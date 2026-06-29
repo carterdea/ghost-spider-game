@@ -24,7 +24,7 @@ interface Building {
 }
 
 interface FadingWeb {
-  line: Phaser.GameObjects.Line;
+  graphic: Phaser.GameObjects.Graphics;
   fromX: number;
   fromY: number;
   toX: number;
@@ -77,6 +77,9 @@ const GENERATED_TEXTURES = [
   "planter",
   "roofVent",
   "waterTower",
+  "parkTree",
+  "parkBench",
+  "bat",
 ] as const;
 
 export class GameScene extends Phaser.Scene {
@@ -89,7 +92,7 @@ export class GameScene extends Phaser.Scene {
   private enemies: EnemyView[] = [];
   private bullets?: Phaser.Physics.Arcade.Group;
   private webGlobs?: Phaser.Physics.Arcade.Group;
-  private webLines: Phaser.GameObjects.Line[] = [];
+  private webLines: Phaser.GameObjects.Graphics[] = [];
   private fadingWebs: FadingWeb[] = [];
   private shieldView?: Phaser.GameObjects.Arc;
   private playerOnStreet = false;
@@ -169,15 +172,26 @@ export class GameScene extends Phaser.Scene {
     this.createGunnerSprites(graphics);
     this.createDroneSprites(graphics);
 
-    graphics.fillStyle(colors.web);
-    graphics.fillCircle(6, 6, 6);
-    graphics.generateTexture("webGlob", 12, 12);
+    graphics.lineStyle(3, colors.web, 0.92);
+    graphics.strokeCircle(16, 12, 8);
+    graphics.lineStyle(2, colors.web, 0.78);
+    graphics.lineBetween(3, 12, 29, 12);
+    graphics.lineBetween(16, 1, 16, 23);
+    graphics.lineBetween(7, 4, 25, 20);
+    graphics.lineBetween(7, 20, 25, 4);
+    graphics.lineStyle(1, 0xbff7ff, 0.78);
+    graphics.strokeEllipse(16, 12, 24, 14);
+    graphics.generateTexture("webGlob", 32, 24);
     graphics.clear();
 
     graphics.lineStyle(3, colors.web, 0.92);
     graphics.strokeEllipse(24, 16, 44, 28);
     graphics.lineBetween(4, 16, 44, 16);
     graphics.lineBetween(24, 2, 24, 30);
+    graphics.lineStyle(1, 0xbff7ff, 0.82);
+    graphics.strokeEllipse(24, 16, 28, 18);
+    graphics.lineBetween(10, 8, 38, 24);
+    graphics.lineBetween(38, 8, 10, 24);
     graphics.generateTexture("webNet", 48, 32);
     graphics.clear();
 
@@ -635,6 +649,40 @@ export class GameScene extends Phaser.Scene {
     graphics.fillRect(20, 43, 56, 6);
     graphics.generateTexture("waterTower", 96, 124);
     graphics.clear();
+
+    graphics.fillStyle(0x3a241b);
+    graphics.fillRect(28, 52, 10, 36);
+    graphics.fillStyle(0x132f33);
+    graphics.fillCircle(24, 42, 24);
+    graphics.fillCircle(44, 32, 29);
+    graphics.fillCircle(61, 48, 23);
+    graphics.fillStyle(0x1f5b4d);
+    graphics.fillCircle(38, 44, 18);
+    graphics.lineStyle(2, 0x6ee7d8, 0.22);
+    graphics.lineBetween(24, 37, 42, 28);
+    graphics.lineBetween(44, 52, 64, 45);
+    graphics.generateTexture("parkTree", 86, 92);
+    graphics.clear();
+
+    graphics.fillStyle(0x35263a);
+    graphics.fillRoundedRect(6, 26, 90, 12, 5);
+    graphics.fillStyle(0x5b3a67);
+    graphics.fillRoundedRect(0, 16, 102, 12, 5);
+    graphics.lineStyle(4, 0x222b42, 1);
+    graphics.lineBetween(18, 28, 10, 54);
+    graphics.lineBetween(82, 28, 92, 54);
+    graphics.generateTexture("parkBench", 104, 60);
+    graphics.clear();
+
+    graphics.fillStyle(0x070911, 1);
+    graphics.fillEllipse(22, 16, 12, 9);
+    graphics.fillTriangle(17, 15, 0, 4, 8, 22);
+    graphics.fillTriangle(27, 15, 44, 4, 36, 22);
+    graphics.fillStyle(0xb8efff, 0.82);
+    graphics.fillCircle(20, 14, 1.5);
+    graphics.fillCircle(24, 14, 1.5);
+    graphics.generateTexture("bat", 46, 28);
+    graphics.clear();
   }
 
   private createAnimations(): void {
@@ -684,6 +732,8 @@ export class GameScene extends Phaser.Scene {
     this.add.rectangle(2800, STREET_MIN_Y, this.state.world.width, 4, 0x44516f, 0.35).setDepth(-7);
     this.add.rectangle(2800, STREET_MAX_Y, this.state.world.width, 4, 0x44516f, 0.25).setDepth(-7);
     this.createStreetDetails();
+    this.createCentralPark();
+    this.createNightLife();
 
     this.platforms = this.physics.add.staticGroup();
     const buildings: Building[] = [
@@ -789,6 +839,9 @@ export class GameScene extends Phaser.Scene {
 
   private createStreetDetails(): void {
     for (let x = 96; x < this.state.world.width; x += 192) {
+      if (x > 3300 && x < 4040) {
+        continue;
+      }
       this.add.image(x, FACADE_TOP_Y, "brickFacade").setOrigin(0.5, 0).setDepth(-6.5);
     }
 
@@ -807,20 +860,31 @@ export class GameScene extends Phaser.Scene {
     }
 
     const storefronts = [
-      { x: 220, texture: "storefront", height: 124 },
+      { x: 220, texture: "storefront", height: 124, name: "JOE'S PIZZA", accent: "#f25f8f" },
       { x: 600, texture: "apartmentDoor", height: 132 },
-      { x: 1120, texture: "storefront", height: 124 },
+      { x: 1120, texture: "storefront", height: 124, name: "MOON BOOKS", accent: "#87f0ff" },
       { x: 1500, texture: "apartmentDoor", height: 132 },
-      { x: 2050, texture: "storefront", height: 124 },
+      { x: 2050, texture: "storefront", height: 124, name: "NIGHT OWL COFFEE", accent: "#f5d46c" },
       { x: 2530, texture: "apartmentDoor", height: 132 },
-      { x: 3230, texture: "storefront", height: 124 },
-      { x: 3720, texture: "apartmentDoor", height: 132 },
-      { x: 4380, texture: "storefront", height: 124 },
+      { x: 3230, texture: "storefront", height: 124, name: "SLICE SLICE BABY", accent: "#39e7d0" },
+      { x: 3720, texture: "apartmentDoor", height: 132, hiddenByPark: true },
+      { x: 4380, texture: "storefront", height: 124, name: "GHOST BEAN", accent: "#d9b6ff" },
       { x: 4930, texture: "apartmentDoor", height: 132 },
     ] as const;
 
     for (const detail of storefronts) {
+      if ("hiddenByPark" in detail) {
+        continue;
+      }
       this.add.image(detail.x, SIDEWALK_Y - detail.height / 2, detail.texture).setDepth(-3.5);
+      if ("name" in detail) {
+        this.add.rectangle(detail.x, SIDEWALK_Y - detail.height + 6, 154, 18, 0x0a0d16, 0.78).setDepth(-3.25);
+        this.add.text(detail.x, SIDEWALK_Y - detail.height + 6, detail.name, {
+          color: detail.accent,
+          fontFamily: "Arial Black, Impact, sans-serif",
+          fontSize: detail.name.length > 13 ? "11px" : "13px",
+        }).setOrigin(0.5).setDepth(-3.2);
+      }
     }
 
     for (let x = 420; x < this.state.world.width; x += 1040) {
@@ -837,6 +901,44 @@ export class GameScene extends Phaser.Scene {
       this.add.image(x, 1188, "trashCan").setDepth(1200);
       this.add.image(x + 190, 1192, "hydrant").setDepth(1200);
       this.add.image(x + 330, 1188, "planter").setDepth(1200);
+    }
+  }
+
+  private createCentralPark(): void {
+    const parkX = 3650;
+    this.add.rectangle(parkX, 1132, 720, 126, 0x103a36, 0.96).setDepth(-3.45);
+    this.add.rectangle(parkX, 1190, 740, 20, 0x263149, 1).setDepth(-3.35);
+    this.add.text(parkX - 285, 1092, "CENTRAL PARK", {
+      color: "#a7ffe9",
+      fontFamily: "Arial Black, Impact, sans-serif",
+      fontSize: "18px",
+    }).setDepth(-3.05);
+
+    for (let x = parkX - 300; x <= parkX + 300; x += 88) {
+      const y = 1132 + ((x / 88) % 2) * 16;
+      this.add.image(x, y, "parkTree").setDepth(-3.15);
+    }
+
+    this.add.image(parkX - 155, 1182, "parkBench").setDepth(1195);
+    this.add.image(parkX + 185, 1182, "parkBench").setDepth(1195);
+    this.add.rectangle(parkX, 1172, 260, 18, 0x1b554d, 0.85).setDepth(-3.12);
+    this.add.rectangle(parkX, 1176, 250, 4, 0x6ee7d8, 0.24).setDepth(-3.1);
+  }
+
+  private createNightLife(): void {
+    for (const [index, startX] of [540, 2440, 4380].entries()) {
+      const bat = this.add.image(startX, 265 + index * 62, "bat").setDepth(-2);
+      bat.setAlpha(0.82);
+      this.tweens.add({
+        targets: bat,
+        x: startX + 520,
+        y: `+=${index % 2 === 0 ? -70 : 54}`,
+        flipX: true,
+        yoyo: true,
+        repeat: -1,
+        duration: 5200 + index * 900,
+        ease: "Sine.inOut",
+      });
     }
   }
 
@@ -1156,32 +1258,39 @@ export class GameScene extends Phaser.Scene {
     }
 
     const dt = delta / 1000;
-    const maxLength = 555;
-    const spring = 780 / anchors.length;
+    const maxLength = 585;
+    const spring = 690 / anchors.length;
 
     for (const anchor of anchors) {
       const distance = Phaser.Math.Distance.Between(player.x, player.y, anchor.x, anchor.y);
       const angle = Phaser.Math.Angle.Between(player.x, player.y, anchor.x, anchor.y);
-      const stretch = Math.max(0, distance - 120) / maxLength;
+      const stretch = Math.max(0, distance - 105) / maxLength;
       const tangent = angle + Math.PI / 2;
       const travelSign = this.getSwingDirection(player, actions);
+      const bottomArc = Phaser.Math.Clamp((player.y - anchor.y) / maxLength, 0, 1);
+      const exitArc = Phaser.Math.Clamp(((player.x - anchor.x) * travelSign) / maxLength, 0, 1);
 
       body.velocity.x += Math.cos(angle) * spring * stretch * dt;
       body.velocity.y += Math.sin(angle) * spring * stretch * dt;
-      body.velocity.x += Math.cos(tangent) * travelSign * 120 * dt;
-      body.velocity.y += Math.sin(tangent) * travelSign * 58 * dt;
+      body.velocity.x += Math.cos(tangent) * travelSign * (92 + bottomArc * 72) * dt;
+      body.velocity.y += Math.sin(tangent) * travelSign * (38 + bottomArc * 30) * dt;
+      body.velocity.y += bottomArc * 80 * dt;
+      body.velocity.y -= exitArc * 210 * dt;
 
       if (distance > maxLength) {
-        const correction = (distance - maxLength) * 0.12;
+        const correction = (distance - maxLength) * 0.09;
         player.x += Math.cos(angle) * correction;
         player.y += Math.sin(angle) * correction;
       }
     }
 
     const moveAssist = Number(actions.moveRight) - Number(actions.moveLeft);
-    body.velocity.x += moveAssist * 330 * dt;
-    body.velocity.x *= 0.998;
-    body.velocity.y *= 0.997;
+    const automaticDirection = moveAssist === 0 ? this.getSwingDirection(player, actions) : moveAssist;
+    body.velocity.x += automaticDirection * 145 * dt;
+    body.velocity.x += moveAssist * 170 * dt;
+    body.velocity.x *= 0.995;
+    body.velocity.y *= 0.996;
+    player.setMaxVelocity(650, 930);
   }
 
   private findWebAnchors(x: number, y: number): WebAnchor[] {
@@ -1269,14 +1378,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     while (this.webLines.length < anchors.length) {
-      this.webLines.push(this.add.line(0, 0, 0, 0, 0, 0, colors.web, 0.82).setOrigin(0, 0).setLineWidth(3));
+      this.webLines.push(this.add.graphics());
     }
 
     const hands = this.getWebHandPositions(player, anchors);
     for (const [index, anchor] of anchors.entries()) {
       const hand = hands[index] ?? hands[0];
-      this.webLines[index].setTo(anchor.x, anchor.y, hand.x, hand.y);
-      this.webLines[index].setDepth(player.depth + 2 + index);
+      const graphic = this.webLines[index];
+      graphic.clear();
+      this.drawWebStrand(graphic, anchor, hand, 0.88, 3 + index);
+      graphic.setDepth(player.depth + 2 + index);
     }
 
     for (const staleLine of this.webLines.slice(anchors.length)) {
@@ -1302,11 +1413,43 @@ export class GameScene extends Phaser.Scene {
     return hand;
   }
 
+  private drawWebStrand(graphic: Phaser.GameObjects.Graphics, anchor: WebAnchor, hand: WebAnchor, alpha: number, seed: number): void {
+    const dx = hand.x - anchor.x;
+    const dy = hand.y - anchor.y;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const normalX = -dy / length;
+    const normalY = dx / length;
+    const middleX = (anchor.x + hand.x) / 2;
+    const middleY = (anchor.y + hand.y) / 2;
+    const wobble = Math.sin(this.time.now * 0.006 + seed) * 8;
+
+    graphic.lineStyle(3, colors.web, alpha);
+    graphic.beginPath();
+    graphic.moveTo(anchor.x, anchor.y);
+    graphic.lineTo(middleX + normalX * wobble, middleY + normalY * wobble);
+    graphic.lineTo(hand.x, hand.y);
+    graphic.strokePath();
+
+    graphic.lineStyle(1, 0xbff7ff, alpha * 0.82);
+    for (let step = 1; step <= 4; step += 1) {
+      const t = step / 5;
+      const x = Phaser.Math.Linear(anchor.x, hand.x, t) + normalX * wobble * (1 - Math.abs(0.5 - t));
+      const y = Phaser.Math.Linear(anchor.y, hand.y, t) + normalY * wobble * (1 - Math.abs(0.5 - t));
+      const branch = 10 + ((step + seed) % 3) * 5;
+      const side = step % 2 === 0 ? 1 : -1;
+      graphic.lineBetween(x, y, x + normalX * branch * side, y + normalY * branch * side);
+      graphic.lineBetween(x, y, x - dx * 0.035, y - dy * 0.035);
+    }
+
+    graphic.strokeCircle(hand.x, hand.y, 6);
+  }
+
   private fadeWeb(anchor: WebAnchor, hand: WebAnchor): void {
-    const line = this.add.line(0, 0, anchor.x, anchor.y, hand.x, hand.y, colors.web, 0.72).setOrigin(0, 0).setLineWidth(3);
-    line.setDepth(hand.y + 4);
+    const graphic = this.add.graphics();
+    this.drawWebStrand(graphic, anchor, hand, 0.72, 0);
+    graphic.setDepth(hand.y + 4);
     this.fadingWebs.push({
-      line,
+      graphic,
       fromX: anchor.x,
       fromY: anchor.y,
       toX: hand.x,
@@ -1325,19 +1468,20 @@ export class GameScene extends Phaser.Scene {
       const age = this.time.now - web.createdAt;
       const progress = Phaser.Math.Clamp(age / web.duration, 0, 1);
       if (progress >= 1) {
-        web.line.destroy();
+        web.graphic.destroy();
         continue;
       }
 
       const fall = progress * progress * 96;
       const sway = Math.sin(progress * Math.PI) * web.velocityX;
-      web.line.setTo(
-        web.fromX + sway * 0.4,
-        web.fromY + fall * 0.4,
-        web.toX + sway,
-        web.toY + fall + web.velocityY * progress,
+      web.graphic.clear();
+      this.drawWebStrand(
+        web.graphic,
+        { x: web.fromX + sway * 0.4, y: web.fromY + fall * 0.4 },
+        { x: web.toX + sway, y: web.toY + fall + web.velocityY * progress },
+        (1 - progress) * 0.72,
+        0,
       );
-      web.line.setAlpha((1 - progress) * 0.72);
       liveWebs.push(web);
     }
 
@@ -1355,7 +1499,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (const web of this.fadingWebs) {
-      web.line.destroy();
+      web.graphic.destroy();
     }
     this.fadingWebs = [];
   }
@@ -1428,6 +1572,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.state.player.gadget === "web-shield") {
       this.state.player.shieldUntil = this.time.now + 1100;
+      this.createWebBurst(player.x, player.y, 58, 760);
       this.state.player.message = "Web shield spun.";
       return;
     }
@@ -1436,6 +1581,7 @@ export class GameScene extends Phaser.Scene {
     this.setPlayerGravity(player, true);
     player.setVelocityY(-420);
     player.setVelocityX((player.body?.velocity.x ?? 0) + facing * 220);
+    this.createWebBurst(player.x - facing * 22, player.y + 8, 42, 520);
     this.state.player.message = "Web-wings vault.";
   }
 
@@ -1452,6 +1598,26 @@ export class GameScene extends Phaser.Scene {
 
     this.shieldView.setPosition(player.x, player.y);
     this.shieldView.setDepth(player.depth + 1);
+  }
+
+  private createWebBurst(x: number, y: number, radius: number, duration: number): void {
+    const burst = this.add.graphics();
+    burst.setDepth(y + 5);
+    burst.lineStyle(2, colors.web, 0.82);
+    burst.strokeCircle(x, y, radius);
+    burst.strokeCircle(x, y, radius * 0.55);
+    for (let spoke = 0; spoke < 10; spoke += 1) {
+      const angle = (Math.PI * 2 * spoke) / 10;
+      burst.lineBetween(x, y, x + Math.cos(angle) * radius, y + Math.sin(angle) * radius);
+    }
+    this.tweens.add({
+      targets: burst,
+      alpha: 0,
+      scale: 1.18,
+      duration,
+      ease: "Sine.out",
+      onComplete: () => burst.destroy(),
+    });
   }
 
   private updateEnemies(time: number): void {
