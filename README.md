@@ -9,6 +9,28 @@ A tiny Phaser 3 tracer-bullet prototype for a keyboard side-scroller about a bal
 - Vite `8.0.10`
 - Bun for scripts and dependency management
 
+## Run Locally
+
+Install dependencies:
+
+```bash
+bun install
+```
+
+Start the game:
+
+```bash
+bun run dev
+```
+
+Open the local URL Vite prints, usually `http://localhost:5173/`.
+
+Check TypeScript:
+
+```bash
+bun run typecheck
+```
+
 ## Controls
 
 - `A` / `D`: move across the level
