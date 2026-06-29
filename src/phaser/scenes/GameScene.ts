@@ -434,7 +434,8 @@ export class GameScene extends Phaser.Scene {
 
   private createWorld(): void {
     this.physics.world.setBounds(0, 0, this.state.world.width, this.state.world.height);
-    this.add.rectangle(2800, 800, this.state.world.width, this.state.world.height, 0x111827).setDepth(-10);
+    this.add.rectangle(2800, 800, this.state.world.width, this.state.world.height, 0x10172b).setDepth(-10);
+    this.createReferenceStyleSkyline();
     this.add.rectangle(2800, 1320, this.state.world.width, 330, 0x0c0f16).setDepth(-8);
     this.add.rectangle(2800, STREET_MIN_Y, this.state.world.width, 4, 0x44516f, 0.35).setDepth(-7);
     this.add.rectangle(2800, STREET_MAX_Y, this.state.world.width, 4, 0x44516f, 0.25).setDepth(-7);
@@ -456,6 +457,82 @@ export class GameScene extends Phaser.Scene {
       this.add.image(building.x, building.y, "building").setDisplaySize(building.w, building.h).setDepth(-9);
       this.paintWindows(building);
       this.createRoofPlatform(building);
+    }
+  }
+
+  private createReferenceStyleSkyline(): void {
+    const backBlocks = [
+      { x: 180, y: 610, w: 420, h: 980, color: 0x17244a },
+      { x: 690, y: 560, w: 620, h: 1060, color: 0x1b315c },
+      { x: 1380, y: 610, w: 560, h: 980, color: 0x182a53 },
+      { x: 2060, y: 545, w: 690, h: 1110, color: 0x1c3561 },
+      { x: 2860, y: 600, w: 620, h: 1000, color: 0x17284f },
+      { x: 3620, y: 555, w: 720, h: 1090, color: 0x1d3763 },
+      { x: 4460, y: 605, w: 660, h: 990, color: 0x182d56 },
+      { x: 5220, y: 570, w: 600, h: 1060, color: 0x1a315d },
+    ];
+
+    for (const block of backBlocks) {
+      this.add.rectangle(block.x, block.y, block.w, block.h, block.color).setDepth(-9.7);
+      this.add.rectangle(block.x, block.y - block.h / 2 + 260, block.w - 52, 16, 0x1592aa, 0.68).setDepth(-9.55);
+      this.add.rectangle(block.x, block.y + block.h / 2 - 250, block.w - 72, 12, 0x24c6d5, 0.55).setDepth(-9.55);
+      this.paintBackdropWindows(block.x, block.y, block.w, block.h, -9.5);
+    }
+
+    const midBlocks = [
+      { x: 420, y: 760, w: 390, h: 680, color: 0x203d66 },
+      { x: 1080, y: 745, w: 470, h: 710, color: 0x1c365f },
+      { x: 1780, y: 790, w: 430, h: 620, color: 0x24456b },
+      { x: 2480, y: 745, w: 510, h: 710, color: 0x1d3b65 },
+      { x: 3180, y: 780, w: 470, h: 640, color: 0x24466e },
+      { x: 3920, y: 742, w: 540, h: 716, color: 0x1c3864 },
+      { x: 4680, y: 780, w: 470, h: 640, color: 0x25486f },
+    ];
+
+    for (const block of midBlocks) {
+      this.add.rectangle(block.x, block.y, block.w, block.h, block.color).setDepth(-9.25);
+      this.add.rectangle(block.x, block.y + block.h / 2 - 98, block.w - 44, 14, 0x18a9c6, 0.74).setDepth(-9.05);
+      this.paintBackdropWindows(block.x, block.y, block.w, block.h, -9.02);
+    }
+
+    this.add.rectangle(5180, 350, 360, 210, 0xf3fbff, 0.94).setDepth(-8.95);
+    this.add.rectangle(5180, 350, 392, 242, 0x72f1ff, 0.18).setDepth(-8.96);
+    this.add.rectangle(5180, 350, 400, 250).setStrokeStyle(8, 0xc7f7ff, 0.82).setDepth(-8.94);
+
+    this.add.polygon(3120, 1085, [
+      -1700, 160,
+      1850, -40,
+      1970, 60,
+      -1600, 260,
+    ], 0x4d2b6d, 0.92).setDepth(-7.6);
+    this.add.polygon(3120, 1120, [
+      -1680, 132,
+      1810, -62,
+      1840, -30,
+      -1660, 166,
+    ], 0xb744a2, 0.62).setDepth(-7.55);
+  }
+
+  private paintBackdropWindows(x: number, y: number, width: number, height: number, depth: number): void {
+    const left = x - width / 2 + 46;
+    const top = y - height / 2 + 54;
+    const columns = Math.max(3, Math.floor((width - 76) / 72));
+    const rows = Math.max(4, Math.floor((height - 100) / 86));
+    const windowColors = [0xf6d971, 0xb8efff, 0x65d4e5, 0x51345d, 0x0f1835];
+
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const seed = (row * 7 + column * 11 + Math.floor(x / 100)) % windowColors.length;
+        const lit = (row + column + Math.floor(x / 80)) % 4 !== 0;
+        const color = lit ? windowColors[seed] : 0x101934;
+        const windowWidth = 18 + ((row + column) % 3) * 8;
+        const windowHeight = 34 + (column % 2) * 18;
+        this.add.rectangle(left + column * 72, top + row * 86, windowWidth, windowHeight, color, lit ? 0.88 : 0.76).setDepth(depth);
+
+        if (lit && (row + column) % 5 === 0) {
+          this.add.rectangle(left + column * 72 + 7, top + row * 86, 4, windowHeight, 0x1a2242, 0.9).setDepth(depth + 0.01);
+        }
+      }
     }
   }
 
