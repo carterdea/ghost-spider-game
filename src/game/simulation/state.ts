@@ -1,11 +1,14 @@
 export type EnemyKind = "robot" | "gunner";
+export type GadgetKind = "web-net" | "web-shield" | "web-wings";
 
 export interface PlayerState {
   health: number;
   maxHealth: number;
   score: number;
+  gadget: GadgetKind;
   webAttached: boolean;
   webAnchor: { x: number; y: number } | null;
+  shieldUntil: number;
   message: string;
 }
 
@@ -33,8 +36,10 @@ export const createInitialGameState = (): GameState => ({
     health: 100,
     maxHealth: 100,
     score: 0,
+    gadget: "web-net",
     webAttached: false,
     webAnchor: null,
+    shieldUntil: 0,
     message: "Swing, climb, and clear the skyline.",
   },
   enemies: [

@@ -1,9 +1,9 @@
 import Phaser from "phaser";
 import { colors } from "../../game/assets/manifest";
+import { createEmptyActions, type ActionState } from "../../game/input/actions";
 import { createKeyboardBindings, readActions } from "../../game/input/bindings";
-import type { ActionState } from "../../game/input/actions";
 import { damageEnemy, damagePlayer } from "../../game/simulation/systems/combat";
-import { createInitialGameState, type EnemyState, type GameState } from "../../game/simulation/state";
+import { createInitialGameState, type EnemyState, type GadgetKind, type GameState } from "../../game/simulation/state";
 import { Hud } from "../../ui/hud/hud";
 
 interface EnemyView {
@@ -11,18 +11,37 @@ interface EnemyView {
   sprite: Phaser.Physics.Arcade.Sprite;
   direction: number;
   nextShotAt: number;
+  snaredUntil: number;
+  streetLane: boolean;
 }
+
+interface Building {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const STREET_MIN_Y = 1210;
+const STREET_MAX_Y = 1400;
+const STREET_ENTRY_Y = 1190;
+const GADGETS: GadgetKind[] = ["web-net", "web-shield", "web-wings"];
 
 export class GameScene extends Phaser.Scene {
   private state: GameState = createInitialGameState();
   private hud?: Hud;
   private keys?: ReturnType<typeof createKeyboardBindings>;
+  private previousActions: ActionState = createEmptyActions();
   private player?: Phaser.Physics.Arcade.Sprite;
   private platforms?: Phaser.Physics.Arcade.StaticGroup;
   private enemies: EnemyView[] = [];
   private bullets?: Phaser.Physics.Arcade.Group;
+  private webGlobs?: Phaser.Physics.Arcade.Group;
   private webLine?: Phaser.GameObjects.Line;
+  private shieldView?: Phaser.GameObjects.Arc;
+  private playerOnStreet = false;
   private attackCooldownUntil = 0;
+  private gadgetCooldownUntil = 0;
   private hitCooldownUntil = 0;
 
   public constructor() {
@@ -32,6 +51,8 @@ export class GameScene extends Phaser.Scene {
   public create(): void {
     this.state = createInitialGameState();
     this.enemies = [];
+    this.previousActions = createEmptyActions();
+    this.playerOnStreet = false;
     this.createTextures();
     this.createWorld();
     this.createPlayer();
@@ -51,31 +72,27 @@ export class GameScene extends Phaser.Scene {
 
   public update(time: number, delta: number): void {
     const player = this.requirePlayer();
-    const actions = this.keys ? readActions(this.keys) : {
-      moveLeft: false,
-      moveRight: false,
-      jump: false,
-      web: false,
-      attack: false,
-      drop: false,
-      reset: false,
-    };
+    const actions = this.keys ? readActions(this.keys) : createEmptyActions();
 
-    if (actions.reset) {
+    if (this.wasPressed(actions, "reset")) {
       this.scene.restart();
       return;
     }
 
     if (this.state.player.health === 0) {
-      player.setVelocityX(0);
+      player.setVelocity(0, 0);
       this.hud?.render(this.state);
+      this.previousActions = actions;
       return;
     }
 
+    this.updateStreetMode(player, actions);
     this.updatePlayer(player, actions, delta);
     this.updateEnemies(time);
     this.updateWebLine(player);
+    this.updateShield(player, time);
     this.hud?.render(this.state);
+    this.previousActions = actions;
   }
 
   private createTextures(): void {
@@ -114,6 +131,18 @@ export class GameScene extends Phaser.Scene {
     graphics.clear();
 
     graphics.fillStyle(colors.web);
+    graphics.fillCircle(6, 6, 6);
+    graphics.generateTexture("webGlob", 12, 12);
+    graphics.clear();
+
+    graphics.lineStyle(3, colors.web, 0.92);
+    graphics.strokeEllipse(24, 16, 44, 28);
+    graphics.lineBetween(4, 16, 44, 16);
+    graphics.lineBetween(24, 2, 24, 30);
+    graphics.generateTexture("webNet", 48, 32);
+    graphics.clear();
+
+    graphics.fillStyle(colors.danger);
     graphics.fillCircle(5, 5, 5);
     graphics.generateTexture("bullet", 10, 10);
     graphics.clear();
@@ -125,6 +154,11 @@ export class GameScene extends Phaser.Scene {
     graphics.generateTexture("building", 64, 64);
     graphics.clear();
 
+    graphics.fillStyle(0x303b59);
+    graphics.fillRoundedRect(0, 0, 64, 18, 4);
+    graphics.generateTexture("roof", 64, 18);
+    graphics.clear();
+
     graphics.fillStyle(0x141823);
     graphics.fillRect(0, 0, 64, 64);
     graphics.generateTexture("street", 64, 64);
@@ -134,10 +168,12 @@ export class GameScene extends Phaser.Scene {
   private createWorld(): void {
     this.physics.world.setBounds(0, 0, this.state.world.width, this.state.world.height);
     this.add.rectangle(2800, 800, this.state.world.width, this.state.world.height, 0x111827).setDepth(-10);
-    this.add.rectangle(2800, 1465, this.state.world.width, 280, 0x0c0f16).setDepth(-8);
+    this.add.rectangle(2800, 1320, this.state.world.width, 330, 0x0c0f16).setDepth(-8);
+    this.add.rectangle(2800, STREET_MIN_Y, this.state.world.width, 4, 0x44516f, 0.35).setDepth(-7);
+    this.add.rectangle(2800, STREET_MAX_Y, this.state.world.width, 4, 0x44516f, 0.25).setDepth(-7);
 
     this.platforms = this.physics.add.staticGroup();
-    const buildings = [
+    const buildings: Building[] = [
       { x: 270, y: 920, w: 540, h: 980 },
       { x: 960, y: 760, w: 520, h: 1300 },
       { x: 1640, y: 1030, w: 440, h: 760 },
@@ -149,24 +185,25 @@ export class GameScene extends Phaser.Scene {
     ];
 
     for (const building of buildings) {
-      const body = this.platforms.create(building.x, building.y, "building") as Phaser.Physics.Arcade.Sprite;
-      body.displayWidth = building.w;
-      body.displayHeight = building.h;
-      body.refreshBody();
-      this.paintWindows(building.x, building.y, building.w, building.h);
+      this.add.image(building.x, building.y, "building").setDisplaySize(building.w, building.h).setDepth(-3);
+      this.paintWindows(building);
+      this.createRoofPlatform(building);
     }
-
-    const street = this.platforms.create(2800, this.state.world.streetY + 80, "street") as Phaser.Physics.Arcade.Sprite;
-    street.displayWidth = this.state.world.width;
-    street.displayHeight = 160;
-    street.refreshBody();
   }
 
-  private paintWindows(x: number, y: number, width: number, height: number): void {
-    const top = y - height / 2 + 48;
-    const left = x - width / 2 + 38;
-    const rows = Math.max(2, Math.floor((height - 120) / 72));
-    const columns = Math.max(2, Math.floor((width - 80) / 64));
+  private createRoofPlatform(building: Building): void {
+    const roofY = building.y - building.h / 2 + 10;
+    const roof = this.requirePlatforms().create(building.x, roofY, "roof") as Phaser.Physics.Arcade.Sprite;
+    roof.displayWidth = building.w - 30;
+    roof.displayHeight = 18;
+    roof.refreshBody();
+  }
+
+  private paintWindows({ x, y, w, h }: Building): void {
+    const top = y - h / 2 + 58;
+    const left = x - w / 2 + 38;
+    const rows = Math.max(2, Math.floor((h - 120) / 72));
+    const columns = Math.max(2, Math.floor((w - 80) / 64));
 
     for (let row = 0; row < rows; row += 1) {
       for (let column = 0; column < columns; column += 1) {
@@ -177,7 +214,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createPlayer(): void {
-    const player = this.physics.add.sprite(120, 690, "player");
+    const player = this.physics.add.sprite(120, 600, "player");
     player.setCollideWorldBounds(true);
     player.setDragX(880);
     player.setMaxVelocity(760, 980);
@@ -187,12 +224,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createEnemies(): void {
-    const placements: Record<string, { x: number; y: number }> = {
-      "robot-roof-1": { x: 960, y: 78 },
-      "gunner-street-1": { x: 1920, y: 1360 },
-      "robot-roof-2": { x: 2920, y: -40 },
-      "robot-street-1": { x: 3600, y: 1360 },
-      "gunner-roof-1": { x: 4660, y: 180 },
+    const placements: Record<string, { x: number; y: number; streetLane: boolean }> = {
+      "robot-roof-1": { x: 960, y: 80, streetLane: false },
+      "gunner-street-1": { x: 1920, y: 1340, streetLane: true },
+      "robot-roof-2": { x: 2920, y: -5, streetLane: false },
+      "robot-street-1": { x: 3600, y: 1380, streetLane: true },
+      "gunner-roof-1": { x: 4660, y: 235, streetLane: false },
     };
 
     for (const enemyState of this.state.enemies) {
@@ -201,26 +238,58 @@ export class GameScene extends Phaser.Scene {
       sprite.setCollideWorldBounds(true);
       sprite.setDragX(600);
       sprite.setMaxVelocity(180, 900);
-      this.physics.add.collider(sprite, this.requirePlatforms());
-      this.enemies.push({ state: enemyState, sprite, direction: 1, nextShotAt: 0 });
+      sprite.body?.setAllowGravity(!placement.streetLane);
+
+      if (placement.streetLane) {
+        sprite.setDepth(placement.y);
+      } else {
+        this.physics.add.collider(sprite, this.requirePlatforms());
+      }
+
+      this.enemies.push({ state: enemyState, sprite, direction: 1, nextShotAt: 0, snaredUntil: 0, streetLane: placement.streetLane });
     }
   }
 
   private createCombat(): void {
     this.bullets = this.physics.add.group({ allowGravity: false });
+    this.webGlobs = this.physics.add.group({ allowGravity: false });
+
     this.physics.add.overlap(this.requirePlayer(), this.bullets, (_, bulletObject) => {
       const bullet = bulletObject as Phaser.Physics.Arcade.Sprite;
       bullet.destroy();
+
+      if (this.time.now < this.state.player.shieldUntil) {
+        this.state.player.message = "Web shield caught the shot.";
+        return;
+      }
+
       damagePlayer(this.state, 12, "Hit by a skyline shot.");
     });
 
     for (const enemy of this.enemies) {
       this.physics.add.overlap(this.requirePlayer(), enemy.sprite, () => {
-        if (this.time.now < this.hitCooldownUntil) {
+        if (this.time.now < this.hitCooldownUntil || this.time.now < enemy.snaredUntil) {
           return;
         }
         this.hitCooldownUntil = this.time.now + 700;
         damagePlayer(this.state, enemy.state.damage, enemy.state.kind === "gunner" ? "Close-range blast." : "Robot tackle.");
+      });
+
+      this.physics.add.overlap(this.requireWebGlobs(), enemy.sprite, (globObject) => {
+        const glob = globObject as Phaser.Physics.Arcade.Sprite;
+        const power = glob.getData("power") as "glob" | "net";
+        glob.destroy();
+
+        if (power === "net") {
+          enemy.snaredUntil = this.time.now + 1800;
+          enemy.sprite.setTint(colors.web);
+          this.time.delayedCall(1800, () => enemy.sprite.active && enemy.sprite.clearTint());
+        }
+
+        const defeated = damageEnemy(this.state, enemy.state, power === "net" ? 12 : 16);
+        if (defeated) {
+          enemy.sprite.destroy();
+        }
       });
     }
   }
@@ -229,12 +298,43 @@ export class GameScene extends Phaser.Scene {
     const camera = this.cameras.main;
     camera.setBounds(0, 0, this.state.world.width, this.state.world.height);
     camera.startFollow(this.requirePlayer(), true, 0.08, 0.08);
-    camera.setDeadzone(190, 120);
+    camera.setDeadzone(210, 150);
+  }
+
+  private updateStreetMode(player: Phaser.Physics.Arcade.Sprite, actions: ActionState): void {
+    const body = player.body;
+    if (!body || this.state.player.webAttached) {
+      return;
+    }
+
+    if (!this.playerOnStreet && player.y >= STREET_ENTRY_Y && body.velocity.y >= 0) {
+      this.playerOnStreet = true;
+      this.setPlayerGravity(player, false);
+      player.y = Phaser.Math.Clamp(player.y, STREET_MIN_Y, STREET_MAX_Y);
+      player.setVelocityY(0);
+      this.state.player.message = "Street level: move up and down to dodge.";
+    }
+
+    if (!this.playerOnStreet) {
+      return;
+    }
+
+    if (this.wasPressed(actions, "jump")) {
+      this.playerOnStreet = false;
+      this.setPlayerGravity(player, true);
+      player.setVelocityY(-560);
+      return;
+    }
+
+    const laneMove = Number(actions.moveDown) - Number(actions.moveUp);
+    player.setVelocityY(laneMove * 260);
+    player.y = Phaser.Math.Clamp(player.y, STREET_MIN_Y, STREET_MAX_Y);
+    player.setDepth(player.y);
   }
 
   private updatePlayer(player: Phaser.Physics.Arcade.Sprite, actions: ActionState, delta: number): void {
-    const grounded = player.body?.blocked.down === true;
-    const speed = grounded ? 420 : 330;
+    const grounded = this.playerOnStreet || player.body?.blocked.down === true;
+    const speed = grounded ? 430 : 340;
     const move = Number(actions.moveRight) - Number(actions.moveLeft);
 
     if (move !== 0) {
@@ -244,15 +344,17 @@ export class GameScene extends Phaser.Scene {
       player.setAccelerationX(0);
     }
 
-    if (grounded && actions.jump) {
+    if (!this.playerOnStreet && grounded && this.wasPressed(actions, "jump")) {
       player.setVelocityY(-560);
     }
 
-    if (actions.drop) {
-      this.detachWeb("Dropped to street level.");
+    if (this.wasPressed(actions, "cycleGadget")) {
+      this.cycleGadget();
     }
 
     if (actions.web && !this.state.player.webAttached) {
+      this.playerOnStreet = false;
+      this.setPlayerGravity(player, true);
       this.attachWeb(player);
     }
 
@@ -264,8 +366,17 @@ export class GameScene extends Phaser.Scene {
       this.applySwing(player, this.state.player.webAnchor, delta);
     }
 
-    if (actions.attack && this.time.now >= this.attackCooldownUntil) {
+    if (actions.glide && !this.playerOnStreet && !grounded && player.body && player.body.velocity.y > 80) {
+      player.setVelocityY(Math.min(player.body.velocity.y, 170));
+      this.state.player.message = "Web-wings slowed the fall.";
+    }
+
+    if (this.wasPressed(actions, "attack") && this.time.now >= this.attackCooldownUntil) {
       this.attack(player);
+    }
+
+    if (this.wasPressed(actions, "gadget") && this.time.now >= this.gadgetCooldownUntil) {
+      this.useGadget(player);
     }
 
     player.setVelocityX(Phaser.Math.Clamp(player.body?.velocity.x ?? 0, -speed * 1.45, speed * 1.45));
@@ -281,7 +392,7 @@ export class GameScene extends Phaser.Scene {
 
     this.state.player.webAttached = true;
     this.state.player.webAnchor = anchor;
-    this.state.player.message = "Web attached.";
+    this.state.player.message = "Web-line attached.";
     player.setGravityY(-220);
   }
 
@@ -350,11 +461,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   private attack(player: Phaser.Physics.Arcade.Sprite): void {
-    this.attackCooldownUntil = this.time.now + 320;
-    const range = 96;
+    this.attackCooldownUntil = this.time.now + 280;
     const facing = player.flipX ? -1 : 1;
+
+    if (this.tryCloseStrike(player, facing)) {
+      return;
+    }
+
+    this.fireWebGlob(player.x + facing * 30, player.y - 8, facing, "glob");
+    this.state.player.message = "Web glob fired.";
+  }
+
+  private tryCloseStrike(player: Phaser.Physics.Arcade.Sprite, facing: number): boolean {
     const hitX = player.x + facing * 56;
-    let connected = false;
 
     for (const enemy of this.enemies) {
       if (!enemy.sprite.active) {
@@ -362,24 +481,77 @@ export class GameScene extends Phaser.Scene {
       }
 
       const distance = Phaser.Math.Distance.Between(hitX, player.y, enemy.sprite.x, enemy.sprite.y);
-      if (distance > range) {
+      if (distance > 96) {
         continue;
       }
 
-      connected = true;
       const defeated = damageEnemy(this.state, enemy.state, 20);
       enemy.sprite.setVelocityX(facing * 240);
       enemy.sprite.setTint(0xffffff);
-      this.time.delayedCall(90, () => enemy.sprite.clearTint());
+      this.time.delayedCall(90, () => enemy.sprite.active && enemy.sprite.clearTint());
 
       if (defeated) {
         enemy.sprite.destroy();
       }
+
+      return true;
     }
 
-    if (!connected) {
-      this.state.player.message = "Ballet kick missed.";
+    return false;
+  }
+
+  private fireWebGlob(x: number, y: number, facing: number, power: "glob" | "net"): void {
+    const globs = this.requireWebGlobs();
+    const glob = globs.create(x, y, power === "net" ? "webNet" : "webGlob") as Phaser.Physics.Arcade.Sprite;
+    glob.setData("power", power);
+    glob.setVelocity(facing * (power === "net" ? 430 : 560), power === "net" ? -20 : 0);
+    glob.setDepth(y);
+    this.time.delayedCall(1100, () => glob.destroy());
+  }
+
+  private cycleGadget(): void {
+    const currentIndex = GADGETS.indexOf(this.state.player.gadget);
+    const nextIndex = (currentIndex + 1) % GADGETS.length;
+    this.state.player.gadget = GADGETS[nextIndex];
+    this.state.player.message = `Gadget ready: ${this.state.player.gadget}.`;
+  }
+
+  private useGadget(player: Phaser.Physics.Arcade.Sprite): void {
+    this.gadgetCooldownUntil = this.time.now + 650;
+    const facing = player.flipX ? -1 : 1;
+
+    if (this.state.player.gadget === "web-net") {
+      this.fireWebGlob(player.x + facing * 32, player.y - 8, facing, "net");
+      this.state.player.message = "Web net launched.";
+      return;
     }
+
+    if (this.state.player.gadget === "web-shield") {
+      this.state.player.shieldUntil = this.time.now + 1100;
+      this.state.player.message = "Web shield spun.";
+      return;
+    }
+
+    this.playerOnStreet = false;
+    this.setPlayerGravity(player, true);
+    player.setVelocityY(-420);
+    player.setVelocityX((player.body?.velocity.x ?? 0) + facing * 220);
+    this.state.player.message = "Web-wings vault.";
+  }
+
+  private updateShield(player: Phaser.Physics.Arcade.Sprite, time: number): void {
+    if (time >= this.state.player.shieldUntil) {
+      this.shieldView?.destroy();
+      this.shieldView = undefined;
+      return;
+    }
+
+    if (!this.shieldView) {
+      this.shieldView = this.add.circle(player.x, player.y, 54).setStrokeStyle(4, colors.web, 0.82).setFillStyle(colors.web, 0.08);
+    }
+
+    this.shieldView.setPosition(player.x, player.y);
+    this.shieldView.setDepth(player.depth + 1);
   }
 
   private updateEnemies(time: number): void {
@@ -387,6 +559,11 @@ export class GameScene extends Phaser.Scene {
 
     for (const enemy of this.enemies) {
       if (!enemy.sprite.active) {
+        continue;
+      }
+
+      if (time < enemy.snaredUntil) {
+        enemy.sprite.setVelocityX(0);
         continue;
       }
 
@@ -400,6 +577,13 @@ export class GameScene extends Phaser.Scene {
 
       enemy.sprite.setVelocityX(enemy.direction * (enemy.state.kind === "gunner" ? 70 : 105));
       enemy.sprite.setFlipX(enemy.direction < 0);
+
+      if (enemy.streetLane) {
+        const laneDelta = Phaser.Math.Clamp(player.y - enemy.sprite.y, -1, 1);
+        enemy.sprite.setVelocityY(laneDelta * 42);
+        enemy.sprite.y = Phaser.Math.Clamp(enemy.sprite.y, STREET_MIN_Y, STREET_MAX_Y);
+        enemy.sprite.setDepth(enemy.sprite.y);
+      }
 
       if (enemy.state.kind === "gunner" && time >= enemy.nextShotAt) {
         const closeEnough = Phaser.Math.Distance.Between(player.x, player.y, enemy.sprite.x, enemy.sprite.y) < 680;
@@ -417,7 +601,19 @@ export class GameScene extends Phaser.Scene {
     const angle = Phaser.Math.Angle.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
     bullet.setVelocity(Math.cos(angle) * 360, Math.sin(angle) * 360);
     bullet.setTint(colors.danger);
+    bullet.setDepth(enemy.sprite.depth + 1);
     this.time.delayedCall(2600, () => bullet.destroy());
+  }
+
+  private wasPressed(actions: ActionState, action: keyof ActionState): boolean {
+    return actions[action] && !this.previousActions[action];
+  }
+
+  private setPlayerGravity(player: Phaser.Physics.Arcade.Sprite, enabled: boolean): void {
+    const body = player.body;
+    if (body instanceof Phaser.Physics.Arcade.Body) {
+      body.setAllowGravity(enabled);
+    }
   }
 
   private requirePlayer(): Phaser.Physics.Arcade.Sprite {
@@ -442,5 +638,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     return this.bullets;
+  }
+
+  private requireWebGlobs(): Phaser.Physics.Arcade.Group {
+    if (!this.webGlobs) {
+      throw new Error("Web globs have not been created.");
+    }
+
+    return this.webGlobs;
   }
 }

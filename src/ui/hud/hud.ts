@@ -20,10 +20,10 @@ export class Hud {
           <div class="bar" aria-label="Health">
             <div class="bar-fill" style="width: ${healthPercent}%"></div>
           </div>
-          <div class="objective">Health ${state.player.health}/${state.player.maxHealth}</div>
+          <div class="objective">Health ${state.player.health}/${state.player.maxHealth} · Gadget ${state.player.gadget}</div>
         </section>
         <aside class="hint-chip">
-          A/D move · Space jump · W swing web · S drop · J kick/web strike · R restart
+          A/D move · W/S lane · Space jump · E swing · J web strike · Q cycle · K gadget · Shift glide
         </aside>
       </div>
       <div class="message">${state.player.message}</div>

@@ -11,13 +11,18 @@ A tiny Phaser 3 tracer-bullet prototype for a keyboard side-scroller about a bal
 
 ## Controls
 
-- `A` / `D`: move
+- `A` / `D`: move across the level
+- `W` / `S`: move up and down the street plane when on foot
 - `Space`: jump
-- `W`: hold to attach a web to a nearby high ledge
-- `S`: drop from web
-- `J`: close-range kick/web strike
+- `E`: hold to attach a swing web to a nearby high ledge
+- `J`: web-glob strike on foot or close-range kick near enemies
+- `Q`: cycle gadget
+- `K`: use gadget
+- `Shift`: slow fall with web-wings
 - `R`: restart
 
 ## Prototype Loop
 
 Swing between rooftops or drop to street level, avoid robot and hooded gunner attacks, and clear enemies for score while protecting health.
+
+Gadgets are based on Ghost-Spider / Gwen Stacy's Janet Van Dyne web-shooters: web-lines, globs, nets, shield-like web shapes, and web-wings.
