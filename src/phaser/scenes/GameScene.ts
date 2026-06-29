@@ -26,6 +26,8 @@ const STREET_MIN_Y = 1210;
 const STREET_MAX_Y = 1400;
 const STREET_ENTRY_Y = 1190;
 const ENEMY_STREET_MAX_Y = STREET_MAX_Y - 34;
+const FACADE_TOP_Y = 1016;
+const SIDEWALK_Y = 1192;
 const GADGETS: GadgetKind[] = ["web-net", "web-shield", "web-wings"];
 const GENERATED_TEXTURES = [
   "player-idle-0",
@@ -51,6 +53,7 @@ const GENERATED_TEXTURES = [
   "hydrant",
   "crosswalkStripe",
   "laneDash",
+  "brickFacade",
 ] as const;
 
 export class GameScene extends Phaser.Scene {
@@ -179,43 +182,64 @@ export class GameScene extends Phaser.Scene {
 
   private createPlayerSprites(graphics: Phaser.GameObjects.Graphics): void {
     const frames = [
-      { key: "player-idle-0", arm: -2, leg: 0, wing: 0, tutu: 0 },
-      { key: "player-idle-1", arm: 0, leg: -1, wing: 1, tutu: 1 },
-      { key: "player-run-0", arm: -7, leg: -6, wing: 4, tutu: -2 },
-      { key: "player-run-1", arm: 7, leg: 6, wing: -2, tutu: 2 },
-      { key: "player-glide", arm: 0, leg: 0, wing: 14, tutu: 0 },
+      { key: "player-idle-0", arm: -2, leg: 0, hood: 0, reach: 0 },
+      { key: "player-idle-1", arm: 1, leg: -1, hood: 1, reach: 0 },
+      { key: "player-run-0", arm: -7, leg: -7, hood: 0, reach: -2 },
+      { key: "player-run-1", arm: 7, leg: 7, hood: 1, reach: 2 },
+      { key: "player-glide", arm: 0, leg: 0, hood: -1, reach: 8 },
     ];
 
     for (const frame of frames) {
       graphics.clear();
-      graphics.fillStyle(colors.wingLavender, 0.58);
-      graphics.fillTriangle(22, 38, 4, 72 + frame.wing, 31, 63);
-      graphics.fillTriangle(50, 38, 68, 72 + frame.wing, 41, 63);
-      graphics.lineStyle(2, colors.web, 0.55);
-      graphics.lineBetween(14, 60, 31, 63);
-      graphics.lineBetween(58, 60, 41, 63);
+      graphics.lineStyle(3, 0x12131c, 0.75);
+      graphics.fillStyle(0x11131d);
+      graphics.fillRoundedRect(25, 48, 22, 31, 9);
+      graphics.fillStyle(0xf8f8ff);
+      graphics.fillTriangle(22, 35, 36, 76, 49, 35);
+      graphics.fillStyle(0x11131d);
+      graphics.fillTriangle(34, 48, 49, 40, 48, 78);
+      graphics.fillStyle(0xffffff);
+      graphics.fillTriangle(24, 39, 37, 31, 36, 63);
 
-      graphics.fillStyle(0xf9f6ff);
-      graphics.fillRoundedRect(24, 5, 25, 32, 11);
-      graphics.fillStyle(0x1b2036);
-      graphics.fillTriangle(26, 22, 33, 31, 27, 33);
-      graphics.fillTriangle(47, 22, 40, 31, 46, 33);
-      graphics.fillStyle(colors.suitPurple);
-      graphics.fillRoundedRect(26, 34, 20, 34, 8);
-      graphics.fillStyle(0x9c7cff);
-      graphics.fillEllipse(36, 50 + frame.tutu, 38, 16);
+      graphics.lineStyle(6, 0xffffff, 1);
+      graphics.lineBetween(25, 42, 13, 58 + frame.arm - frame.reach);
+      graphics.lineBetween(47, 42, 60, 58 - frame.arm - frame.reach);
+      graphics.lineStyle(4, 0xd2278b, 1);
+      graphics.lineBetween(17, 53 + frame.arm, 10, 66 + frame.arm);
+      graphics.lineBetween(55, 53 - frame.arm, 63, 66 - frame.arm);
+      graphics.lineStyle(1, colors.balletTeal, 0.9);
+      graphics.lineBetween(13, 58 + frame.arm, 7, 64 + frame.arm);
+      graphics.lineBetween(13, 58 + frame.arm, 18, 68 + frame.arm);
+      graphics.lineBetween(59, 58 - frame.arm, 53, 68 - frame.arm);
+      graphics.lineBetween(59, 58 - frame.arm, 66, 64 - frame.arm);
 
-      graphics.lineStyle(5, colors.suitPurple, 1);
-      graphics.lineBetween(27, 42, 16, 55 + frame.arm);
-      graphics.lineBetween(45, 42, 56, 55 - frame.arm);
-      graphics.lineStyle(5, colors.balletTeal, 1);
-      graphics.lineBetween(31, 66, 22, 82 + frame.leg);
-      graphics.lineBetween(41, 66, 50, 82 - frame.leg);
+      graphics.lineStyle(6, 0x151620, 1);
+      graphics.lineBetween(31, 75, 20, 91 + frame.leg);
+      graphics.lineBetween(42, 75, 54, 91 - frame.leg);
       graphics.fillStyle(colors.balletTeal);
-      graphics.fillEllipse(20, 84 + frame.leg, 19, 7);
-      graphics.fillEllipse(52, 84 - frame.leg, 19, 7);
+      graphics.fillEllipse(18, 94 + frame.leg, 20, 8);
+      graphics.fillEllipse(56, 94 - frame.leg, 20, 8);
 
-      graphics.generateTexture(frame.key, 72, 92);
+      graphics.fillStyle(0xffffff);
+      graphics.fillTriangle(17, 6 + frame.hood, 36, 0 + frame.hood, 56, 8 + frame.hood);
+      graphics.fillRoundedRect(18, 6 + frame.hood, 36, 37, 15);
+      graphics.fillTriangle(18, 16 + frame.hood, 6, 42 + frame.hood, 27, 37 + frame.hood);
+      graphics.fillTriangle(54, 16 + frame.hood, 66, 42 + frame.hood, 45, 37 + frame.hood);
+      graphics.fillStyle(0xd2278b);
+      graphics.fillTriangle(14, 28 + frame.hood, 27, 40 + frame.hood, 8, 42 + frame.hood);
+      graphics.fillTriangle(58, 28 + frame.hood, 45, 40 + frame.hood, 64, 42 + frame.hood);
+      graphics.lineStyle(1, colors.balletTeal, 0.9);
+      graphics.lineBetween(14, 31 + frame.hood, 26, 39 + frame.hood);
+      graphics.lineBetween(20, 29 + frame.hood, 22, 42 + frame.hood);
+      graphics.lineBetween(58, 31 + frame.hood, 46, 39 + frame.hood);
+      graphics.lineBetween(52, 29 + frame.hood, 50, 42 + frame.hood);
+      graphics.fillStyle(0xffffff);
+      graphics.fillRoundedRect(25, 15 + frame.hood, 23, 24, 10);
+      graphics.lineStyle(2, 0xd2278b, 1);
+      graphics.strokeTriangle(25, 25 + frame.hood, 34, 21 + frame.hood, 32, 31 + frame.hood);
+      graphics.strokeTriangle(48, 25 + frame.hood, 39, 21 + frame.hood, 41, 31 + frame.hood);
+
+      graphics.generateTexture(frame.key, 72, 104);
     }
 
     graphics.clear();
@@ -281,6 +305,19 @@ export class GameScene extends Phaser.Scene {
       graphics.lineBetween(x, 0, x, 40);
     }
     graphics.generateTexture("sidewalkTile", 96, 40);
+    graphics.clear();
+
+    graphics.fillStyle(0x1a2236);
+    graphics.fillRect(0, 0, 192, 176);
+    graphics.fillStyle(0x26314c);
+    for (let row = 0; row < 7; row += 1) {
+      for (let column = 0; column < 8; column += 1) {
+        graphics.fillRect(column * 24 + (row % 2) * 12, row * 24, 20, 18);
+      }
+    }
+    graphics.fillStyle(0x101522);
+    graphics.fillRect(0, 158, 192, 18);
+    graphics.generateTexture("brickFacade", 192, 176);
     graphics.clear();
 
     graphics.fillStyle(0x192033);
@@ -416,15 +453,19 @@ export class GameScene extends Phaser.Scene {
     ];
 
     for (const building of buildings) {
-      this.add.image(building.x, building.y, "building").setDisplaySize(building.w, building.h).setDepth(-3);
+      this.add.image(building.x, building.y, "building").setDisplaySize(building.w, building.h).setDepth(-9);
       this.paintWindows(building);
       this.createRoofPlatform(building);
     }
   }
 
   private createStreetDetails(): void {
+    for (let x = 96; x < this.state.world.width; x += 192) {
+      this.add.image(x, FACADE_TOP_Y, "brickFacade").setOrigin(0.5, 0).setDepth(-6.5);
+    }
+
     for (let x = 48; x < this.state.world.width; x += 96) {
-      this.add.image(x, 1192, "sidewalkTile").setOrigin(0.5, 0).setDepth(-6);
+      this.add.image(x, SIDEWALK_Y, "sidewalkTile").setOrigin(0.5, 0).setDepth(-4);
     }
 
     for (let x = 120; x < this.state.world.width; x += 420) {
@@ -438,20 +479,20 @@ export class GameScene extends Phaser.Scene {
     }
 
     const storefronts = [
-      { x: 220, y: 1082, texture: "storefront" },
-      { x: 600, y: 1086, texture: "apartmentDoor" },
-      { x: 1120, y: 1082, texture: "storefront" },
-      { x: 1500, y: 1086, texture: "apartmentDoor" },
-      { x: 2050, y: 1082, texture: "storefront" },
-      { x: 2530, y: 1086, texture: "apartmentDoor" },
-      { x: 3230, y: 1082, texture: "storefront" },
-      { x: 3720, y: 1086, texture: "apartmentDoor" },
-      { x: 4380, y: 1082, texture: "storefront" },
-      { x: 4930, y: 1086, texture: "apartmentDoor" },
+      { x: 220, texture: "storefront", height: 124 },
+      { x: 600, texture: "apartmentDoor", height: 132 },
+      { x: 1120, texture: "storefront", height: 124 },
+      { x: 1500, texture: "apartmentDoor", height: 132 },
+      { x: 2050, texture: "storefront", height: 124 },
+      { x: 2530, texture: "apartmentDoor", height: 132 },
+      { x: 3230, texture: "storefront", height: 124 },
+      { x: 3720, texture: "apartmentDoor", height: 132 },
+      { x: 4380, texture: "storefront", height: 124 },
+      { x: 4930, texture: "apartmentDoor", height: 132 },
     ] as const;
 
     for (const detail of storefronts) {
-      this.add.image(detail.x, detail.y, detail.texture).setDepth(-2);
+      this.add.image(detail.x, SIDEWALK_Y - detail.height / 2, detail.texture).setDepth(-3.5);
     }
 
     for (let x = 360; x < this.state.world.width; x += 620) {
@@ -481,7 +522,7 @@ export class GameScene extends Phaser.Scene {
     for (let row = 0; row < rows; row += 1) {
       for (let column = 0; column < columns; column += 1) {
         const lit = (row + column) % 3 !== 0;
-        this.add.rectangle(left + column * 64, top + row * 72, 20, 28, lit ? 0xf9d37a : 0x26314d, lit ? 0.82 : 0.5);
+        this.add.rectangle(left + column * 64, top + row * 72, 20, 28, lit ? 0xf9d37a : 0x26314d, lit ? 0.82 : 0.5).setDepth(-8.8);
       }
     }
   }
@@ -491,7 +532,7 @@ export class GameScene extends Phaser.Scene {
     player.setCollideWorldBounds(true);
     player.setDragX(880);
     player.setMaxVelocity(760, 980);
-    player.body?.setSize(32, 72).setOffset(20, 13);
+    player.body?.setSize(34, 80).setOffset(19, 16);
     player.play("player-idle");
     this.physics.add.collider(player, this.requirePlatforms());
     this.player = player;
