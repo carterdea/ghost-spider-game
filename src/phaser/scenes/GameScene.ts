@@ -13,6 +13,7 @@ interface EnemyView {
   nextShotAt: number;
   snaredUntil: number;
   streetLane: boolean;
+  airborne: boolean;
 }
 
 interface Building {
@@ -20,6 +21,18 @@ interface Building {
   y: number;
   w: number;
   h: number;
+}
+
+interface FadingWeb {
+  line: Phaser.GameObjects.Line;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  velocityX: number;
+  velocityY: number;
+  createdAt: number;
+  duration: number;
 }
 
 const STREET_MIN_Y = 1210;
@@ -35,10 +48,14 @@ const GENERATED_TEXTURES = [
   "player-run-0",
   "player-run-1",
   "player-glide",
+  "player-swing",
+  "player-downed",
   "robot-walk-0",
   "robot-walk-1",
   "gunner-walk-0",
   "gunner-walk-1",
+  "drone-fly-0",
+  "drone-fly-1",
   "webGlob",
   "webNet",
   "bullet",
@@ -54,6 +71,12 @@ const GENERATED_TEXTURES = [
   "crosswalkStripe",
   "laneDash",
   "brickFacade",
+  "foodCart",
+  "newsStand",
+  "stoop",
+  "planter",
+  "roofVent",
+  "waterTower",
 ] as const;
 
 export class GameScene extends Phaser.Scene {
@@ -67,12 +90,14 @@ export class GameScene extends Phaser.Scene {
   private bullets?: Phaser.Physics.Arcade.Group;
   private webGlobs?: Phaser.Physics.Arcade.Group;
   private webLines: Phaser.GameObjects.Line[] = [];
+  private fadingWebs: FadingWeb[] = [];
   private shieldView?: Phaser.GameObjects.Arc;
   private playerOnStreet = false;
   private attackCooldownUntil = 0;
   private gadgetCooldownUntil = 0;
   private hitCooldownUntil = 0;
   private nextWebSwapAt = 0;
+  private knockoutStarted = false;
 
   public constructor() {
     super("game");
@@ -81,6 +106,12 @@ export class GameScene extends Phaser.Scene {
   public create(): void {
     this.state = createInitialGameState();
     this.enemies = [];
+    this.webLines = [];
+    this.fadingWebs = [];
+    this.knockoutStarted = false;
+    this.time.timeScale = 1;
+    this.tweens.timeScale = 1;
+    this.physics.world.timeScale = 1;
     this.previousActions = createEmptyActions();
     this.playerOnStreet = false;
     this.createTextures();
@@ -111,7 +142,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.state.player.health === 0) {
-      player.setVelocity(0, 0);
+      this.startKnockout(player);
+      this.updateFadingWebs();
+      this.updateWebLine(player);
       this.hud?.render(this.state);
       this.previousActions = actions;
       return;
@@ -121,6 +154,7 @@ export class GameScene extends Phaser.Scene {
     this.updatePlayer(player, actions, delta);
     this.updateEnemies(time);
     this.updateWebLine(player);
+    this.updateFadingWebs();
     this.updateShield(player, time);
     this.hud?.render(this.state);
     this.previousActions = actions;
@@ -133,6 +167,7 @@ export class GameScene extends Phaser.Scene {
     this.createPlayerSprites(graphics);
     this.createRobotSprites(graphics);
     this.createGunnerSprites(graphics);
+    this.createDroneSprites(graphics);
 
     graphics.fillStyle(colors.web);
     graphics.fillCircle(6, 6, 6);
@@ -182,18 +217,26 @@ export class GameScene extends Phaser.Scene {
 
   private createPlayerSprites(graphics: Phaser.GameObjects.Graphics): void {
     const frames = [
-      { key: "player-idle-0", arm: -1, leg: 0, hood: 0, reach: 0 },
-      { key: "player-idle-1", arm: 1, leg: -1, hood: 1, reach: 0 },
-      { key: "player-run-0", arm: -7, leg: -7, hood: 0, reach: -2 },
-      { key: "player-run-1", arm: 7, leg: 7, hood: 1, reach: 2 },
-      { key: "player-glide", arm: 0, leg: 0, hood: -1, reach: 10 },
+      { key: "player-idle-0", arm: -1, leg: 0, hood: 0, reach: 0, swing: false, downed: false },
+      { key: "player-idle-1", arm: 1, leg: -1, hood: 1, reach: 0, swing: false, downed: false },
+      { key: "player-run-0", arm: -7, leg: -7, hood: 0, reach: -2, swing: false, downed: false },
+      { key: "player-run-1", arm: 7, leg: 7, hood: 1, reach: 2, swing: false, downed: false },
+      { key: "player-glide", arm: 0, leg: 0, hood: -1, reach: 10, swing: false, downed: false },
+      { key: "player-swing", arm: 22, leg: -9, hood: -1, reach: 18, swing: true, downed: false },
+      { key: "player-downed", arm: -4, leg: 12, hood: 2, reach: 0, swing: false, downed: true },
     ];
 
     for (const frame of frames) {
       graphics.clear();
+      if (frame.downed) {
+        this.drawDownedPlayer(graphics, frame.key);
+        continue;
+      }
       const hoodY = 8 + frame.hood;
-      const leftArmX = 25 - frame.arm - frame.reach;
-      const rightArmX = 71 + frame.arm + frame.reach;
+      const leftArmX = frame.swing ? 30 : 25 - frame.arm - frame.reach;
+      const rightArmX = frame.swing ? 66 : 71 + frame.arm + frame.reach;
+      const leftHandY = frame.swing ? 15 : 98 + frame.arm;
+      const rightHandY = frame.swing ? 17 : 98 - frame.arm;
 
       graphics.fillStyle(0x0a0c12, 1);
       graphics.fillRoundedRect(35, 61, 28, 44, 13);
@@ -209,19 +252,19 @@ export class GameScene extends Phaser.Scene {
       graphics.lineBetween(46, 69, 48, 96);
 
       graphics.lineStyle(9, 0xffffff, 1);
-      graphics.lineBetween(35, 61, leftArmX, 77 + frame.arm);
-      graphics.lineBetween(62, 61, rightArmX, 77 - frame.arm);
+      graphics.lineBetween(35, 61, leftArmX, frame.swing ? 28 : 77 + frame.arm);
+      graphics.lineBetween(62, 61, rightArmX, frame.swing ? 28 : 77 - frame.arm);
       graphics.lineStyle(5, 0xd2268d, 1);
-      graphics.lineBetween(leftArmX, 77 + frame.arm, leftArmX - 7, 94 + frame.arm);
-      graphics.lineBetween(rightArmX, 77 - frame.arm, rightArmX + 7, 94 - frame.arm);
+      graphics.lineBetween(leftArmX, frame.swing ? 28 : 77 + frame.arm, leftArmX - 7, frame.swing ? leftHandY : 94 + frame.arm);
+      graphics.lineBetween(rightArmX, frame.swing ? 28 : 77 - frame.arm, rightArmX + 7, frame.swing ? rightHandY : 94 - frame.arm);
       graphics.lineStyle(2, colors.balletTeal, 0.95);
-      graphics.lineBetween(leftArmX - 1, 80 + frame.arm, leftArmX - 7, 93 + frame.arm);
-      graphics.lineBetween(leftArmX + 3, 82 + frame.arm, leftArmX - 2, 96 + frame.arm);
-      graphics.lineBetween(rightArmX + 1, 80 - frame.arm, rightArmX + 7, 93 - frame.arm);
-      graphics.lineBetween(rightArmX - 3, 82 - frame.arm, rightArmX + 2, 96 - frame.arm);
+      graphics.lineBetween(leftArmX - 1, frame.swing ? 32 : 80 + frame.arm, leftArmX - 7, frame.swing ? leftHandY : 93 + frame.arm);
+      graphics.lineBetween(leftArmX + 3, frame.swing ? 34 : 82 + frame.arm, leftArmX - 2, frame.swing ? leftHandY + 4 : 96 + frame.arm);
+      graphics.lineBetween(rightArmX + 1, frame.swing ? 32 : 80 - frame.arm, rightArmX + 7, frame.swing ? rightHandY : 93 - frame.arm);
+      graphics.lineBetween(rightArmX - 3, frame.swing ? 34 : 82 - frame.arm, rightArmX + 2, frame.swing ? rightHandY + 4 : 96 - frame.arm);
       graphics.fillStyle(0xffffff, 1);
-      graphics.fillEllipse(leftArmX - 9, 98 + frame.arm, 16, 9);
-      graphics.fillEllipse(rightArmX + 9, 98 - frame.arm, 16, 9);
+      graphics.fillEllipse(leftArmX - 9, leftHandY, 16, 9);
+      graphics.fillEllipse(rightArmX + 9, rightHandY, 16, 9);
 
       graphics.lineStyle(10, 0x0c0f17, 1);
       graphics.lineBetween(43, 103, 31, 126 + frame.leg);
@@ -271,24 +314,69 @@ export class GameScene extends Phaser.Scene {
     graphics.clear();
   }
 
+  private drawDownedPlayer(graphics: Phaser.GameObjects.Graphics, key: string): void {
+    graphics.fillStyle(0x0a0c12, 1);
+    graphics.fillRoundedRect(20, 78, 58, 24, 12);
+    graphics.lineStyle(8, 0xffffff, 1);
+    graphics.lineBetween(24, 84, 7, 97);
+    graphics.lineBetween(70, 84, 88, 96);
+    graphics.lineStyle(5, 0xd2268d, 1);
+    graphics.lineBetween(10, 97, 24, 104);
+    graphics.lineBetween(85, 96, 73, 104);
+    graphics.lineStyle(9, 0x0c0f17, 1);
+    graphics.lineBetween(33, 100, 22, 125);
+    graphics.lineBetween(57, 100, 76, 123);
+    graphics.fillStyle(colors.balletTeal, 1);
+    graphics.fillEllipse(20, 128, 28, 9);
+    graphics.fillEllipse(78, 126, 28, 9);
+    graphics.fillStyle(0xd2268d, 1);
+    graphics.fillTriangle(22, 56, 38, 80, 9, 80);
+    graphics.fillTriangle(73, 56, 56, 80, 88, 80);
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillRoundedRect(24, 45, 50, 38, 17);
+    graphics.fillEllipse(49, 72, 36, 26);
+    graphics.fillStyle(0xd2268d, 1);
+    graphics.fillTriangle(36, 70, 46, 64, 43, 76);
+    graphics.fillTriangle(62, 70, 52, 64, 55, 76);
+    graphics.generateTexture(key, 96, 136);
+  }
+
   private createRobotSprites(graphics: Phaser.GameObjects.Graphics): void {
     for (const [index, lean] of [0, 2].entries()) {
       graphics.clear();
+      graphics.fillStyle(0x171c2b);
+      graphics.fillEllipse(31 + lean, 77, 46, 9);
       graphics.fillStyle(0x4c566f);
-      graphics.fillRoundedRect(12 + lean, 18, 38, 40, 5);
+      graphics.fillRoundedRect(12 + lean, 22, 40, 38, 6);
+      graphics.fillStyle(0x2f384f);
+      graphics.fillRoundedRect(17 + lean, 27, 30, 26, 4);
+      graphics.lineStyle(2, 0x8a97b3, 0.85);
+      graphics.strokeRoundedRect(17 + lean, 27, 30, 26, 4);
       graphics.fillStyle(colors.robot);
-      graphics.fillRoundedRect(15 + lean, 8, 32, 24, 4);
+      graphics.fillRoundedRect(15 + lean, 8, 32, 24, 5);
+      graphics.fillStyle(0x141a2a);
+      graphics.fillRect(19 + lean, 14, 24, 12);
       graphics.fillStyle(0xdce3f2);
       graphics.fillRect(21 + lean, 17, 7, 6);
       graphics.fillRect(34 + lean, 17, 7, 6);
       graphics.fillStyle(colors.danger);
-      graphics.fillRect(18 + lean, 36, 26, 5);
-      graphics.lineStyle(6, 0x707b92, 1);
-      graphics.lineBetween(15 + lean, 43, 5, 59 - lean);
-      graphics.lineBetween(48 + lean, 43, 59, 59 + lean);
-      graphics.lineBetween(22 + lean, 58, 18, 73 + lean);
-      graphics.lineBetween(40 + lean, 58, 45, 73 - lean);
-      graphics.generateTexture(`robot-walk-${index}`, 64, 82);
+      graphics.fillRect(18 + lean, 38, 26, 5);
+      graphics.fillStyle(0x9ca8c4);
+      graphics.fillCircle(23 + lean, 46, 3);
+      graphics.fillCircle(39 + lean, 46, 3);
+      graphics.lineStyle(7, 0x707b92, 1);
+      graphics.lineBetween(15 + lean, 44, 4, 60 - lean);
+      graphics.lineBetween(49 + lean, 44, 61, 60 + lean);
+      graphics.lineStyle(4, 0x2ce5d2, 0.85);
+      graphics.lineBetween(5 + lean, 61 - lean, 16 + lean, 65 - lean);
+      graphics.lineBetween(60 + lean, 61 + lean, 49 + lean, 65 + lean);
+      graphics.lineStyle(7, 0x5f6a83, 1);
+      graphics.lineBetween(22 + lean, 60, 17, 75 + lean);
+      graphics.lineBetween(41 + lean, 60, 47, 75 - lean);
+      graphics.fillStyle(0x222b40);
+      graphics.fillRoundedRect(10, 73 + lean, 18, 7, 3);
+      graphics.fillRoundedRect(39, 73 - lean, 18, 7, 3);
+      graphics.generateTexture(`robot-walk-${index}`, 72, 88);
     }
 
     graphics.clear();
@@ -297,23 +385,68 @@ export class GameScene extends Phaser.Scene {
   private createGunnerSprites(graphics: Phaser.GameObjects.Graphics): void {
     for (const [index, coat] of [0, 3].entries()) {
       graphics.clear();
+      graphics.fillStyle(0x0b0e16);
+      graphics.fillEllipse(36, 82, 50, 8);
       graphics.fillStyle(0x0d1018);
-      graphics.fillRoundedRect(13, 7, 36, 56, 16);
+      graphics.fillRoundedRect(14, 8, 42, 59, 17);
       graphics.fillStyle(colors.gunner);
-      graphics.fillTriangle(13, 30, 5, 75 + coat, 31, 60);
-      graphics.fillTriangle(49, 30, 58, 75 - coat, 31, 60);
-      graphics.fillStyle(0xf3f3ff);
-      graphics.fillCircle(31, 22, 8);
+      graphics.fillTriangle(14, 30, 4, 80 + coat, 34, 61);
+      graphics.fillTriangle(56, 30, 68, 80 - coat, 34, 61);
       graphics.fillStyle(0x242a3b);
-      graphics.fillRect(31, 39, 30, 7);
+      graphics.fillRoundedRect(22, 35, 27, 31, 6);
+      graphics.lineStyle(2, 0x5b657f, 0.8);
+      graphics.lineBetween(28, 41, 28, 62);
+      graphics.lineBetween(41, 40, 41, 62);
+      graphics.fillStyle(0xf3f3ff);
+      graphics.fillCircle(35, 22, 9);
+      graphics.fillStyle(0x111520);
+      graphics.fillTriangle(22, 20, 35, 6, 49, 20);
+      graphics.fillStyle(0xf0d07a);
+      graphics.fillRect(31, 22, 9, 3);
+      graphics.fillStyle(0x242a3b);
+      graphics.fillRoundedRect(36, 40, 31, 7, 2);
       graphics.fillStyle(0x12151f);
-      graphics.fillRect(55, 38, 12, 5);
+      graphics.fillRoundedRect(62, 39, 13, 5, 2);
       graphics.fillStyle(colors.danger);
-      graphics.fillCircle(66, 40, 3);
+      graphics.fillCircle(75, 41, 3);
       graphics.lineStyle(5, 0x2a3143, 1);
-      graphics.lineBetween(23, 61, 18, 78 - coat);
-      graphics.lineBetween(39, 61, 45, 78 + coat);
-      graphics.generateTexture(`gunner-walk-${index}`, 72, 86);
+      graphics.lineBetween(25, 63, 19, 81 - coat);
+      graphics.lineBetween(45, 63, 51, 81 + coat);
+      graphics.fillStyle(0x141824);
+      graphics.fillRoundedRect(11, 78 - coat, 18, 7, 3);
+      graphics.fillRoundedRect(43, 78 + coat, 18, 7, 3);
+      graphics.generateTexture(`gunner-walk-${index}`, 82, 92);
+    }
+
+    graphics.clear();
+  }
+
+  private createDroneSprites(graphics: Phaser.GameObjects.Graphics): void {
+    for (const [index, rotor] of [0, 5].entries()) {
+      graphics.clear();
+      graphics.fillStyle(0x101626, 0.75);
+      graphics.fillEllipse(38, 58, 62, 9);
+      graphics.fillStyle(0x2f3954);
+      graphics.fillRoundedRect(19, 24, 38, 24, 7);
+      graphics.fillStyle(0x56627f);
+      graphics.fillRoundedRect(25, 17, 26, 14, 5);
+      graphics.fillStyle(0x151c2f);
+      graphics.fillRect(28, 29, 20, 9);
+      graphics.fillStyle(colors.danger);
+      graphics.fillCircle(38, 34, 4);
+      graphics.lineStyle(3, 0x66728e, 1);
+      graphics.lineBetween(19, 27, 5, 16);
+      graphics.lineBetween(57, 27, 71, 16);
+      graphics.lineBetween(19, 43, 6, 55);
+      graphics.lineBetween(57, 43, 70, 55);
+      graphics.lineStyle(3, 0x9aa6bf, 0.9);
+      graphics.lineBetween(1, 16 - rotor, 17, 16 + rotor);
+      graphics.lineBetween(59, 16 + rotor, 75, 16 - rotor);
+      graphics.lineBetween(2, 55 + rotor, 18, 55 - rotor);
+      graphics.lineBetween(58, 55 - rotor, 74, 55 + rotor);
+      graphics.fillStyle(0x2ce5d2, 0.86);
+      graphics.fillRect(29, 47, 18, 4);
+      graphics.generateTexture(`drone-fly-${index}`, 78, 66);
     }
 
     graphics.clear();
@@ -424,6 +557,84 @@ export class GameScene extends Phaser.Scene {
     graphics.fillRoundedRect(0, 0, 92, 8, 4);
     graphics.generateTexture("laneDash", 92, 8);
     graphics.clear();
+
+    graphics.fillStyle(0x20283c);
+    graphics.fillRoundedRect(0, 20, 124, 72, 8);
+    graphics.fillStyle(0xd94494);
+    graphics.fillRect(0, 20, 124, 14);
+    graphics.fillStyle(0xf4d46c);
+    graphics.fillRect(12, 42, 30, 22);
+    graphics.fillRect(50, 42, 26, 22);
+    graphics.fillRect(84, 42, 28, 22);
+    graphics.fillStyle(0x76e5ef, 0.65);
+    graphics.fillRect(10, 68, 104, 10);
+    graphics.fillStyle(0x111722);
+    graphics.fillCircle(22, 94, 8);
+    graphics.fillCircle(102, 94, 8);
+    graphics.generateTexture("foodCart", 124, 104);
+    graphics.clear();
+
+    graphics.fillStyle(0x172033);
+    graphics.fillRoundedRect(0, 12, 136, 102, 6);
+    graphics.fillStyle(0x5d6ea0);
+    graphics.fillRect(8, 24, 120, 12);
+    graphics.fillStyle(0xf5f2d0);
+    for (let x = 12; x < 112; x += 24) {
+      graphics.fillRect(x, 46, 16, 22);
+      graphics.fillRect(x + 4, 74, 16, 24);
+    }
+    graphics.fillStyle(0xe85f9a);
+    graphics.fillRect(0, 0, 136, 16);
+    graphics.generateTexture("newsStand", 136, 120);
+    graphics.clear();
+
+    graphics.fillStyle(0x182137);
+    graphics.fillRoundedRect(0, 0, 132, 92, 4);
+    graphics.fillStyle(0x293657);
+    graphics.fillRoundedRect(24, 18, 84, 74, 9);
+    graphics.fillStyle(0x0d121e);
+    graphics.fillRoundedRect(45, 36, 42, 56, 8);
+    graphics.fillStyle(0xb68650);
+    graphics.fillCircle(78, 65, 3);
+    graphics.fillStyle(0x44516f);
+    graphics.fillRect(10, 84, 112, 8);
+    graphics.generateTexture("stoop", 132, 100);
+    graphics.clear();
+
+    graphics.fillStyle(0x1e4e45);
+    graphics.fillRoundedRect(4, 48, 70, 16, 5);
+    graphics.fillStyle(0x2a654f);
+    graphics.fillCircle(22, 42, 19);
+    graphics.fillCircle(42, 34, 24);
+    graphics.fillCircle(59, 44, 18);
+    graphics.fillStyle(0x6e4c36);
+    graphics.fillRect(38, 44, 8, 15);
+    graphics.generateTexture("planter", 80, 70);
+    graphics.clear();
+
+    graphics.fillStyle(0x222b42);
+    graphics.fillRoundedRect(0, 20, 78, 44, 4);
+    graphics.fillStyle(0x485572);
+    graphics.fillRect(8, 8, 62, 14);
+    graphics.lineStyle(2, 0x111827, 0.8);
+    for (let x = 14; x < 65; x += 12) {
+      graphics.lineBetween(x, 10, x - 4, 20);
+    }
+    graphics.generateTexture("roofVent", 82, 68);
+    graphics.clear();
+
+    graphics.lineStyle(5, 0x222b42, 1);
+    graphics.lineBetween(22, 42, 8, 118);
+    graphics.lineBetween(74, 42, 88, 118);
+    graphics.lineBetween(16, 84, 80, 84);
+    graphics.fillStyle(0x4b5877);
+    graphics.fillEllipse(48, 30, 74, 32);
+    graphics.fillRoundedRect(12, 30, 72, 46, 8);
+    graphics.fillEllipse(48, 76, 72, 22);
+    graphics.fillStyle(0x7a88a8, 0.8);
+    graphics.fillRect(20, 43, 56, 6);
+    graphics.generateTexture("waterTower", 96, 124);
+    graphics.clear();
   }
 
   private createAnimations(): void {
@@ -431,6 +642,7 @@ export class GameScene extends Phaser.Scene {
     this.anims.remove("player-run");
     this.anims.remove("robot-walk");
     this.anims.remove("gunner-walk");
+    this.anims.remove("drone-fly");
 
     this.anims.create({
       key: "player-idle",
@@ -454,6 +666,12 @@ export class GameScene extends Phaser.Scene {
       key: "gunner-walk",
       frames: [{ key: "gunner-walk-0" }, { key: "gunner-walk-1" }],
       frameRate: 4,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "drone-fly",
+      frames: [{ key: "drone-fly-0" }, { key: "drone-fly-1" }],
+      frameRate: 10,
       repeat: -1,
     });
   }
@@ -524,6 +742,13 @@ export class GameScene extends Phaser.Scene {
     this.add.rectangle(5180, 350, 360, 210, 0xf3fbff, 0.94).setDepth(-8.95);
     this.add.rectangle(5180, 350, 392, 242, 0x72f1ff, 0.18).setDepth(-8.96);
     this.add.rectangle(5180, 350, 400, 250).setStrokeStyle(8, 0xc7f7ff, 0.82).setDepth(-8.94);
+    this.add.text(5180, 335, "BIG\nSTINKY\nPANTS", {
+      align: "center",
+      color: "#172033",
+      fontFamily: "Arial Black, Impact, sans-serif",
+      fontSize: "38px",
+      lineSpacing: -5,
+    }).setOrigin(0.5).setDepth(-8.93);
 
     this.add.polygon(3120, 1085, [
       -1700, 160,
@@ -598,6 +823,12 @@ export class GameScene extends Phaser.Scene {
       this.add.image(detail.x, SIDEWALK_Y - detail.height / 2, detail.texture).setDepth(-3.5);
     }
 
+    for (let x = 420; x < this.state.world.width; x += 1040) {
+      this.add.image(x, SIDEWALK_Y - 50, "stoop").setDepth(-3.4);
+      this.add.image(x + 260, SIDEWALK_Y - 60, "newsStand").setDepth(-3.3);
+      this.add.image(x + 560, SIDEWALK_Y - 52, "foodCart").setDepth(-3.2);
+    }
+
     for (let x = 360; x < this.state.world.width; x += 620) {
       this.add.image(x, 1160, "streetLight").setDepth(1180);
     }
@@ -605,11 +836,22 @@ export class GameScene extends Phaser.Scene {
     for (let x = 520; x < this.state.world.width; x += 930) {
       this.add.image(x, 1188, "trashCan").setDepth(1200);
       this.add.image(x + 190, 1192, "hydrant").setDepth(1200);
+      this.add.image(x + 330, 1188, "planter").setDepth(1200);
     }
   }
 
   private createRoofPlatform(building: Building): void {
     const roofY = building.y - building.h / 2 + 10;
+    this.add.rectangle(building.x, roofY + 23, building.w - 22, 42, 0x151c2f, 0.92).setDepth(-7.2);
+    this.add.rectangle(building.x, roofY + 3, building.w - 8, 16, 0x3c4868, 1).setDepth(-7.1);
+    this.add.rectangle(building.x - building.w / 2 + 34, roofY - 12, 44, 34, 0x202944, 1).setDepth(-7);
+    this.add.rectangle(building.x + building.w / 2 - 34, roofY - 12, 44, 34, 0x202944, 1).setDepth(-7);
+    if (building.w > 500) {
+      this.add.image(building.x - building.w * 0.18, roofY - 42, "roofVent").setDepth(-6.8);
+      this.add.image(building.x + building.w * 0.22, roofY - 88, "waterTower").setDepth(-6.9);
+    } else {
+      this.add.image(building.x + building.w * 0.18, roofY - 42, "roofVent").setDepth(-6.8);
+    }
     const roof = this.requirePlatforms().create(building.x, roofY, "roof") as Phaser.Physics.Arcade.Sprite;
     roof.displayWidth = building.w - 30;
     roof.displayHeight = 18;
@@ -642,34 +884,77 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createEnemies(): void {
-    const placements: Record<string, { x: number; y: number; streetLane: boolean }> = {
+    const placements: Record<string, { x: number; y: number; streetLane: boolean; airborne?: boolean }> = {
       "robot-roof-1": { x: 960, y: 80, streetLane: false },
+      "drone-roof-1": { x: 1360, y: 170, streetLane: false, airborne: true },
       "gunner-street-1": { x: 1920, y: 1330, streetLane: true },
       "robot-roof-2": { x: 2920, y: -5, streetLane: false },
+      "drone-roof-2": { x: 3480, y: 80, streetLane: false, airborne: true },
       "robot-street-1": { x: 3600, y: 1348, streetLane: true },
       "gunner-roof-1": { x: 4660, y: 235, streetLane: false },
+      "robot-roof-3": { x: 5200, y: 565, streetLane: false },
     };
 
     for (const enemyState of this.state.enemies) {
       const placement = placements[enemyState.id];
-      const texture = enemyState.kind === "gunner" ? "gunner-walk-0" : "robot-walk-0";
+      const texture = this.getEnemyTexture(enemyState.kind);
       const sprite = this.physics.add.sprite(placement.x, placement.y, texture);
       sprite.setCollideWorldBounds(true);
       sprite.setDragX(600);
-      sprite.setMaxVelocity(180, 900);
-      sprite.body?.setSize(enemyState.kind === "gunner" ? 34 : 38, enemyState.kind === "gunner" ? 72 : 70).setOffset(enemyState.kind === "gunner" ? 18 : 13, 10);
-      sprite.body?.setAllowGravity(!placement.streetLane);
-      sprite.play(enemyState.kind === "gunner" ? "gunner-walk" : "robot-walk");
+      sprite.setMaxVelocity(enemyState.kind === "drone" ? 220 : 180, enemyState.kind === "drone" ? 140 : 900);
+      this.setEnemyBody(sprite, enemyState.kind);
+      sprite.body?.setAllowGravity(!placement.streetLane && placement.airborne !== true);
+      sprite.play(this.getEnemyAnimation(enemyState.kind));
 
       if (placement.streetLane) {
         sprite.y = Phaser.Math.Clamp(sprite.y, STREET_MIN_Y, ENEMY_STREET_MAX_Y);
         sprite.setDepth(sprite.y);
-      } else {
+      } else if (placement.airborne !== true) {
         this.physics.add.collider(sprite, this.requirePlatforms());
+      } else {
+        sprite.setDepth(placement.y + 30);
       }
 
-      this.enemies.push({ state: enemyState, sprite, direction: 1, nextShotAt: 0, snaredUntil: 0, streetLane: placement.streetLane });
+      this.enemies.push({ state: enemyState, sprite, direction: 1, nextShotAt: 0, snaredUntil: 0, streetLane: placement.streetLane, airborne: placement.airborne === true });
     }
+  }
+
+  private getEnemyTexture(kind: EnemyState["kind"]): string {
+    if (kind === "gunner") {
+      return "gunner-walk-0";
+    }
+
+    if (kind === "drone") {
+      return "drone-fly-0";
+    }
+
+    return "robot-walk-0";
+  }
+
+  private getEnemyAnimation(kind: EnemyState["kind"]): string {
+    if (kind === "gunner") {
+      return "gunner-walk";
+    }
+
+    if (kind === "drone") {
+      return "drone-fly";
+    }
+
+    return "robot-walk";
+  }
+
+  private setEnemyBody(sprite: Phaser.Physics.Arcade.Sprite, kind: EnemyState["kind"]): void {
+    if (kind === "gunner") {
+      sprite.body?.setSize(40, 76).setOffset(20, 10);
+      return;
+    }
+
+    if (kind === "drone") {
+      sprite.body?.setSize(52, 34).setOffset(13, 18);
+      return;
+    }
+
+    sprite.body?.setSize(42, 72).setOffset(15, 10);
   }
 
   private createCombat(): void {
@@ -694,7 +979,7 @@ export class GameScene extends Phaser.Scene {
           return;
         }
         this.hitCooldownUntil = this.time.now + 700;
-        damagePlayer(this.state, enemy.state.damage, enemy.state.kind === "gunner" ? "Close-range blast." : "Robot tackle.");
+        damagePlayer(this.state, enemy.state.damage, enemy.state.kind === "gunner" ? "Close-range blast." : enemy.state.kind === "drone" ? "Drone zap." : "Robot tackle.");
       });
 
       this.physics.add.overlap(this.requireWebGlobs(), enemy.sprite, (globObject) => {
@@ -787,15 +1072,16 @@ export class GameScene extends Phaser.Scene {
     if (this.state.player.webAttached && this.state.player.webAnchors.length > 0) {
       this.updateSwingAnchors(player, actions);
       this.applySwing(player, this.state.player.webAnchors, actions, delta);
+      player.setTexture("player-swing");
     }
 
-    if (actions.glide && !this.playerOnStreet && !grounded && player.body && player.body.velocity.y > 80) {
+    if (!this.state.player.webAttached && actions.glide && !this.playerOnStreet && !grounded && player.body && player.body.velocity.y > 80) {
       player.setVelocityY(Math.min(player.body.velocity.y, 170));
       player.setTexture("player-glide");
       this.state.player.message = "Web-wings slowed the fall.";
-    } else if (Math.abs(player.body?.velocity.x ?? 0) > 80) {
+    } else if (!this.state.player.webAttached && Math.abs(player.body?.velocity.x ?? 0) > 80) {
       player.play("player-run", true);
-    } else if (!actions.glide) {
+    } else if (!this.state.player.webAttached && !actions.glide) {
       player.play("player-idle", true);
     }
 
@@ -826,11 +1112,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.state.player.webAttached = false;
+    const player = this.requirePlayer();
+    for (const anchor of this.state.player.webAnchors) {
+      this.fadeWeb(anchor, this.getClosestHandPosition(player, anchor));
+    }
+
     this.state.player.webAnchors = [];
     this.state.player.message = message;
     this.nextWebSwapAt = 0;
-    this.requirePlayer().setGravityY(0);
-    this.clearWebLines();
+    player.setGravityY(0);
+    this.clearWebLines(false);
   }
 
   private updateSwingAnchors(player: Phaser.Physics.Arcade.Sprite, actions: ActionState): void {
@@ -847,9 +1138,14 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    const droppedAnchor = trailingAnchor ?? overextendedAnchor;
+    if (droppedAnchor) {
+      this.fadeWeb(droppedAnchor, this.getClosestHandPosition(player, droppedAnchor));
+    }
+
     const newAnchor = this.findForwardWebAnchor(player.x, player.y, travelDirection, anchors);
-    this.state.player.webAnchors = [...anchors.filter((anchor) => anchor !== (trailingAnchor ?? overextendedAnchor)), newAnchor].slice(-2);
-    this.nextWebSwapAt = this.time.now + 420;
+    this.state.player.webAnchors = [...anchors.filter((anchor) => anchor !== droppedAnchor), newAnchor].slice(-2);
+    this.nextWebSwapAt = this.time.now + 300;
     this.state.player.message = "New web-line caught.";
   }
 
@@ -860,27 +1156,32 @@ export class GameScene extends Phaser.Scene {
     }
 
     const dt = delta / 1000;
-    const maxLength = 520;
-    const spring = 640 / anchors.length;
+    const maxLength = 555;
+    const spring = 780 / anchors.length;
 
     for (const anchor of anchors) {
       const distance = Phaser.Math.Distance.Between(player.x, player.y, anchor.x, anchor.y);
       const angle = Phaser.Math.Angle.Between(player.x, player.y, anchor.x, anchor.y);
-      const stretch = Math.max(0, distance - 140) / maxLength;
+      const stretch = Math.max(0, distance - 120) / maxLength;
+      const tangent = angle + Math.PI / 2;
+      const travelSign = this.getSwingDirection(player, actions);
 
       body.velocity.x += Math.cos(angle) * spring * stretch * dt;
       body.velocity.y += Math.sin(angle) * spring * stretch * dt;
+      body.velocity.x += Math.cos(tangent) * travelSign * 120 * dt;
+      body.velocity.y += Math.sin(tangent) * travelSign * 58 * dt;
 
       if (distance > maxLength) {
-        const correction = (distance - maxLength) * 0.18;
+        const correction = (distance - maxLength) * 0.12;
         player.x += Math.cos(angle) * correction;
         player.y += Math.sin(angle) * correction;
       }
     }
 
     const moveAssist = Number(actions.moveRight) - Number(actions.moveLeft);
-    body.velocity.x += moveAssist * 260 * dt;
-    body.velocity.x *= 0.995;
+    body.velocity.x += moveAssist * 330 * dt;
+    body.velocity.x *= 0.998;
+    body.velocity.y *= 0.997;
   }
 
   private findWebAnchors(x: number, y: number): WebAnchor[] {
@@ -963,7 +1264,7 @@ export class GameScene extends Phaser.Scene {
   private updateWebLine(player: Phaser.Physics.Arcade.Sprite): void {
     const anchors = this.state.player.webAnchors;
     if (!this.state.player.webAttached || anchors.length === 0) {
-      this.clearWebLines();
+      this.clearWebLines(false);
       return;
     }
 
@@ -971,8 +1272,11 @@ export class GameScene extends Phaser.Scene {
       this.webLines.push(this.add.line(0, 0, 0, 0, 0, 0, colors.web, 0.82).setOrigin(0, 0).setLineWidth(3));
     }
 
+    const hands = this.getWebHandPositions(player, anchors);
     for (const [index, anchor] of anchors.entries()) {
-      this.webLines[index].setTo(anchor.x, anchor.y, player.x, player.y);
+      const hand = hands[index] ?? hands[0];
+      this.webLines[index].setTo(anchor.x, anchor.y, hand.x, hand.y);
+      this.webLines[index].setDepth(player.depth + 2 + index);
     }
 
     for (const staleLine of this.webLines.slice(anchors.length)) {
@@ -981,11 +1285,79 @@ export class GameScene extends Phaser.Scene {
     this.webLines = this.webLines.slice(0, anchors.length);
   }
 
-  private clearWebLines(): void {
+  private getWebHandPositions(player: Phaser.Physics.Arcade.Sprite, anchors: WebAnchor[]): WebAnchor[] {
+    const facing = player.flipX ? -1 : 1;
+    const left = { x: player.x - 18 * facing, y: player.y - 48 };
+    const right = { x: player.x + 18 * facing, y: player.y - 47 };
+
+    if (anchors.length <= 1) {
+      return [anchors[0] && anchors[0].x < player.x ? left : right];
+    }
+
+    return anchors.map((anchor) => (anchor.x < player.x ? left : right));
+  }
+
+  private getClosestHandPosition(player: Phaser.Physics.Arcade.Sprite, anchor: WebAnchor): WebAnchor {
+    const [hand] = this.getWebHandPositions(player, [anchor]);
+    return hand;
+  }
+
+  private fadeWeb(anchor: WebAnchor, hand: WebAnchor): void {
+    const line = this.add.line(0, 0, anchor.x, anchor.y, hand.x, hand.y, colors.web, 0.72).setOrigin(0, 0).setLineWidth(3);
+    line.setDepth(hand.y + 4);
+    this.fadingWebs.push({
+      line,
+      fromX: anchor.x,
+      fromY: anchor.y,
+      toX: hand.x,
+      toY: hand.y,
+      velocityX: Phaser.Math.Between(-14, 14),
+      velocityY: Phaser.Math.Between(54, 82),
+      createdAt: this.time.now,
+      duration: 760,
+    });
+  }
+
+  private updateFadingWebs(): void {
+    const liveWebs: FadingWeb[] = [];
+
+    for (const web of this.fadingWebs) {
+      const age = this.time.now - web.createdAt;
+      const progress = Phaser.Math.Clamp(age / web.duration, 0, 1);
+      if (progress >= 1) {
+        web.line.destroy();
+        continue;
+      }
+
+      const fall = progress * progress * 96;
+      const sway = Math.sin(progress * Math.PI) * web.velocityX;
+      web.line.setTo(
+        web.fromX + sway * 0.4,
+        web.fromY + fall * 0.4,
+        web.toX + sway,
+        web.toY + fall + web.velocityY * progress,
+      );
+      web.line.setAlpha((1 - progress) * 0.72);
+      liveWebs.push(web);
+    }
+
+    this.fadingWebs = liveWebs;
+  }
+
+  private clearWebLines(destroyFadingWebs: boolean): void {
     for (const line of this.webLines) {
       line.destroy();
     }
     this.webLines = [];
+
+    if (!destroyFadingWebs) {
+      return;
+    }
+
+    for (const web of this.fadingWebs) {
+      web.line.destroy();
+    }
+    this.fadingWebs = [];
   }
 
   private attack(player: Phaser.Physics.Arcade.Sprite): void {
@@ -1092,6 +1464,9 @@ export class GameScene extends Phaser.Scene {
 
       if (time < enemy.snaredUntil) {
         enemy.sprite.setVelocityX(0);
+        if (enemy.airborne) {
+          enemy.sprite.setVelocityY(Math.sin(time / 180) * 18);
+        }
         if (enemy.streetLane) {
           enemy.sprite.y = Phaser.Math.Clamp(enemy.sprite.y, STREET_MIN_Y, ENEMY_STREET_MAX_Y);
           enemy.sprite.setDepth(enemy.sprite.y);
@@ -1107,7 +1482,7 @@ export class GameScene extends Phaser.Scene {
         enemy.direction = -1;
       }
 
-      enemy.sprite.setVelocityX(enemy.direction * (enemy.state.kind === "gunner" ? 70 : 105));
+      enemy.sprite.setVelocityX(enemy.direction * (enemy.state.kind === "gunner" ? 70 : enemy.state.kind === "drone" ? 120 : 105));
       enemy.sprite.setFlipX(enemy.direction < 0);
 
       if (enemy.streetLane) {
@@ -1117,11 +1492,16 @@ export class GameScene extends Phaser.Scene {
         enemy.sprite.setDepth(enemy.sprite.y);
       }
 
-      if (enemy.state.kind === "gunner" && time >= enemy.nextShotAt) {
-        const closeEnough = Phaser.Math.Distance.Between(player.x, player.y, enemy.sprite.x, enemy.sprite.y) < 680;
+      if (enemy.airborne) {
+        enemy.sprite.setVelocityY(Math.sin(time / 260 + enemy.sprite.x * 0.01) * 52);
+        enemy.sprite.setDepth(enemy.sprite.y + 30);
+      }
+
+      if ((enemy.state.kind === "gunner" || enemy.state.kind === "drone") && time >= enemy.nextShotAt) {
+        const closeEnough = Phaser.Math.Distance.Between(player.x, player.y, enemy.sprite.x, enemy.sprite.y) < (enemy.state.kind === "drone" ? 560 : 680);
         if (closeEnough) {
           this.fireBullet(enemy, player);
-          enemy.nextShotAt = time + 1550;
+          enemy.nextShotAt = time + (enemy.state.kind === "drone" ? 1900 : 1550);
         }
       }
     }
@@ -1129,12 +1509,49 @@ export class GameScene extends Phaser.Scene {
 
   private fireBullet(enemy: EnemyView, player: Phaser.Physics.Arcade.Sprite): void {
     const bullets = this.requireBullets();
-    const bullet = bullets.create(enemy.sprite.x, enemy.sprite.y + 4, "bullet") as Phaser.Physics.Arcade.Sprite;
+    const bullet = bullets.create(enemy.sprite.x, enemy.sprite.y + (enemy.state.kind === "drone" ? 18 : 4), "bullet") as Phaser.Physics.Arcade.Sprite;
     const angle = Phaser.Math.Angle.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
-    bullet.setVelocity(Math.cos(angle) * 360, Math.sin(angle) * 360);
-    bullet.setTint(colors.danger);
+    const speed = enemy.state.kind === "drone" ? 300 : 360;
+    bullet.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    bullet.setTint(enemy.state.kind === "drone" ? colors.balletTeal : colors.danger);
     bullet.setDepth(enemy.sprite.depth + 1);
     this.time.delayedCall(2600, () => bullet.destroy());
+  }
+
+  private startKnockout(player: Phaser.Physics.Arcade.Sprite): void {
+    if (this.knockoutStarted) {
+      player.setTexture("player-downed");
+      return;
+    }
+
+    this.knockoutStarted = true;
+    this.state.player.webAttached = false;
+    for (const anchor of this.state.player.webAnchors) {
+      this.fadeWeb(anchor, this.getClosestHandPosition(player, anchor));
+    }
+    this.state.player.webAnchors = [];
+    this.clearWebLines(false);
+    this.playerOnStreet = false;
+    this.setPlayerGravity(player, true);
+    player.setGravityY(0);
+    player.setAcceleration(0, 0);
+    player.setVelocity(player.flipX ? 120 : -120, -210);
+    player.setAngularVelocity(player.flipX ? 90 : -90);
+    player.setTexture("player-downed");
+    player.setTint(0xffd1f0);
+    this.state.player.message = "Knocked out in slow motion. Press R to restart.";
+    this.time.timeScale = 0.28;
+    this.tweens.timeScale = 0.28;
+    this.physics.world.timeScale = 0.28;
+    this.cameras.main.shake(360, 0.006);
+
+    this.time.delayedCall(900, () => {
+      player.setAngularVelocity(0);
+      player.setVelocity(0, 0);
+      player.setAngle(0);
+      player.clearTint();
+      player.setTexture("player-downed");
+    });
   }
 
   private wasPressed(actions: ActionState, action: keyof ActionState): boolean {
