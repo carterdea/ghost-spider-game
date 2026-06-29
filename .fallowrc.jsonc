@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/fallow/schema.json",
+  "usedClassMembers": [
+    {
+      "extends": "Phaser.Scene",
+      "members": ["create", "update"]
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Ghost Pirouette icon</title>
   <rect width="64" height="64" rx="12" fill="#101521"/>
   <path d="M19 36 7 54l20-9Zm26 0 12 18-20-9Z" fill="#b9a6ff" opacity=".82"/>
   <rect x="22" y="24" width="20" height="28" rx="10" fill="#6f4cff"/>

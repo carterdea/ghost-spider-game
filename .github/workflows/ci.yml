@@ -25,4 +25,4 @@ jobs:
         run: bun run typecheck
 
       - name: Fallow
-        run: bunx fallow
+        run: bunx fallow --skip health --fail-on-issues

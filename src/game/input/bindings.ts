@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { createEmptyActions, type ActionState } from "./actions";
+import { type ActionState, createEmptyActions } from "./actions";
 
 type KeyMap = Record<keyof ActionState, Phaser.Input.Keyboard.Key>;
 

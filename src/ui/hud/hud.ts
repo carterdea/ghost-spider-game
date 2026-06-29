@@ -8,7 +8,9 @@ export class Hud {
   }
 
   public render(state: GameState): void {
-    const healthPercent = Math.round((state.player.health / state.player.maxHealth) * 100);
+    const healthPercent = Math.round(
+      (state.player.health / state.player.maxHealth) * 100,
+    );
 
     this.root.innerHTML = `
       <div class="hud-top">

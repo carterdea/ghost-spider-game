@@ -1,9 +1,18 @@
 import Phaser from "phaser";
 import { colors } from "../../game/assets/manifest";
-import { createEmptyActions, type ActionState } from "../../game/input/actions";
+import { type ActionState, createEmptyActions } from "../../game/input/actions";
 import { createKeyboardBindings, readActions } from "../../game/input/bindings";
-import { damageEnemy, damagePlayer } from "../../game/simulation/systems/combat";
-import { createInitialGameState, type EnemyState, type GadgetKind, type GameState, type WebAnchor } from "../../game/simulation/state";
+import {
+  createInitialGameState,
+  type EnemyState,
+  type GadgetKind,
+  type GameState,
+  type WebAnchor,
+} from "../../game/simulation/state";
+import {
+  damageEnemy,
+  damagePlayer,
+} from "../../game/simulation/systems/combat";
 import { Hud } from "../../ui/hud/hud";
 
 interface EnemyView {
@@ -42,6 +51,15 @@ const ENEMY_STREET_MAX_Y = STREET_MAX_Y - 34;
 const FACADE_TOP_Y = 1016;
 const SIDEWALK_Y = 1192;
 const GADGETS: GadgetKind[] = ["web-net", "web-shield", "web-wings"];
+const WEB_ANCHOR_CANDIDATES: WebAnchor[] = [
+  { x: 520, y: 430 },
+  { x: 1180, y: 120 },
+  { x: 1860, y: 650 },
+  { x: 2600, y: 300 },
+  { x: 3360, y: 30 },
+  { x: 4100, y: 730 },
+  { x: 5020, y: 210 },
+];
 const GENERATED_TEXTURES = [
   "player-idle-0",
   "player-idle-1",
@@ -231,13 +249,69 @@ export class GameScene extends Phaser.Scene {
 
   private createPlayerSprites(graphics: Phaser.GameObjects.Graphics): void {
     const frames = [
-      { key: "player-idle-0", arm: -1, leg: 0, hood: 0, reach: 0, swing: false, downed: false },
-      { key: "player-idle-1", arm: 1, leg: -1, hood: 1, reach: 0, swing: false, downed: false },
-      { key: "player-run-0", arm: -7, leg: -7, hood: 0, reach: -2, swing: false, downed: false },
-      { key: "player-run-1", arm: 7, leg: 7, hood: 1, reach: 2, swing: false, downed: false },
-      { key: "player-glide", arm: 0, leg: 0, hood: -1, reach: 10, swing: false, downed: false },
-      { key: "player-swing", arm: 22, leg: -9, hood: -1, reach: 18, swing: true, downed: false },
-      { key: "player-downed", arm: -4, leg: 12, hood: 2, reach: 0, swing: false, downed: true },
+      {
+        key: "player-idle-0",
+        arm: -1,
+        leg: 0,
+        hood: 0,
+        reach: 0,
+        swing: false,
+        downed: false,
+      },
+      {
+        key: "player-idle-1",
+        arm: 1,
+        leg: -1,
+        hood: 1,
+        reach: 0,
+        swing: false,
+        downed: false,
+      },
+      {
+        key: "player-run-0",
+        arm: -7,
+        leg: -7,
+        hood: 0,
+        reach: -2,
+        swing: false,
+        downed: false,
+      },
+      {
+        key: "player-run-1",
+        arm: 7,
+        leg: 7,
+        hood: 1,
+        reach: 2,
+        swing: false,
+        downed: false,
+      },
+      {
+        key: "player-glide",
+        arm: 0,
+        leg: 0,
+        hood: -1,
+        reach: 10,
+        swing: false,
+        downed: false,
+      },
+      {
+        key: "player-swing",
+        arm: 22,
+        leg: -9,
+        hood: -1,
+        reach: 18,
+        swing: true,
+        downed: false,
+      },
+      {
+        key: "player-downed",
+        arm: -4,
+        leg: 12,
+        hood: 2,
+        reach: 0,
+        swing: false,
+        downed: true,
+      },
     ];
 
     for (const frame of frames) {
@@ -267,15 +341,50 @@ export class GameScene extends Phaser.Scene {
 
       graphics.lineStyle(9, 0xffffff, 1);
       graphics.lineBetween(35, 61, leftArmX, frame.swing ? 28 : 77 + frame.arm);
-      graphics.lineBetween(62, 61, rightArmX, frame.swing ? 28 : 77 - frame.arm);
+      graphics.lineBetween(
+        62,
+        61,
+        rightArmX,
+        frame.swing ? 28 : 77 - frame.arm,
+      );
       graphics.lineStyle(5, 0xd2268d, 1);
-      graphics.lineBetween(leftArmX, frame.swing ? 28 : 77 + frame.arm, leftArmX - 7, frame.swing ? leftHandY : 94 + frame.arm);
-      graphics.lineBetween(rightArmX, frame.swing ? 28 : 77 - frame.arm, rightArmX + 7, frame.swing ? rightHandY : 94 - frame.arm);
+      graphics.lineBetween(
+        leftArmX,
+        frame.swing ? 28 : 77 + frame.arm,
+        leftArmX - 7,
+        frame.swing ? leftHandY : 94 + frame.arm,
+      );
+      graphics.lineBetween(
+        rightArmX,
+        frame.swing ? 28 : 77 - frame.arm,
+        rightArmX + 7,
+        frame.swing ? rightHandY : 94 - frame.arm,
+      );
       graphics.lineStyle(2, colors.balletTeal, 0.95);
-      graphics.lineBetween(leftArmX - 1, frame.swing ? 32 : 80 + frame.arm, leftArmX - 7, frame.swing ? leftHandY : 93 + frame.arm);
-      graphics.lineBetween(leftArmX + 3, frame.swing ? 34 : 82 + frame.arm, leftArmX - 2, frame.swing ? leftHandY + 4 : 96 + frame.arm);
-      graphics.lineBetween(rightArmX + 1, frame.swing ? 32 : 80 - frame.arm, rightArmX + 7, frame.swing ? rightHandY : 93 - frame.arm);
-      graphics.lineBetween(rightArmX - 3, frame.swing ? 34 : 82 - frame.arm, rightArmX + 2, frame.swing ? rightHandY + 4 : 96 - frame.arm);
+      graphics.lineBetween(
+        leftArmX - 1,
+        frame.swing ? 32 : 80 + frame.arm,
+        leftArmX - 7,
+        frame.swing ? leftHandY : 93 + frame.arm,
+      );
+      graphics.lineBetween(
+        leftArmX + 3,
+        frame.swing ? 34 : 82 + frame.arm,
+        leftArmX - 2,
+        frame.swing ? leftHandY + 4 : 96 + frame.arm,
+      );
+      graphics.lineBetween(
+        rightArmX + 1,
+        frame.swing ? 32 : 80 - frame.arm,
+        rightArmX + 7,
+        frame.swing ? rightHandY : 93 - frame.arm,
+      );
+      graphics.lineBetween(
+        rightArmX - 3,
+        frame.swing ? 34 : 82 - frame.arm,
+        rightArmX + 2,
+        frame.swing ? rightHandY + 4 : 96 - frame.arm,
+      );
       graphics.fillStyle(0xffffff, 1);
       graphics.fillEllipse(leftArmX - 9, leftHandY, 16, 9);
       graphics.fillEllipse(rightArmX + 9, rightHandY, 16, 9);
@@ -328,7 +437,10 @@ export class GameScene extends Phaser.Scene {
     graphics.clear();
   }
 
-  private drawDownedPlayer(graphics: Phaser.GameObjects.Graphics, key: string): void {
+  private drawDownedPlayer(
+    graphics: Phaser.GameObjects.Graphics,
+    key: string,
+  ): void {
     graphics.fillStyle(0x0a0c12, 1);
     graphics.fillRoundedRect(20, 78, 58, 24, 12);
     graphics.lineStyle(8, 0xffffff, 1);
@@ -725,12 +837,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createWorld(): void {
-    this.physics.world.setBounds(0, 0, this.state.world.width, this.state.world.height);
-    this.add.rectangle(2800, 800, this.state.world.width, this.state.world.height, 0x10172b).setDepth(-10);
+    this.physics.world.setBounds(
+      0,
+      0,
+      this.state.world.width,
+      this.state.world.height,
+    );
+    this.add
+      .rectangle(
+        2800,
+        800,
+        this.state.world.width,
+        this.state.world.height,
+        0x10172b,
+      )
+      .setDepth(-10);
     this.createReferenceStyleSkyline();
-    this.add.rectangle(2800, 1320, this.state.world.width, 330, 0x0c0f16).setDepth(-8);
-    this.add.rectangle(2800, STREET_MIN_Y, this.state.world.width, 4, 0x44516f, 0.35).setDepth(-7);
-    this.add.rectangle(2800, STREET_MAX_Y, this.state.world.width, 4, 0x44516f, 0.25).setDepth(-7);
+    this.add
+      .rectangle(2800, 1320, this.state.world.width, 330, 0x0c0f16)
+      .setDepth(-8);
+    this.add
+      .rectangle(2800, STREET_MIN_Y, this.state.world.width, 4, 0x44516f, 0.35)
+      .setDepth(-7);
+    this.add
+      .rectangle(2800, STREET_MAX_Y, this.state.world.width, 4, 0x44516f, 0.25)
+      .setDepth(-7);
     this.createStreetDetails();
     this.createCentralPark();
     this.createNightLife();
@@ -748,7 +879,10 @@ export class GameScene extends Phaser.Scene {
     ];
 
     for (const building of buildings) {
-      this.add.image(building.x, building.y, "building").setDisplaySize(building.w, building.h).setDepth(-9);
+      this.add
+        .image(building.x, building.y, "building")
+        .setDisplaySize(building.w, building.h)
+        .setDepth(-9);
       this.paintWindows(building);
       this.createRoofPlatform(building);
     }
@@ -767,9 +901,29 @@ export class GameScene extends Phaser.Scene {
     ];
 
     for (const block of backBlocks) {
-      this.add.rectangle(block.x, block.y, block.w, block.h, block.color).setDepth(-9.7);
-      this.add.rectangle(block.x, block.y - block.h / 2 + 260, block.w - 52, 16, 0x1592aa, 0.68).setDepth(-9.55);
-      this.add.rectangle(block.x, block.y + block.h / 2 - 250, block.w - 72, 12, 0x24c6d5, 0.55).setDepth(-9.55);
+      this.add
+        .rectangle(block.x, block.y, block.w, block.h, block.color)
+        .setDepth(-9.7);
+      this.add
+        .rectangle(
+          block.x,
+          block.y - block.h / 2 + 260,
+          block.w - 52,
+          16,
+          0x1592aa,
+          0.68,
+        )
+        .setDepth(-9.55);
+      this.add
+        .rectangle(
+          block.x,
+          block.y + block.h / 2 - 250,
+          block.w - 72,
+          12,
+          0x24c6d5,
+          0.55,
+        )
+        .setDepth(-9.55);
       this.paintBackdropWindows(block.x, block.y, block.w, block.h, -9.5);
     }
 
@@ -784,37 +938,66 @@ export class GameScene extends Phaser.Scene {
     ];
 
     for (const block of midBlocks) {
-      this.add.rectangle(block.x, block.y, block.w, block.h, block.color).setDepth(-9.25);
-      this.add.rectangle(block.x, block.y + block.h / 2 - 98, block.w - 44, 14, 0x18a9c6, 0.74).setDepth(-9.05);
+      this.add
+        .rectangle(block.x, block.y, block.w, block.h, block.color)
+        .setDepth(-9.25);
+      this.add
+        .rectangle(
+          block.x,
+          block.y + block.h / 2 - 98,
+          block.w - 44,
+          14,
+          0x18a9c6,
+          0.74,
+        )
+        .setDepth(-9.05);
       this.paintBackdropWindows(block.x, block.y, block.w, block.h, -9.02);
     }
 
     this.add.rectangle(5180, 350, 360, 210, 0xf3fbff, 0.94).setDepth(-8.95);
     this.add.rectangle(5180, 350, 392, 242, 0x72f1ff, 0.18).setDepth(-8.96);
-    this.add.rectangle(5180, 350, 400, 250).setStrokeStyle(8, 0xc7f7ff, 0.82).setDepth(-8.94);
-    this.add.text(5180, 335, "BIG\nSTINKY\nPANTS", {
-      align: "center",
-      color: "#172033",
-      fontFamily: "Arial Black, Impact, sans-serif",
-      fontSize: "38px",
-      lineSpacing: -5,
-    }).setOrigin(0.5).setDepth(-8.93);
+    this.add
+      .rectangle(5180, 350, 400, 250)
+      .setStrokeStyle(8, 0xc7f7ff, 0.82)
+      .setDepth(-8.94);
+    this.add
+      .text(5180, 335, "BIG\nSTINKY\nPANTS", {
+        align: "center",
+        color: "#172033",
+        fontFamily: "Arial Black, Impact, sans-serif",
+        fontSize: "38px",
+        lineSpacing: -5,
+      })
+      .setOrigin(0.5)
+      .setDepth(-8.93);
 
-    this.add.polygon(3120, 1085, [
-      -1700, 160,
-      1850, -40,
-      1970, 60,
-      -1600, 260,
-    ], 0x4d2b6d, 0.92).setDepth(-7.6);
-    this.add.polygon(3120, 1120, [
-      -1680, 132,
-      1810, -62,
-      1840, -30,
-      -1660, 166,
-    ], 0xb744a2, 0.62).setDepth(-7.55);
+    this.add
+      .polygon(
+        3120,
+        1085,
+        [-1700, 160, 1850, -40, 1970, 60, -1600, 260],
+        0x4d2b6d,
+        0.92,
+      )
+      .setDepth(-7.6);
+    this.add
+      .polygon(
+        3120,
+        1120,
+        [-1680, 132, 1810, -62, 1840, -30, -1660, 166],
+        0xb744a2,
+        0.62,
+      )
+      .setDepth(-7.55);
   }
 
-  private paintBackdropWindows(x: number, y: number, width: number, height: number, depth: number): void {
+  private paintBackdropWindows(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    depth: number,
+  ): void {
     const left = x - width / 2 + 46;
     const top = y - height / 2 + 54;
     const columns = Math.max(3, Math.floor((width - 76) / 72));
@@ -823,15 +1006,34 @@ export class GameScene extends Phaser.Scene {
 
     for (let row = 0; row < rows; row += 1) {
       for (let column = 0; column < columns; column += 1) {
-        const seed = (row * 7 + column * 11 + Math.floor(x / 100)) % windowColors.length;
+        const seed =
+          (row * 7 + column * 11 + Math.floor(x / 100)) % windowColors.length;
         const lit = (row + column + Math.floor(x / 80)) % 4 !== 0;
         const color = lit ? windowColors[seed] : 0x101934;
         const windowWidth = 18 + ((row + column) % 3) * 8;
         const windowHeight = 34 + (column % 2) * 18;
-        this.add.rectangle(left + column * 72, top + row * 86, windowWidth, windowHeight, color, lit ? 0.88 : 0.76).setDepth(depth);
+        this.add
+          .rectangle(
+            left + column * 72,
+            top + row * 86,
+            windowWidth,
+            windowHeight,
+            color,
+            lit ? 0.88 : 0.76,
+          )
+          .setDepth(depth);
 
         if (lit && (row + column) % 5 === 0) {
-          this.add.rectangle(left + column * 72 + 7, top + row * 86, 4, windowHeight, 0x1a2242, 0.9).setDepth(depth + 0.01);
+          this.add
+            .rectangle(
+              left + column * 72 + 7,
+              top + row * 86,
+              4,
+              windowHeight,
+              0x1a2242,
+              0.9,
+            )
+            .setDepth(depth + 0.01);
         }
       }
     }
@@ -842,11 +1044,17 @@ export class GameScene extends Phaser.Scene {
       if (x > 3300 && x < 4040) {
         continue;
       }
-      this.add.image(x, FACADE_TOP_Y, "brickFacade").setOrigin(0.5, 0).setDepth(-6.5);
+      this.add
+        .image(x, FACADE_TOP_Y, "brickFacade")
+        .setOrigin(0.5, 0)
+        .setDepth(-6.5);
     }
 
     for (let x = 48; x < this.state.world.width; x += 96) {
-      this.add.image(x, SIDEWALK_Y, "sidewalkTile").setOrigin(0.5, 0).setDepth(-4);
+      this.add
+        .image(x, SIDEWALK_Y, "sidewalkTile")
+        .setOrigin(0.5, 0)
+        .setDepth(-4);
     }
 
     for (let x = 120; x < this.state.world.width; x += 420) {
@@ -860,15 +1068,45 @@ export class GameScene extends Phaser.Scene {
     }
 
     const storefronts = [
-      { x: 220, texture: "storefront", height: 124, name: "JOE'S PIZZA", accent: "#f25f8f" },
+      {
+        x: 220,
+        texture: "storefront",
+        height: 124,
+        name: "JOE'S PIZZA",
+        accent: "#f25f8f",
+      },
       { x: 600, texture: "apartmentDoor", height: 132 },
-      { x: 1120, texture: "storefront", height: 124, name: "MOON BOOKS", accent: "#87f0ff" },
+      {
+        x: 1120,
+        texture: "storefront",
+        height: 124,
+        name: "MOON BOOKS",
+        accent: "#87f0ff",
+      },
       { x: 1500, texture: "apartmentDoor", height: 132 },
-      { x: 2050, texture: "storefront", height: 124, name: "NIGHT OWL COFFEE", accent: "#f5d46c" },
+      {
+        x: 2050,
+        texture: "storefront",
+        height: 124,
+        name: "NIGHT OWL COFFEE",
+        accent: "#f5d46c",
+      },
       { x: 2530, texture: "apartmentDoor", height: 132 },
-      { x: 3230, texture: "storefront", height: 124, name: "SLICE SLICE BABY", accent: "#39e7d0" },
+      {
+        x: 3230,
+        texture: "storefront",
+        height: 124,
+        name: "SLICE SLICE BABY",
+        accent: "#39e7d0",
+      },
       { x: 3720, texture: "apartmentDoor", height: 132, hiddenByPark: true },
-      { x: 4380, texture: "storefront", height: 124, name: "GHOST BEAN", accent: "#d9b6ff" },
+      {
+        x: 4380,
+        texture: "storefront",
+        height: 124,
+        name: "GHOST BEAN",
+        accent: "#d9b6ff",
+      },
       { x: 4930, texture: "apartmentDoor", height: 132 },
     ] as const;
 
@@ -876,14 +1114,28 @@ export class GameScene extends Phaser.Scene {
       if ("hiddenByPark" in detail) {
         continue;
       }
-      this.add.image(detail.x, SIDEWALK_Y - detail.height / 2, detail.texture).setDepth(-3.5);
+      this.add
+        .image(detail.x, SIDEWALK_Y - detail.height / 2, detail.texture)
+        .setDepth(-3.5);
       if ("name" in detail) {
-        this.add.rectangle(detail.x, SIDEWALK_Y - detail.height + 6, 154, 18, 0x0a0d16, 0.78).setDepth(-3.25);
-        this.add.text(detail.x, SIDEWALK_Y - detail.height + 6, detail.name, {
-          color: detail.accent,
-          fontFamily: "Arial Black, Impact, sans-serif",
-          fontSize: detail.name.length > 13 ? "11px" : "13px",
-        }).setOrigin(0.5).setDepth(-3.2);
+        this.add
+          .rectangle(
+            detail.x,
+            SIDEWALK_Y - detail.height + 6,
+            154,
+            18,
+            0x0a0d16,
+            0.78,
+          )
+          .setDepth(-3.25);
+        this.add
+          .text(detail.x, SIDEWALK_Y - detail.height + 6, detail.name, {
+            color: detail.accent,
+            fontFamily: "Arial Black, Impact, sans-serif",
+            fontSize: detail.name.length > 13 ? "11px" : "13px",
+          })
+          .setOrigin(0.5)
+          .setDepth(-3.2);
       }
     }
 
@@ -908,11 +1160,13 @@ export class GameScene extends Phaser.Scene {
     const parkX = 3650;
     this.add.rectangle(parkX, 1132, 720, 126, 0x103a36, 0.96).setDepth(-3.45);
     this.add.rectangle(parkX, 1190, 740, 20, 0x263149, 1).setDepth(-3.35);
-    this.add.text(parkX - 285, 1092, "CENTRAL PARK", {
-      color: "#a7ffe9",
-      fontFamily: "Arial Black, Impact, sans-serif",
-      fontSize: "18px",
-    }).setDepth(-3.05);
+    this.add
+      .text(parkX - 285, 1092, "CENTRAL PARK", {
+        color: "#a7ffe9",
+        fontFamily: "Arial Black, Impact, sans-serif",
+        fontSize: "18px",
+      })
+      .setDepth(-3.05);
 
     for (let x = parkX - 300; x <= parkX + 300; x += 88) {
       const y = 1132 + ((x / 88) % 2) * 16;
@@ -944,17 +1198,49 @@ export class GameScene extends Phaser.Scene {
 
   private createRoofPlatform(building: Building): void {
     const roofY = building.y - building.h / 2 + 10;
-    this.add.rectangle(building.x, roofY + 23, building.w - 22, 42, 0x151c2f, 0.92).setDepth(-7.2);
-    this.add.rectangle(building.x, roofY + 3, building.w - 8, 16, 0x3c4868, 1).setDepth(-7.1);
-    this.add.rectangle(building.x - building.w / 2 + 34, roofY - 12, 44, 34, 0x202944, 1).setDepth(-7);
-    this.add.rectangle(building.x + building.w / 2 - 34, roofY - 12, 44, 34, 0x202944, 1).setDepth(-7);
+    this.add
+      .rectangle(building.x, roofY + 23, building.w - 22, 42, 0x151c2f, 0.92)
+      .setDepth(-7.2);
+    this.add
+      .rectangle(building.x, roofY + 3, building.w - 8, 16, 0x3c4868, 1)
+      .setDepth(-7.1);
+    this.add
+      .rectangle(
+        building.x - building.w / 2 + 34,
+        roofY - 12,
+        44,
+        34,
+        0x202944,
+        1,
+      )
+      .setDepth(-7);
+    this.add
+      .rectangle(
+        building.x + building.w / 2 - 34,
+        roofY - 12,
+        44,
+        34,
+        0x202944,
+        1,
+      )
+      .setDepth(-7);
     if (building.w > 500) {
-      this.add.image(building.x - building.w * 0.18, roofY - 42, "roofVent").setDepth(-6.8);
-      this.add.image(building.x + building.w * 0.22, roofY - 88, "waterTower").setDepth(-6.9);
+      this.add
+        .image(building.x - building.w * 0.18, roofY - 42, "roofVent")
+        .setDepth(-6.8);
+      this.add
+        .image(building.x + building.w * 0.22, roofY - 88, "waterTower")
+        .setDepth(-6.9);
     } else {
-      this.add.image(building.x + building.w * 0.18, roofY - 42, "roofVent").setDepth(-6.8);
+      this.add
+        .image(building.x + building.w * 0.18, roofY - 42, "roofVent")
+        .setDepth(-6.8);
     }
-    const roof = this.requirePlatforms().create(building.x, roofY, "roof") as Phaser.Physics.Arcade.Sprite;
+    const roof = this.requirePlatforms().create(
+      building.x,
+      roofY,
+      "roof",
+    ) as Phaser.Physics.Arcade.Sprite;
     roof.displayWidth = building.w - 30;
     roof.displayHeight = 18;
     roof.refreshBody();
@@ -969,7 +1255,16 @@ export class GameScene extends Phaser.Scene {
     for (let row = 0; row < rows; row += 1) {
       for (let column = 0; column < columns; column += 1) {
         const lit = (row + column) % 3 !== 0;
-        this.add.rectangle(left + column * 64, top + row * 72, 20, 28, lit ? 0xf9d37a : 0x26314d, lit ? 0.82 : 0.5).setDepth(-8.8);
+        this.add
+          .rectangle(
+            left + column * 64,
+            top + row * 72,
+            20,
+            28,
+            lit ? 0xf9d37a : 0x26314d,
+            lit ? 0.82 : 0.5,
+          )
+          .setDepth(-8.8);
       }
     }
   }
@@ -986,7 +1281,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createEnemies(): void {
-    const placements: Record<string, { x: number; y: number; streetLane: boolean; airborne?: boolean }> = {
+    const placements: Record<
+      string,
+      { x: number; y: number; streetLane: boolean; airborne?: boolean }
+    > = {
       "robot-roof-1": { x: 960, y: 80, streetLane: false },
       "drone-roof-1": { x: 1360, y: 170, streetLane: false, airborne: true },
       "gunner-street-1": { x: 1920, y: 1330, streetLane: true },
@@ -1003,13 +1301,22 @@ export class GameScene extends Phaser.Scene {
       const sprite = this.physics.add.sprite(placement.x, placement.y, texture);
       sprite.setCollideWorldBounds(true);
       sprite.setDragX(600);
-      sprite.setMaxVelocity(enemyState.kind === "drone" ? 220 : 180, enemyState.kind === "drone" ? 140 : 900);
+      sprite.setMaxVelocity(
+        enemyState.kind === "drone" ? 220 : 180,
+        enemyState.kind === "drone" ? 140 : 900,
+      );
       this.setEnemyBody(sprite, enemyState.kind);
-      sprite.body?.setAllowGravity(!placement.streetLane && placement.airborne !== true);
+      sprite.body?.setAllowGravity(
+        !placement.streetLane && placement.airborne !== true,
+      );
       sprite.play(this.getEnemyAnimation(enemyState.kind));
 
       if (placement.streetLane) {
-        sprite.y = Phaser.Math.Clamp(sprite.y, STREET_MIN_Y, ENEMY_STREET_MAX_Y);
+        sprite.y = Phaser.Math.Clamp(
+          sprite.y,
+          STREET_MIN_Y,
+          ENEMY_STREET_MAX_Y,
+        );
         sprite.setDepth(sprite.y);
       } else if (placement.airborne !== true) {
         this.physics.add.collider(sprite, this.requirePlatforms());
@@ -1017,7 +1324,15 @@ export class GameScene extends Phaser.Scene {
         sprite.setDepth(placement.y + 30);
       }
 
-      this.enemies.push({ state: enemyState, sprite, direction: 1, nextShotAt: 0, snaredUntil: 0, streetLane: placement.streetLane, airborne: placement.airborne === true });
+      this.enemies.push({
+        state: enemyState,
+        sprite,
+        direction: 1,
+        nextShotAt: 0,
+        snaredUntil: 0,
+        streetLane: placement.streetLane,
+        airborne: placement.airborne === true,
+      });
     }
   }
 
@@ -1045,7 +1360,10 @@ export class GameScene extends Phaser.Scene {
     return "robot-walk";
   }
 
-  private setEnemyBody(sprite: Phaser.Physics.Arcade.Sprite, kind: EnemyState["kind"]): void {
+  private setEnemyBody(
+    sprite: Phaser.Physics.Arcade.Sprite,
+    kind: EnemyState["kind"],
+  ): void {
     if (kind === "gunner") {
       sprite.body?.setSize(40, 76).setOffset(20, 10);
       return;
@@ -1063,43 +1381,69 @@ export class GameScene extends Phaser.Scene {
     this.bullets = this.physics.add.group({ allowGravity: false });
     this.webGlobs = this.physics.add.group({ allowGravity: false });
 
-    this.physics.add.overlap(this.requirePlayer(), this.bullets, (_, bulletObject) => {
-      const bullet = bulletObject as Phaser.Physics.Arcade.Sprite;
-      bullet.destroy();
+    this.physics.add.overlap(
+      this.requirePlayer(),
+      this.bullets,
+      (_, bulletObject) => {
+        const bullet = bulletObject as Phaser.Physics.Arcade.Sprite;
+        bullet.destroy();
 
-      if (this.time.now < this.state.player.shieldUntil) {
-        this.state.player.message = "Web shield caught the shot.";
-        return;
-      }
+        if (this.time.now < this.state.player.shieldUntil) {
+          this.state.player.message = "Web shield caught the shot.";
+          return;
+        }
 
-      damagePlayer(this.state, 12, "Hit by a skyline shot.");
-    });
+        damagePlayer(this.state, 12, "Hit by a skyline shot.");
+      },
+    );
 
     for (const enemy of this.enemies) {
       this.physics.add.overlap(this.requirePlayer(), enemy.sprite, () => {
-        if (this.time.now < this.hitCooldownUntil || this.time.now < enemy.snaredUntil) {
+        if (
+          this.time.now < this.hitCooldownUntil ||
+          this.time.now < enemy.snaredUntil
+        ) {
           return;
         }
         this.hitCooldownUntil = this.time.now + 700;
-        damagePlayer(this.state, enemy.state.damage, enemy.state.kind === "gunner" ? "Close-range blast." : enemy.state.kind === "drone" ? "Drone zap." : "Robot tackle.");
+        damagePlayer(
+          this.state,
+          enemy.state.damage,
+          enemy.state.kind === "gunner"
+            ? "Close-range blast."
+            : enemy.state.kind === "drone"
+              ? "Drone zap."
+              : "Robot tackle.",
+        );
       });
 
-      this.physics.add.overlap(this.requireWebGlobs(), enemy.sprite, (globObject) => {
-        const glob = globObject as Phaser.Physics.Arcade.Sprite;
-        const power = glob.getData("power") as "glob" | "net";
-        glob.destroy();
+      this.physics.add.overlap(
+        this.requireWebGlobs(),
+        enemy.sprite,
+        (globObject) => {
+          const glob = globObject as Phaser.Physics.Arcade.Sprite;
+          const power = glob.getData("power") as "glob" | "net";
+          glob.destroy();
 
-        if (power === "net") {
-          enemy.snaredUntil = this.time.now + 1800;
-          enemy.sprite.setTint(colors.web);
-          this.time.delayedCall(1800, () => enemy.sprite.active && enemy.sprite.clearTint());
-        }
+          if (power === "net") {
+            enemy.snaredUntil = this.time.now + 1800;
+            enemy.sprite.setTint(colors.web);
+            this.time.delayedCall(
+              1800,
+              () => enemy.sprite.active && enemy.sprite.clearTint(),
+            );
+          }
 
-        const defeated = damageEnemy(this.state, enemy.state, power === "net" ? 12 : 16);
-        if (defeated) {
-          enemy.sprite.destroy();
-        }
-      });
+          const defeated = damageEnemy(
+            this.state,
+            enemy.state,
+            power === "net" ? 12 : 16,
+          );
+          if (defeated) {
+            enemy.sprite.destroy();
+          }
+        },
+      );
     }
   }
 
@@ -1110,13 +1454,20 @@ export class GameScene extends Phaser.Scene {
     camera.setDeadzone(210, 150);
   }
 
-  private updateStreetMode(player: Phaser.Physics.Arcade.Sprite, actions: ActionState): void {
+  private updateStreetMode(
+    player: Phaser.Physics.Arcade.Sprite,
+    actions: ActionState,
+  ): void {
     const body = player.body;
     if (!body || this.state.player.webAttached) {
       return;
     }
 
-    if (!this.playerOnStreet && player.y >= STREET_ENTRY_Y && body.velocity.y >= 0) {
+    if (
+      !this.playerOnStreet &&
+      player.y >= STREET_ENTRY_Y &&
+      body.velocity.y >= 0
+    ) {
       this.playerOnStreet = true;
       this.setPlayerGravity(player, false);
       player.y = Phaser.Math.Clamp(player.y, STREET_MIN_Y, STREET_MAX_Y);
@@ -1141,7 +1492,11 @@ export class GameScene extends Phaser.Scene {
     player.setDepth(player.y);
   }
 
-  private updatePlayer(player: Phaser.Physics.Arcade.Sprite, actions: ActionState, delta: number): void {
+  private updatePlayer(
+    player: Phaser.Physics.Arcade.Sprite,
+    actions: ActionState,
+    delta: number,
+  ): void {
     const grounded = this.playerOnStreet || player.body?.blocked.down === true;
     const speed = grounded ? 430 : 340;
     const move = Number(actions.moveRight) - Number(actions.moveLeft);
@@ -1171,31 +1526,56 @@ export class GameScene extends Phaser.Scene {
       this.detachWeb("Released the web.");
     }
 
-    if (this.state.player.webAttached && this.state.player.webAnchors.length > 0) {
+    if (
+      this.state.player.webAttached &&
+      this.state.player.webAnchors.length > 0
+    ) {
       this.updateSwingAnchors(player, actions);
       this.applySwing(player, this.state.player.webAnchors, actions, delta);
       player.setTexture("player-swing");
     }
 
-    if (!this.state.player.webAttached && actions.glide && !this.playerOnStreet && !grounded && player.body && player.body.velocity.y > 80) {
+    if (
+      !this.state.player.webAttached &&
+      actions.glide &&
+      !this.playerOnStreet &&
+      !grounded &&
+      player.body &&
+      player.body.velocity.y > 80
+    ) {
       player.setVelocityY(Math.min(player.body.velocity.y, 170));
       player.setTexture("player-glide");
       this.state.player.message = "Web-wings slowed the fall.";
-    } else if (!this.state.player.webAttached && Math.abs(player.body?.velocity.x ?? 0) > 80) {
+    } else if (
+      !this.state.player.webAttached &&
+      Math.abs(player.body?.velocity.x ?? 0) > 80
+    ) {
       player.play("player-run", true);
     } else if (!this.state.player.webAttached && !actions.glide) {
       player.play("player-idle", true);
     }
 
-    if (this.wasPressed(actions, "attack") && this.time.now >= this.attackCooldownUntil) {
+    if (
+      this.wasPressed(actions, "attack") &&
+      this.time.now >= this.attackCooldownUntil
+    ) {
       this.attack(player);
     }
 
-    if (this.wasPressed(actions, "gadget") && this.time.now >= this.gadgetCooldownUntil) {
+    if (
+      this.wasPressed(actions, "gadget") &&
+      this.time.now >= this.gadgetCooldownUntil
+    ) {
       this.useGadget(player);
     }
 
-    player.setVelocityX(Phaser.Math.Clamp(player.body?.velocity.x ?? 0, -speed * 1.45, speed * 1.45));
+    player.setVelocityX(
+      Phaser.Math.Clamp(
+        player.body?.velocity.x ?? 0,
+        -speed * 1.45,
+        speed * 1.45,
+      ),
+    );
   }
 
   private attachWeb(player: Phaser.Physics.Arcade.Sprite): void {
@@ -1203,7 +1583,8 @@ export class GameScene extends Phaser.Scene {
 
     this.state.player.webAttached = true;
     this.state.player.webAnchors = anchors;
-    this.state.player.message = anchors.length > 1 ? "Two web-lines attached." : "Web-line attached.";
+    this.state.player.message =
+      anchors.length > 1 ? "Two web-lines attached." : "Web-line attached.";
     this.nextWebSwapAt = this.time.now + 360;
     player.setGravityY(-220);
   }
@@ -1226,15 +1607,24 @@ export class GameScene extends Phaser.Scene {
     this.clearWebLines(false);
   }
 
-  private updateSwingAnchors(player: Phaser.Physics.Arcade.Sprite, actions: ActionState): void {
+  private updateSwingAnchors(
+    player: Phaser.Physics.Arcade.Sprite,
+    actions: ActionState,
+  ): void {
     if (this.time.now < this.nextWebSwapAt) {
       return;
     }
 
     const anchors = this.state.player.webAnchors;
     const travelDirection = this.getSwingDirection(player, actions);
-    const trailingAnchor = anchors.find((anchor) => (anchor.x - player.x) * travelDirection < -110);
-    const overextendedAnchor = anchors.find((anchor) => Phaser.Math.Distance.Between(player.x, player.y, anchor.x, anchor.y) > 600);
+    const trailingAnchor = anchors.find(
+      (anchor) => (anchor.x - player.x) * travelDirection < -110,
+    );
+    const overextendedAnchor = anchors.find(
+      (anchor) =>
+        Phaser.Math.Distance.Between(player.x, player.y, anchor.x, anchor.y) >
+        600,
+    );
 
     if (!trailingAnchor && !overextendedAnchor && anchors.length >= 2) {
       return;
@@ -1242,16 +1632,32 @@ export class GameScene extends Phaser.Scene {
 
     const droppedAnchor = trailingAnchor ?? overextendedAnchor;
     if (droppedAnchor) {
-      this.fadeWeb(droppedAnchor, this.getClosestHandPosition(player, droppedAnchor));
+      this.fadeWeb(
+        droppedAnchor,
+        this.getClosestHandPosition(player, droppedAnchor),
+      );
     }
 
-    const newAnchor = this.findForwardWebAnchor(player.x, player.y, travelDirection, anchors);
-    this.state.player.webAnchors = [...anchors.filter((anchor) => anchor !== droppedAnchor), newAnchor].slice(-2);
+    const newAnchor = this.findForwardWebAnchor(
+      player.x,
+      player.y,
+      travelDirection,
+      anchors,
+    );
+    this.state.player.webAnchors = [
+      ...anchors.filter((anchor) => anchor !== droppedAnchor),
+      newAnchor,
+    ].slice(-2);
     this.nextWebSwapAt = this.time.now + 300;
     this.state.player.message = "New web-line caught.";
   }
 
-  private applySwing(player: Phaser.Physics.Arcade.Sprite, anchors: WebAnchor[], actions: ActionState, delta: number): void {
+  private applySwing(
+    player: Phaser.Physics.Arcade.Sprite,
+    anchors: WebAnchor[],
+    actions: ActionState,
+    delta: number,
+  ): void {
     const body = player.body;
     if (!body) {
       return;
@@ -1262,18 +1668,38 @@ export class GameScene extends Phaser.Scene {
     const spring = 690 / anchors.length;
 
     for (const anchor of anchors) {
-      const distance = Phaser.Math.Distance.Between(player.x, player.y, anchor.x, anchor.y);
-      const angle = Phaser.Math.Angle.Between(player.x, player.y, anchor.x, anchor.y);
+      const distance = Phaser.Math.Distance.Between(
+        player.x,
+        player.y,
+        anchor.x,
+        anchor.y,
+      );
+      const angle = Phaser.Math.Angle.Between(
+        player.x,
+        player.y,
+        anchor.x,
+        anchor.y,
+      );
       const stretch = Math.max(0, distance - 105) / maxLength;
       const tangent = angle + Math.PI / 2;
       const travelSign = this.getSwingDirection(player, actions);
-      const bottomArc = Phaser.Math.Clamp((player.y - anchor.y) / maxLength, 0, 1);
-      const exitArc = Phaser.Math.Clamp(((player.x - anchor.x) * travelSign) / maxLength, 0, 1);
+      const bottomArc = Phaser.Math.Clamp(
+        (player.y - anchor.y) / maxLength,
+        0,
+        1,
+      );
+      const exitArc = Phaser.Math.Clamp(
+        ((player.x - anchor.x) * travelSign) / maxLength,
+        0,
+        1,
+      );
 
       body.velocity.x += Math.cos(angle) * spring * stretch * dt;
       body.velocity.y += Math.sin(angle) * spring * stretch * dt;
-      body.velocity.x += Math.cos(tangent) * travelSign * (92 + bottomArc * 72) * dt;
-      body.velocity.y += Math.sin(tangent) * travelSign * (38 + bottomArc * 30) * dt;
+      body.velocity.x +=
+        Math.cos(tangent) * travelSign * (92 + bottomArc * 72) * dt;
+      body.velocity.y +=
+        Math.sin(tangent) * travelSign * (38 + bottomArc * 30) * dt;
       body.velocity.y += bottomArc * 80 * dt;
       body.velocity.y -= exitArc * 210 * dt;
 
@@ -1285,7 +1711,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     const moveAssist = Number(actions.moveRight) - Number(actions.moveLeft);
-    const automaticDirection = moveAssist === 0 ? this.getSwingDirection(player, actions) : moveAssist;
+    const automaticDirection =
+      moveAssist === 0 ? this.getSwingDirection(player, actions) : moveAssist;
     body.velocity.x += automaticDirection * 145 * dt;
     body.velocity.x += moveAssist * 170 * dt;
     body.velocity.x *= 0.995;
@@ -1294,19 +1721,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private findWebAnchors(x: number, y: number): WebAnchor[] {
-    const candidates = [
-      { x: 520, y: 430 },
-      { x: 1180, y: 120 },
-      { x: 1860, y: 650 },
-      { x: 2600, y: 300 },
-      { x: 3360, y: 30 },
-      { x: 4100, y: 730 },
-      { x: 5020, y: 210 },
-    ];
-
-    const nearbyAnchors = candidates
-      .filter((anchor) => anchor.y < y - 80 && Phaser.Math.Distance.Between(x, y, anchor.x, anchor.y) < 760)
-      .sort((a, b) => Phaser.Math.Distance.Between(x, y, a.x, a.y) - Phaser.Math.Distance.Between(x, y, b.x, b.y))
+    const nearbyAnchors = WEB_ANCHOR_CANDIDATES.filter(
+      (anchor) =>
+        anchor.y < y - 80 &&
+        Phaser.Math.Distance.Between(x, y, anchor.x, anchor.y) < 760,
+    )
+      .sort(this.compareAnchorsByDistance(x, y))
       .slice(0, 2);
 
     if (nearbyAnchors.length >= 2) {
@@ -1320,40 +1740,61 @@ export class GameScene extends Phaser.Scene {
     };
     const secondaryDirection = primary.x < x ? 1 : -1;
     const secondary = {
-      x: Phaser.Math.Clamp(primary.x + secondaryDirection * 320, 120, this.state.world.width - 120),
+      x: Phaser.Math.Clamp(
+        primary.x + secondaryDirection * 320,
+        120,
+        this.state.world.width - 120,
+      ),
       y: Math.max(60, primary.y + 40),
     };
 
     return [primary, secondary];
   }
 
-  private findForwardWebAnchor(x: number, y: number, direction: number, currentAnchors: WebAnchor[]): WebAnchor {
-    const candidates = [
-      { x: 520, y: 430 },
-      { x: 1180, y: 120 },
-      { x: 1860, y: 650 },
-      { x: 2600, y: 300 },
-      { x: 3360, y: 30 },
-      { x: 4100, y: 730 },
-      { x: 5020, y: 210 },
-    ];
-    const existing = new Set(currentAnchors.map((anchor) => `${Math.round(anchor.x)}:${Math.round(anchor.y)}`));
-    const authoredAnchor = candidates
-      .filter((anchor) => !existing.has(`${anchor.x}:${anchor.y}`))
+  private findForwardWebAnchor(
+    x: number,
+    y: number,
+    direction: number,
+    currentAnchors: WebAnchor[],
+  ): WebAnchor {
+    const existing = new Set(
+      currentAnchors.map(
+        (anchor) => `${Math.round(anchor.x)}:${Math.round(anchor.y)}`,
+      ),
+    );
+    const authoredAnchor = WEB_ANCHOR_CANDIDATES.filter(
+      (anchor) => !existing.has(`${anchor.x}:${anchor.y}`),
+    )
       .filter((anchor) => (anchor.x - x) * direction > 140 && anchor.y < y - 80)
-      .sort((a, b) => Phaser.Math.Distance.Between(x, y, a.x, a.y) - Phaser.Math.Distance.Between(x, y, b.x, b.y))[0];
+      .sort(this.compareAnchorsByDistance(x, y))[0];
 
     if (authoredAnchor) {
       return authoredAnchor;
     }
 
     return {
-      x: Phaser.Math.Clamp(x + direction * 470, 120, this.state.world.width - 120),
+      x: Phaser.Math.Clamp(
+        x + direction * 470,
+        120,
+        this.state.world.width - 120,
+      ),
       y: Math.max(60, y - 480),
     };
   }
 
-  private getSwingDirection(player: Phaser.Physics.Arcade.Sprite, actions: ActionState): number {
+  private compareAnchorsByDistance(
+    x: number,
+    y: number,
+  ): (a: WebAnchor, b: WebAnchor) => number {
+    return (a, b) =>
+      Phaser.Math.Distance.Between(x, y, a.x, a.y) -
+      Phaser.Math.Distance.Between(x, y, b.x, b.y);
+  }
+
+  private getSwingDirection(
+    player: Phaser.Physics.Arcade.Sprite,
+    actions: ActionState,
+  ): number {
     if (actions.moveRight) {
       return 1;
     }
@@ -1396,7 +1837,10 @@ export class GameScene extends Phaser.Scene {
     this.webLines = this.webLines.slice(0, anchors.length);
   }
 
-  private getWebHandPositions(player: Phaser.Physics.Arcade.Sprite, anchors: WebAnchor[]): WebAnchor[] {
+  private getWebHandPositions(
+    player: Phaser.Physics.Arcade.Sprite,
+    anchors: WebAnchor[],
+  ): WebAnchor[] {
     const facing = player.flipX ? -1 : 1;
     const left = { x: player.x - 18 * facing, y: player.y - 48 };
     const right = { x: player.x + 18 * facing, y: player.y - 47 };
@@ -1408,12 +1852,21 @@ export class GameScene extends Phaser.Scene {
     return anchors.map((anchor) => (anchor.x < player.x ? left : right));
   }
 
-  private getClosestHandPosition(player: Phaser.Physics.Arcade.Sprite, anchor: WebAnchor): WebAnchor {
+  private getClosestHandPosition(
+    player: Phaser.Physics.Arcade.Sprite,
+    anchor: WebAnchor,
+  ): WebAnchor {
     const [hand] = this.getWebHandPositions(player, [anchor]);
     return hand;
   }
 
-  private drawWebStrand(graphic: Phaser.GameObjects.Graphics, anchor: WebAnchor, hand: WebAnchor, alpha: number, seed: number): void {
+  private drawWebStrand(
+    graphic: Phaser.GameObjects.Graphics,
+    anchor: WebAnchor,
+    hand: WebAnchor,
+    alpha: number,
+    seed: number,
+  ): void {
     const dx = hand.x - anchor.x;
     const dy = hand.y - anchor.y;
     const length = Math.max(1, Math.hypot(dx, dy));
@@ -1433,11 +1886,20 @@ export class GameScene extends Phaser.Scene {
     graphic.lineStyle(1, 0xbff7ff, alpha * 0.82);
     for (let step = 1; step <= 4; step += 1) {
       const t = step / 5;
-      const x = Phaser.Math.Linear(anchor.x, hand.x, t) + normalX * wobble * (1 - Math.abs(0.5 - t));
-      const y = Phaser.Math.Linear(anchor.y, hand.y, t) + normalY * wobble * (1 - Math.abs(0.5 - t));
+      const x =
+        Phaser.Math.Linear(anchor.x, hand.x, t) +
+        normalX * wobble * (1 - Math.abs(0.5 - t));
+      const y =
+        Phaser.Math.Linear(anchor.y, hand.y, t) +
+        normalY * wobble * (1 - Math.abs(0.5 - t));
       const branch = 10 + ((step + seed) % 3) * 5;
       const side = step % 2 === 0 ? 1 : -1;
-      graphic.lineBetween(x, y, x + normalX * branch * side, y + normalY * branch * side);
+      graphic.lineBetween(
+        x,
+        y,
+        x + normalX * branch * side,
+        y + normalY * branch * side,
+      );
       graphic.lineBetween(x, y, x - dx * 0.035, y - dy * 0.035);
     }
 
@@ -1516,7 +1978,10 @@ export class GameScene extends Phaser.Scene {
     this.state.player.message = "Web glob fired.";
   }
 
-  private tryCloseStrike(player: Phaser.Physics.Arcade.Sprite, facing: number): boolean {
+  private tryCloseStrike(
+    player: Phaser.Physics.Arcade.Sprite,
+    facing: number,
+  ): boolean {
     const hitX = player.x + facing * 56;
 
     for (const enemy of this.enemies) {
@@ -1524,7 +1989,12 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const distance = Phaser.Math.Distance.Between(hitX, player.y, enemy.sprite.x, enemy.sprite.y);
+      const distance = Phaser.Math.Distance.Between(
+        hitX,
+        player.y,
+        enemy.sprite.x,
+        enemy.sprite.y,
+      );
       if (distance > 96) {
         continue;
       }
@@ -1532,7 +2002,10 @@ export class GameScene extends Phaser.Scene {
       const defeated = damageEnemy(this.state, enemy.state, 20);
       enemy.sprite.setVelocityX(facing * 240);
       enemy.sprite.setTint(0xffffff);
-      this.time.delayedCall(90, () => enemy.sprite.active && enemy.sprite.clearTint());
+      this.time.delayedCall(
+        90,
+        () => enemy.sprite.active && enemy.sprite.clearTint(),
+      );
 
       if (defeated) {
         enemy.sprite.destroy();
@@ -1544,11 +2017,23 @@ export class GameScene extends Phaser.Scene {
     return false;
   }
 
-  private fireWebGlob(x: number, y: number, facing: number, power: "glob" | "net"): void {
+  private fireWebGlob(
+    x: number,
+    y: number,
+    facing: number,
+    power: "glob" | "net",
+  ): void {
     const globs = this.requireWebGlobs();
-    const glob = globs.create(x, y, power === "net" ? "webNet" : "webGlob") as Phaser.Physics.Arcade.Sprite;
+    const glob = globs.create(
+      x,
+      y,
+      power === "net" ? "webNet" : "webGlob",
+    ) as Phaser.Physics.Arcade.Sprite;
     glob.setData("power", power);
-    glob.setVelocity(facing * (power === "net" ? 430 : 560), power === "net" ? -20 : 0);
+    glob.setVelocity(
+      facing * (power === "net" ? 430 : 560),
+      power === "net" ? -20 : 0,
+    );
     glob.setDepth(y);
     this.time.delayedCall(1100, () => glob.destroy());
   }
@@ -1585,7 +2070,10 @@ export class GameScene extends Phaser.Scene {
     this.state.player.message = "Web-wings vault.";
   }
 
-  private updateShield(player: Phaser.Physics.Arcade.Sprite, time: number): void {
+  private updateShield(
+    player: Phaser.Physics.Arcade.Sprite,
+    time: number,
+  ): void {
     if (time >= this.state.player.shieldUntil) {
       this.shieldView?.destroy();
       this.shieldView = undefined;
@@ -1593,14 +2081,22 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (!this.shieldView) {
-      this.shieldView = this.add.circle(player.x, player.y, 54).setStrokeStyle(4, colors.web, 0.82).setFillStyle(colors.web, 0.08);
+      this.shieldView = this.add
+        .circle(player.x, player.y, 54)
+        .setStrokeStyle(4, colors.web, 0.82)
+        .setFillStyle(colors.web, 0.08);
     }
 
     this.shieldView.setPosition(player.x, player.y);
     this.shieldView.setDepth(player.depth + 1);
   }
 
-  private createWebBurst(x: number, y: number, radius: number, duration: number): void {
+  private createWebBurst(
+    x: number,
+    y: number,
+    radius: number,
+    duration: number,
+  ): void {
     const burst = this.add.graphics();
     burst.setDepth(y + 5);
     burst.lineStyle(2, colors.web, 0.82);
@@ -1608,7 +2104,12 @@ export class GameScene extends Phaser.Scene {
     burst.strokeCircle(x, y, radius * 0.55);
     for (let spoke = 0; spoke < 10; spoke += 1) {
       const angle = (Math.PI * 2 * spoke) / 10;
-      burst.lineBetween(x, y, x + Math.cos(angle) * radius, y + Math.sin(angle) * radius);
+      burst.lineBetween(
+        x,
+        y,
+        x + Math.cos(angle) * radius,
+        y + Math.sin(angle) * radius,
+      );
     }
     this.tweens.add({
       targets: burst,
@@ -1634,7 +2135,11 @@ export class GameScene extends Phaser.Scene {
           enemy.sprite.setVelocityY(Math.sin(time / 180) * 18);
         }
         if (enemy.streetLane) {
-          enemy.sprite.y = Phaser.Math.Clamp(enemy.sprite.y, STREET_MIN_Y, ENEMY_STREET_MAX_Y);
+          enemy.sprite.y = Phaser.Math.Clamp(
+            enemy.sprite.y,
+            STREET_MIN_Y,
+            ENEMY_STREET_MAX_Y,
+          );
           enemy.sprite.setDepth(enemy.sprite.y);
         }
         continue;
@@ -1648,38 +2153,75 @@ export class GameScene extends Phaser.Scene {
         enemy.direction = -1;
       }
 
-      enemy.sprite.setVelocityX(enemy.direction * (enemy.state.kind === "gunner" ? 70 : enemy.state.kind === "drone" ? 120 : 105));
+      enemy.sprite.setVelocityX(
+        enemy.direction *
+          (enemy.state.kind === "gunner"
+            ? 70
+            : enemy.state.kind === "drone"
+              ? 120
+              : 105),
+      );
       enemy.sprite.setFlipX(enemy.direction < 0);
 
       if (enemy.streetLane) {
         const laneDelta = Phaser.Math.Clamp(player.y - enemy.sprite.y, -1, 1);
         enemy.sprite.setVelocityY(laneDelta * 42);
-        enemy.sprite.y = Phaser.Math.Clamp(enemy.sprite.y, STREET_MIN_Y, ENEMY_STREET_MAX_Y);
+        enemy.sprite.y = Phaser.Math.Clamp(
+          enemy.sprite.y,
+          STREET_MIN_Y,
+          ENEMY_STREET_MAX_Y,
+        );
         enemy.sprite.setDepth(enemy.sprite.y);
       }
 
       if (enemy.airborne) {
-        enemy.sprite.setVelocityY(Math.sin(time / 260 + enemy.sprite.x * 0.01) * 52);
+        enemy.sprite.setVelocityY(
+          Math.sin(time / 260 + enemy.sprite.x * 0.01) * 52,
+        );
         enemy.sprite.setDepth(enemy.sprite.y + 30);
       }
 
-      if ((enemy.state.kind === "gunner" || enemy.state.kind === "drone") && time >= enemy.nextShotAt) {
-        const closeEnough = Phaser.Math.Distance.Between(player.x, player.y, enemy.sprite.x, enemy.sprite.y) < (enemy.state.kind === "drone" ? 560 : 680);
+      if (
+        (enemy.state.kind === "gunner" || enemy.state.kind === "drone") &&
+        time >= enemy.nextShotAt
+      ) {
+        const closeEnough =
+          Phaser.Math.Distance.Between(
+            player.x,
+            player.y,
+            enemy.sprite.x,
+            enemy.sprite.y,
+          ) < (enemy.state.kind === "drone" ? 560 : 680);
         if (closeEnough) {
           this.fireBullet(enemy, player);
-          enemy.nextShotAt = time + (enemy.state.kind === "drone" ? 1900 : 1550);
+          enemy.nextShotAt =
+            time + (enemy.state.kind === "drone" ? 1900 : 1550);
         }
       }
     }
   }
 
-  private fireBullet(enemy: EnemyView, player: Phaser.Physics.Arcade.Sprite): void {
+  private fireBullet(
+    enemy: EnemyView,
+    player: Phaser.Physics.Arcade.Sprite,
+  ): void {
     const bullets = this.requireBullets();
-    const bullet = bullets.create(enemy.sprite.x, enemy.sprite.y + (enemy.state.kind === "drone" ? 18 : 4), "bullet") as Phaser.Physics.Arcade.Sprite;
-    const angle = Phaser.Math.Angle.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
+    const bullet = bullets.create(
+      enemy.sprite.x,
+      enemy.sprite.y + (enemy.state.kind === "drone" ? 18 : 4),
+      "bullet",
+    ) as Phaser.Physics.Arcade.Sprite;
+    const angle = Phaser.Math.Angle.Between(
+      enemy.sprite.x,
+      enemy.sprite.y,
+      player.x,
+      player.y,
+    );
     const speed = enemy.state.kind === "drone" ? 300 : 360;
     bullet.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-    bullet.setTint(enemy.state.kind === "drone" ? colors.balletTeal : colors.danger);
+    bullet.setTint(
+      enemy.state.kind === "drone" ? colors.balletTeal : colors.danger,
+    );
     bullet.setDepth(enemy.sprite.depth + 1);
     this.time.delayedCall(2600, () => bullet.destroy());
   }
@@ -1705,7 +2247,8 @@ export class GameScene extends Phaser.Scene {
     player.setAngularVelocity(player.flipX ? 90 : -90);
     player.setTexture("player-downed");
     player.setTint(0xffd1f0);
-    this.state.player.message = "Knocked out in slow motion. Press R to restart.";
+    this.state.player.message =
+      "Knocked out in slow motion. Press R to restart.";
     this.time.timeScale = 0.28;
     this.tweens.timeScale = 0.28;
     this.physics.world.timeScale = 0.28;
@@ -1724,7 +2267,10 @@ export class GameScene extends Phaser.Scene {
     return actions[action] && !this.previousActions[action];
   }
 
-  private setPlayerGravity(player: Phaser.Physics.Arcade.Sprite, enabled: boolean): void {
+  private setPlayerGravity(
+    player: Phaser.Physics.Arcade.Sprite,
+    enabled: boolean,
+  ): void {
     const body = player.body;
     if (body instanceof Phaser.Physics.Arcade.Body) {
       body.setAllowGravity(enabled);
