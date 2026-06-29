@@ -182,64 +182,70 @@ export class GameScene extends Phaser.Scene {
 
   private createPlayerSprites(graphics: Phaser.GameObjects.Graphics): void {
     const frames = [
-      { key: "player-idle-0", arm: -2, leg: 0, hood: 0, reach: 0 },
+      { key: "player-idle-0", arm: 0, leg: 0, hood: 0, reach: 0 },
       { key: "player-idle-1", arm: 1, leg: -1, hood: 1, reach: 0 },
-      { key: "player-run-0", arm: -7, leg: -7, hood: 0, reach: -2 },
-      { key: "player-run-1", arm: 7, leg: 7, hood: 1, reach: 2 },
+      { key: "player-run-0", arm: -4, leg: -6, hood: 0, reach: -2 },
+      { key: "player-run-1", arm: 4, leg: 6, hood: 1, reach: 2 },
       { key: "player-glide", arm: 0, leg: 0, hood: -1, reach: 8 },
     ];
 
     for (const frame of frames) {
       graphics.clear();
-      graphics.lineStyle(3, 0x12131c, 0.75);
-      graphics.fillStyle(0x11131d);
-      graphics.fillRoundedRect(25, 48, 22, 31, 9);
-      graphics.fillStyle(0xf8f8ff);
-      graphics.fillTriangle(22, 35, 36, 76, 49, 35);
-      graphics.fillStyle(0x11131d);
-      graphics.fillTriangle(34, 48, 49, 40, 48, 78);
-      graphics.fillStyle(0xffffff);
-      graphics.fillTriangle(24, 39, 37, 31, 36, 63);
+      const px = (x: number, y: number, width: number, height: number, color: number, alpha = 1): void => {
+        graphics.fillStyle(color, alpha);
+        graphics.fillRect(x, y, width, height);
+      };
+      const hoodY = 5 + frame.hood;
+      const leftArmY = 45 + frame.arm - frame.reach;
+      const rightArmY = 45 - frame.arm - frame.reach;
 
-      graphics.lineStyle(6, 0xffffff, 1);
-      graphics.lineBetween(25, 42, 13, 58 + frame.arm - frame.reach);
-      graphics.lineBetween(47, 42, 60, 58 - frame.arm - frame.reach);
-      graphics.lineStyle(4, 0xd2278b, 1);
-      graphics.lineBetween(17, 53 + frame.arm, 10, 66 + frame.arm);
-      graphics.lineBetween(55, 53 - frame.arm, 63, 66 - frame.arm);
-      graphics.lineStyle(1, colors.balletTeal, 0.9);
-      graphics.lineBetween(13, 58 + frame.arm, 7, 64 + frame.arm);
-      graphics.lineBetween(13, 58 + frame.arm, 18, 68 + frame.arm);
-      graphics.lineBetween(59, 58 - frame.arm, 53, 68 - frame.arm);
-      graphics.lineBetween(59, 58 - frame.arm, 66, 64 - frame.arm);
+      px(27, 47, 15, 29, 0x080a10);
+      px(21, 39, 14, 30, 0xf8f8ff);
+      px(35, 39, 13, 30, 0xf8f8ff);
+      px(24, 44, 8, 29, 0xffffff);
+      px(36, 44, 11, 28, 0x0d0f17);
+      px(27, 48, 5, 22, 0xd2278b);
+      px(29, 50, 2, 19, colors.balletTeal);
 
-      graphics.lineStyle(6, 0x151620, 1);
-      graphics.lineBetween(31, 75, 20, 91 + frame.leg);
-      graphics.lineBetween(42, 75, 54, 91 - frame.leg);
-      graphics.fillStyle(colors.balletTeal);
-      graphics.fillEllipse(18, 94 + frame.leg, 20, 8);
-      graphics.fillEllipse(56, 94 - frame.leg, 20, 8);
+      px(17, leftArmY, 8, 22, 0xf5f7ff);
+      px(12, leftArmY + 14, 8, 12, 0xd2278b);
+      px(14, leftArmY + 16, 2, 9, colors.balletTeal);
+      px(18, leftArmY + 17, 2, 8, colors.balletTeal);
+      px(47, rightArmY, 8, 22, 0xf5f7ff);
+      px(53, rightArmY + 14, 8, 12, 0xd2278b);
+      px(55, rightArmY + 16, 2, 9, colors.balletTeal);
+      px(59, rightArmY + 17, 2, 8, colors.balletTeal);
+      px(9, leftArmY + 24, 11, 5, 0xf9fbff);
+      px(53, rightArmY + 24, 11, 5, 0xf9fbff);
 
-      graphics.fillStyle(0xffffff);
-      graphics.fillTriangle(17, 6 + frame.hood, 36, 0 + frame.hood, 56, 8 + frame.hood);
-      graphics.fillRoundedRect(18, 6 + frame.hood, 36, 37, 15);
-      graphics.fillTriangle(18, 16 + frame.hood, 6, 42 + frame.hood, 27, 37 + frame.hood);
-      graphics.fillTriangle(54, 16 + frame.hood, 66, 42 + frame.hood, 45, 37 + frame.hood);
-      graphics.fillStyle(0xd2278b);
-      graphics.fillTriangle(14, 28 + frame.hood, 27, 40 + frame.hood, 8, 42 + frame.hood);
-      graphics.fillTriangle(58, 28 + frame.hood, 45, 40 + frame.hood, 64, 42 + frame.hood);
-      graphics.lineStyle(1, colors.balletTeal, 0.9);
-      graphics.lineBetween(14, 31 + frame.hood, 26, 39 + frame.hood);
-      graphics.lineBetween(20, 29 + frame.hood, 22, 42 + frame.hood);
-      graphics.lineBetween(58, 31 + frame.hood, 46, 39 + frame.hood);
-      graphics.lineBetween(52, 29 + frame.hood, 50, 42 + frame.hood);
-      graphics.fillStyle(0xffffff);
-      graphics.fillRoundedRect(25, 15 + frame.hood, 23, 24, 10);
-      graphics.lineStyle(2, 0xd2278b, 1);
-      graphics.strokeTriangle(25, 25 + frame.hood, 34, 21 + frame.hood, 32, 31 + frame.hood);
-      graphics.strokeTriangle(48, 25 + frame.hood, 39, 21 + frame.hood, 41, 31 + frame.hood);
+      px(24, 72, 8, 16 + frame.leg, 0x0b0d14);
+      px(33, 72, 9, 16 - frame.leg, 0x10131e);
+      px(17, 84 + frame.leg, 15, 7, colors.balletTeal);
+      px(38, 84 - frame.leg, 16, 7, colors.balletTeal);
+      px(18, 82 + frame.leg, 10, 3, 0xf5f7ff);
+      px(41, 82 - frame.leg, 10, 3, 0xf5f7ff);
 
-      graphics.generateTexture(frame.key, 72, 104);
+      px(24, hoodY, 24, 5, 0xe7eaf4);
+      px(20, hoodY + 5, 32, 7, 0xffffff);
+      px(17, hoodY + 12, 38, 12, 0xf8f9ff);
+      px(20, hoodY + 24, 32, 13, 0xe9edf8);
+      px(24, hoodY + 18, 23, 21, 0xffffff);
+      px(13, hoodY + 25, 12, 15, 0xd2278b);
+      px(48, hoodY + 25, 11, 15, 0xd2278b);
+      px(16, hoodY + 28, 2, 10, colors.balletTeal);
+      px(20, hoodY + 31, 2, 8, colors.balletTeal);
+      px(51, hoodY + 28, 2, 10, colors.balletTeal);
+      px(55, hoodY + 31, 2, 8, colors.balletTeal);
+      px(28, hoodY + 25, 8, 4, 0xd2278b);
+      px(38, hoodY + 25, 8, 4, 0xd2278b);
+      px(29, hoodY + 26, 6, 7, 0xf8fbff);
+      px(39, hoodY + 26, 6, 7, 0xf8fbff);
+      px(27, hoodY + 20, 2, 17, 0xc8ccd7, 0.85);
+      px(47, hoodY + 20, 2, 16, 0xc8ccd7, 0.85);
+      px(18, hoodY + 10, 5, 23, 0xdfe3ee, 0.9);
+      px(49, hoodY + 10, 5, 23, 0xdfe3ee, 0.9);
+
+      graphics.generateTexture(frame.key, 72, 96);
     }
 
     graphics.clear();
@@ -609,7 +615,7 @@ export class GameScene extends Phaser.Scene {
     player.setCollideWorldBounds(true);
     player.setDragX(880);
     player.setMaxVelocity(760, 980);
-    player.body?.setSize(34, 80).setOffset(19, 16);
+    player.body?.setSize(32, 76).setOffset(20, 14);
     player.play("player-idle");
     this.physics.add.collider(player, this.requirePlatforms());
     this.player = player;
