@@ -36,7 +36,7 @@ bun run typecheck
 - `A` / `D`: move across the level
 - `W` / `S`: move up and down the street plane when on foot
 - `Space`: jump
-- `E`: hold to attach a swing web to a nearby high ledge
+- `E`: hold to attach up to two swing webs to nearby high ledges
 - `J`: web-glob strike on foot or close-range kick near enemies
 - `Q`: cycle gadget
 - `K`: use gadget
