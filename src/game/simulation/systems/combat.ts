@@ -9,11 +9,11 @@ export const damageEnemy = (state: GameState, enemy: EnemyState, amount: number)
   enemy.health = Math.max(0, enemy.health - amount);
 
   if (enemy.health > 0) {
-    state.player.message = enemy.kind === "gunner" ? "The hooded gunner staggers." : "Robot armor cracked.";
+    state.player.message = enemy.kind === "gunner" ? "The hooded gunner staggers." : enemy.kind === "drone" ? "Drone rotors sputter." : "Robot armor cracked.";
     return false;
   }
 
-  state.player.score += enemy.kind === "gunner" ? 250 : 150;
-  state.player.message = enemy.kind === "gunner" ? "Gunner disarmed." : "Robot dismantled.";
+  state.player.score += enemy.kind === "gunner" ? 250 : enemy.kind === "drone" ? 180 : 150;
+  state.player.message = enemy.kind === "gunner" ? "Gunner disarmed." : enemy.kind === "drone" ? "Drone clipped." : "Robot dismantled.";
   return true;
 };
