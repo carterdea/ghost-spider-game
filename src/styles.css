@@ -1,0 +1,139 @@
+:root {
+  color-scheme: dark;
+  --ink: #f7f7ff;
+  --panel: rgba(14, 16, 28, 0.78);
+  --panel-edge: rgba(255, 255, 255, 0.18);
+  --pink: #ff79c6;
+  --violet: #7c5cff;
+  --teal: #26d6cf;
+  --danger: #ff4d6d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  min-width: 320px;
+  min-height: 100vh;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: #080a13;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+#game {
+  position: absolute;
+  inset: 0;
+}
+
+#game canvas {
+  display: block;
+}
+
+#hud {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  color: var(--ink);
+}
+
+.hud-top {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  right: max(14px, env(safe-area-inset-right));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-cluster,
+.hint-chip {
+  border: 1px solid var(--panel-edge);
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.status-cluster {
+  width: min(360px, calc(100vw - 28px));
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.hero-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hero-name {
+  font-weight: 800;
+}
+
+.objective {
+  color: #cfd4ff;
+  font-size: 12px;
+}
+
+.bar {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--teal), var(--pink));
+  transition: width 120ms ease;
+}
+
+.hint-chip {
+  max-width: min(460px, calc(100vw - 28px));
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #dce2ff;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.message {
+  position: absolute;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100vw - 28px));
+  border: 1px solid rgba(38, 214, 207, 0.34);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(9, 14, 22, 0.78);
+  color: #e8fbff;
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .hud-top {
+    flex-direction: column;
+  }
+}
