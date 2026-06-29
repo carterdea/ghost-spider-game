@@ -42,6 +42,14 @@ const GENERATED_TEXTURES = [
   "building",
   "roof",
   "street",
+  "sidewalkTile",
+  "storefront",
+  "apartmentDoor",
+  "streetLight",
+  "trashCan",
+  "hydrant",
+  "crosswalkStripe",
+  "laneDash",
 ] as const;
 
 export class GameScene extends Phaser.Scene {
@@ -153,6 +161,9 @@ export class GameScene extends Phaser.Scene {
     graphics.fillStyle(0x141823);
     graphics.fillRect(0, 0, 64, 64);
     graphics.generateTexture("street", 64, 64);
+    graphics.clear();
+
+    this.createStreetSprites(graphics);
     graphics.destroy();
   }
 
@@ -256,6 +267,100 @@ export class GameScene extends Phaser.Scene {
     graphics.clear();
   }
 
+  private createStreetSprites(graphics: Phaser.GameObjects.Graphics): void {
+    graphics.clear();
+    graphics.fillStyle(0x283149);
+    graphics.fillRect(0, 0, 96, 40);
+    graphics.lineStyle(2, 0x3f4a67, 0.9);
+    graphics.lineBetween(0, 2, 96, 2);
+    graphics.lineBetween(0, 38, 96, 38);
+    graphics.lineStyle(1, 0x52607d, 0.6);
+    for (let x = 0; x <= 96; x += 24) {
+      graphics.lineBetween(x, 0, x, 40);
+    }
+    graphics.generateTexture("sidewalkTile", 96, 40);
+    graphics.clear();
+
+    graphics.fillStyle(0x192033);
+    graphics.fillRoundedRect(0, 0, 176, 124, 4);
+    graphics.fillStyle(0x2b3858);
+    graphics.fillRect(8, 12, 160, 92);
+    graphics.fillStyle(0xf2ce6b, 0.88);
+    graphics.fillRect(18, 22, 60, 34);
+    graphics.fillRect(98, 22, 52, 34);
+    graphics.fillStyle(0x68d7ff, 0.72);
+    graphics.fillRect(18, 64, 132, 24);
+    graphics.lineStyle(4, 0x0d111c, 1);
+    graphics.strokeRect(18, 22, 60, 34);
+    graphics.strokeRect(98, 22, 52, 34);
+    graphics.strokeRect(18, 64, 132, 24);
+    graphics.fillStyle(0xe85f9a);
+    graphics.fillRect(0, 0, 176, 12);
+    graphics.fillStyle(0x111827);
+    graphics.fillRect(0, 104, 176, 20);
+    graphics.generateTexture("storefront", 176, 124);
+    graphics.clear();
+
+    graphics.fillStyle(0x151b2b);
+    graphics.fillRoundedRect(0, 0, 96, 132, 4);
+    graphics.fillStyle(0x2d3651);
+    graphics.fillRect(12, 12, 72, 112);
+    graphics.fillStyle(0x101522);
+    graphics.fillRoundedRect(28, 42, 40, 82, 8);
+    graphics.fillStyle(0xd9b66f);
+    graphics.fillCircle(60, 84, 3);
+    graphics.lineStyle(3, 0x65708c, 1);
+    graphics.strokeRoundedRect(28, 42, 40, 82, 8);
+    graphics.fillStyle(0xf6d982, 0.8);
+    graphics.fillRect(24, 16, 48, 14);
+    graphics.generateTexture("apartmentDoor", 96, 132);
+    graphics.clear();
+
+    graphics.fillStyle(0x2c344a);
+    graphics.fillRect(18, 24, 8, 112);
+    graphics.fillStyle(0x4b5877);
+    graphics.fillRect(10, 132, 24, 8);
+    graphics.fillStyle(0xf7d875);
+    graphics.fillCircle(22, 18, 18);
+    graphics.fillStyle(0xfff3a3, 0.36);
+    graphics.fillCircle(22, 18, 30);
+    graphics.lineStyle(3, 0x1b2132, 1);
+    graphics.strokeCircle(22, 18, 18);
+    graphics.generateTexture("streetLight", 64, 148);
+    graphics.clear();
+
+    graphics.fillStyle(0x46516a);
+    graphics.fillRoundedRect(8, 14, 34, 46, 6);
+    graphics.fillStyle(0x5d6a87);
+    graphics.fillRect(5, 8, 40, 10);
+    graphics.fillStyle(0x202638);
+    graphics.fillRect(16, 24, 18, 4);
+    graphics.fillRect(16, 36, 18, 4);
+    graphics.generateTexture("trashCan", 52, 68);
+    graphics.clear();
+
+    graphics.fillStyle(0xd94545);
+    graphics.fillRoundedRect(16, 18, 22, 38, 8);
+    graphics.fillStyle(0xf05a5a);
+    graphics.fillCircle(27, 16, 11);
+    graphics.fillStyle(0x7c1d1d);
+    graphics.fillRect(8, 36, 38, 8);
+    graphics.fillStyle(0x242a36);
+    graphics.fillRect(18, 56, 18, 8);
+    graphics.generateTexture("hydrant", 56, 70);
+    graphics.clear();
+
+    graphics.fillStyle(0xe7edf7, 0.72);
+    graphics.fillRect(0, 0, 34, 130);
+    graphics.generateTexture("crosswalkStripe", 34, 130);
+    graphics.clear();
+
+    graphics.fillStyle(0xe8c85e, 0.74);
+    graphics.fillRoundedRect(0, 0, 92, 8, 4);
+    graphics.generateTexture("laneDash", 92, 8);
+    graphics.clear();
+  }
+
   private createAnimations(): void {
     this.anims.remove("player-idle");
     this.anims.remove("player-run");
@@ -294,6 +399,7 @@ export class GameScene extends Phaser.Scene {
     this.add.rectangle(2800, 1320, this.state.world.width, 330, 0x0c0f16).setDepth(-8);
     this.add.rectangle(2800, STREET_MIN_Y, this.state.world.width, 4, 0x44516f, 0.35).setDepth(-7);
     this.add.rectangle(2800, STREET_MAX_Y, this.state.world.width, 4, 0x44516f, 0.25).setDepth(-7);
+    this.createStreetDetails();
 
     this.platforms = this.physics.add.staticGroup();
     const buildings: Building[] = [
@@ -311,6 +417,48 @@ export class GameScene extends Phaser.Scene {
       this.add.image(building.x, building.y, "building").setDisplaySize(building.w, building.h).setDepth(-3);
       this.paintWindows(building);
       this.createRoofPlatform(building);
+    }
+  }
+
+  private createStreetDetails(): void {
+    for (let x = 48; x < this.state.world.width; x += 96) {
+      this.add.image(x, 1192, "sidewalkTile").setOrigin(0.5, 0).setDepth(-6);
+    }
+
+    for (let x = 120; x < this.state.world.width; x += 420) {
+      this.add.image(x, 1335, "laneDash").setDepth(-5);
+    }
+
+    for (let x = 690; x < this.state.world.width; x += 1480) {
+      for (let stripe = 0; stripe < 6; stripe += 1) {
+        this.add.image(x + stripe * 48, 1334, "crosswalkStripe").setDepth(-4);
+      }
+    }
+
+    const storefronts = [
+      { x: 220, y: 1082, texture: "storefront" },
+      { x: 600, y: 1086, texture: "apartmentDoor" },
+      { x: 1120, y: 1082, texture: "storefront" },
+      { x: 1500, y: 1086, texture: "apartmentDoor" },
+      { x: 2050, y: 1082, texture: "storefront" },
+      { x: 2530, y: 1086, texture: "apartmentDoor" },
+      { x: 3230, y: 1082, texture: "storefront" },
+      { x: 3720, y: 1086, texture: "apartmentDoor" },
+      { x: 4380, y: 1082, texture: "storefront" },
+      { x: 4930, y: 1086, texture: "apartmentDoor" },
+    ] as const;
+
+    for (const detail of storefronts) {
+      this.add.image(detail.x, detail.y, detail.texture).setDepth(-2);
+    }
+
+    for (let x = 360; x < this.state.world.width; x += 620) {
+      this.add.image(x, 1160, "streetLight").setDepth(1180);
+    }
+
+    for (let x = 520; x < this.state.world.width; x += 930) {
+      this.add.image(x, 1188, "trashCan").setDepth(1200);
+      this.add.image(x + 190, 1192, "hydrant").setDepth(1200);
     }
   }
 
@@ -517,14 +665,9 @@ export class GameScene extends Phaser.Scene {
   private attachWeb(player: Phaser.Physics.Arcade.Sprite): void {
     const anchor = this.findWebAnchor(player.x, player.y);
 
-    if (!anchor) {
-      this.state.player.message = "No ledge in web range.";
-      return;
-    }
-
     this.state.player.webAttached = true;
     this.state.player.webAnchor = anchor;
-    this.state.player.message = "Web-line attached.";
+    this.state.player.message = "Web-line attached to a ledge.";
     player.setGravityY(-220);
   }
 
@@ -563,7 +706,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private findWebAnchor(x: number, y: number): { x: number; y: number } | null {
+  private findWebAnchor(x: number, y: number): { x: number; y: number } {
     const candidates = [
       { x: 520, y: 430 },
       { x: 1180, y: 120 },
@@ -574,9 +717,19 @@ export class GameScene extends Phaser.Scene {
       { x: 5020, y: 210 },
     ];
 
-    return candidates
+    const nearbyAnchor = candidates
       .filter((anchor) => anchor.y < y - 80 && Phaser.Math.Distance.Between(x, y, anchor.x, anchor.y) < 760)
-      .sort((a, b) => Phaser.Math.Distance.Between(x, y, a.x, a.y) - Phaser.Math.Distance.Between(x, y, b.x, b.y))[0] ?? null;
+      .sort((a, b) => Phaser.Math.Distance.Between(x, y, a.x, a.y) - Phaser.Math.Distance.Between(x, y, b.x, b.y))[0];
+
+    if (nearbyAnchor) {
+      return nearbyAnchor;
+    }
+
+    const facing = this.requirePlayer().flipX ? -1 : 1;
+    return {
+      x: Phaser.Math.Clamp(x + facing * 420, 120, this.state.world.width - 120),
+      y: Math.max(60, y - 460),
+    };
   }
 
   private updateWebLine(player: Phaser.Physics.Arcade.Sprite): void {
