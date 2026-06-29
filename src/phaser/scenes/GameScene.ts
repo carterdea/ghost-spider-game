@@ -69,6 +69,7 @@ export class GameScene extends Phaser.Scene {
   private attackCooldownUntil = 0;
   private gadgetCooldownUntil = 0;
   private hitCooldownUntil = 0;
+  private nextWebSwapAt = 0;
 
   public constructor() {
     super("game");
@@ -640,6 +641,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.state.player.webAttached && this.state.player.webAnchors.length > 0) {
+      this.updateSwingAnchors(player, actions);
       this.applySwing(player, this.state.player.webAnchors, actions, delta);
     }
 
@@ -670,6 +672,7 @@ export class GameScene extends Phaser.Scene {
     this.state.player.webAttached = true;
     this.state.player.webAnchors = anchors;
     this.state.player.message = anchors.length > 1 ? "Two web-lines attached." : "Web-line attached.";
+    this.nextWebSwapAt = this.time.now + 360;
     player.setGravityY(-220);
   }
 
@@ -681,8 +684,29 @@ export class GameScene extends Phaser.Scene {
     this.state.player.webAttached = false;
     this.state.player.webAnchors = [];
     this.state.player.message = message;
+    this.nextWebSwapAt = 0;
     this.requirePlayer().setGravityY(0);
     this.clearWebLines();
+  }
+
+  private updateSwingAnchors(player: Phaser.Physics.Arcade.Sprite, actions: ActionState): void {
+    if (this.time.now < this.nextWebSwapAt) {
+      return;
+    }
+
+    const anchors = this.state.player.webAnchors;
+    const travelDirection = this.getSwingDirection(player, actions);
+    const trailingAnchor = anchors.find((anchor) => (anchor.x - player.x) * travelDirection < -110);
+    const overextendedAnchor = anchors.find((anchor) => Phaser.Math.Distance.Between(player.x, player.y, anchor.x, anchor.y) > 600);
+
+    if (!trailingAnchor && !overextendedAnchor && anchors.length >= 2) {
+      return;
+    }
+
+    const newAnchor = this.findForwardWebAnchor(player.x, player.y, travelDirection, anchors);
+    this.state.player.webAnchors = [...anchors.filter((anchor) => anchor !== (trailingAnchor ?? overextendedAnchor)), newAnchor].slice(-2);
+    this.nextWebSwapAt = this.time.now + 420;
+    this.state.player.message = "New web-line caught.";
   }
 
   private applySwing(player: Phaser.Physics.Arcade.Sprite, anchors: WebAnchor[], actions: ActionState, delta: number): void {
@@ -747,6 +771,49 @@ export class GameScene extends Phaser.Scene {
     };
 
     return [primary, secondary];
+  }
+
+  private findForwardWebAnchor(x: number, y: number, direction: number, currentAnchors: WebAnchor[]): WebAnchor {
+    const candidates = [
+      { x: 520, y: 430 },
+      { x: 1180, y: 120 },
+      { x: 1860, y: 650 },
+      { x: 2600, y: 300 },
+      { x: 3360, y: 30 },
+      { x: 4100, y: 730 },
+      { x: 5020, y: 210 },
+    ];
+    const existing = new Set(currentAnchors.map((anchor) => `${Math.round(anchor.x)}:${Math.round(anchor.y)}`));
+    const authoredAnchor = candidates
+      .filter((anchor) => !existing.has(`${anchor.x}:${anchor.y}`))
+      .filter((anchor) => (anchor.x - x) * direction > 140 && anchor.y < y - 80)
+      .sort((a, b) => Phaser.Math.Distance.Between(x, y, a.x, a.y) - Phaser.Math.Distance.Between(x, y, b.x, b.y))[0];
+
+    if (authoredAnchor) {
+      return authoredAnchor;
+    }
+
+    return {
+      x: Phaser.Math.Clamp(x + direction * 470, 120, this.state.world.width - 120),
+      y: Math.max(60, y - 480),
+    };
+  }
+
+  private getSwingDirection(player: Phaser.Physics.Arcade.Sprite, actions: ActionState): number {
+    if (actions.moveRight) {
+      return 1;
+    }
+
+    if (actions.moveLeft) {
+      return -1;
+    }
+
+    const velocityX = player.body?.velocity.x ?? 0;
+    if (Math.abs(velocityX) > 35) {
+      return Math.sign(velocityX);
+    }
+
+    return player.flipX ? -1 : 1;
   }
 
   private updateWebLine(player: Phaser.Physics.Arcade.Sprite): void {
