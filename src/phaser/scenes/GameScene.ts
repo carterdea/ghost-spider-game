@@ -26,6 +26,23 @@ const STREET_MIN_Y = 1210;
 const STREET_MAX_Y = 1400;
 const STREET_ENTRY_Y = 1190;
 const GADGETS: GadgetKind[] = ["web-net", "web-shield", "web-wings"];
+const GENERATED_TEXTURES = [
+  "player-idle-0",
+  "player-idle-1",
+  "player-run-0",
+  "player-run-1",
+  "player-glide",
+  "robot-walk-0",
+  "robot-walk-1",
+  "gunner-walk-0",
+  "gunner-walk-1",
+  "webGlob",
+  "webNet",
+  "bullet",
+  "building",
+  "roof",
+  "street",
+] as const;
 
 export class GameScene extends Phaser.Scene {
   private state: GameState = createInitialGameState();
@@ -54,6 +71,7 @@ export class GameScene extends Phaser.Scene {
     this.previousActions = createEmptyActions();
     this.playerOnStreet = false;
     this.createTextures();
+    this.createAnimations();
     this.createWorld();
     this.createPlayer();
     this.createEnemies();
@@ -96,39 +114,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createTextures(): void {
+    this.clearGeneratedTextures();
     const graphics = this.add.graphics();
 
-    graphics.fillStyle(colors.ghostWhite);
-    graphics.fillRoundedRect(12, 8, 26, 30, 10);
-    graphics.fillStyle(colors.suitPurple);
-    graphics.fillRoundedRect(16, 34, 18, 34, 8);
-    graphics.fillStyle(colors.wingLavender, 0.76);
-    graphics.fillTriangle(13, 35, 0, 64, 16, 58);
-    graphics.fillTriangle(35, 35, 52, 64, 34, 58);
-    graphics.fillStyle(colors.balletTeal);
-    graphics.fillEllipse(16, 72, 18, 8);
-    graphics.fillEllipse(36, 72, 18, 8);
-    graphics.generateTexture("player", 56, 80);
-    graphics.clear();
-
-    graphics.fillStyle(colors.robot);
-    graphics.fillRoundedRect(4, 10, 40, 42, 4);
-    graphics.fillStyle(0xdce3f2);
-    graphics.fillRect(12, 20, 8, 8);
-    graphics.fillRect(28, 20, 8, 8);
-    graphics.fillStyle(colors.danger);
-    graphics.fillRect(8, 52, 32, 8);
-    graphics.generateTexture("robot", 48, 64);
-    graphics.clear();
-
-    graphics.fillStyle(colors.gunner);
-    graphics.fillRoundedRect(5, 6, 36, 50, 14);
-    graphics.fillStyle(0x2b2f3d);
-    graphics.fillRect(30, 30, 24, 6);
-    graphics.fillStyle(0xf3f3ff);
-    graphics.fillCircle(23, 21, 7);
-    graphics.generateTexture("gunner", 56, 64);
-    graphics.clear();
+    this.createPlayerSprites(graphics);
+    this.createRobotSprites(graphics);
+    this.createGunnerSprites(graphics);
 
     graphics.fillStyle(colors.web);
     graphics.fillCircle(6, 6, 6);
@@ -163,6 +154,138 @@ export class GameScene extends Phaser.Scene {
     graphics.fillRect(0, 0, 64, 64);
     graphics.generateTexture("street", 64, 64);
     graphics.destroy();
+  }
+
+  private clearGeneratedTextures(): void {
+    for (const key of GENERATED_TEXTURES) {
+      if (this.textures.exists(key)) {
+        this.textures.remove(key);
+      }
+    }
+  }
+
+  private createPlayerSprites(graphics: Phaser.GameObjects.Graphics): void {
+    const frames = [
+      { key: "player-idle-0", arm: -2, leg: 0, wing: 0, tutu: 0 },
+      { key: "player-idle-1", arm: 0, leg: -1, wing: 1, tutu: 1 },
+      { key: "player-run-0", arm: -7, leg: -6, wing: 4, tutu: -2 },
+      { key: "player-run-1", arm: 7, leg: 6, wing: -2, tutu: 2 },
+      { key: "player-glide", arm: 0, leg: 0, wing: 14, tutu: 0 },
+    ];
+
+    for (const frame of frames) {
+      graphics.clear();
+      graphics.fillStyle(colors.wingLavender, 0.58);
+      graphics.fillTriangle(22, 38, 4, 72 + frame.wing, 31, 63);
+      graphics.fillTriangle(50, 38, 68, 72 + frame.wing, 41, 63);
+      graphics.lineStyle(2, colors.web, 0.55);
+      graphics.lineBetween(14, 60, 31, 63);
+      graphics.lineBetween(58, 60, 41, 63);
+
+      graphics.fillStyle(0xf9f6ff);
+      graphics.fillRoundedRect(24, 5, 25, 32, 11);
+      graphics.fillStyle(0x1b2036);
+      graphics.fillTriangle(26, 22, 33, 31, 27, 33);
+      graphics.fillTriangle(47, 22, 40, 31, 46, 33);
+      graphics.fillStyle(colors.suitPurple);
+      graphics.fillRoundedRect(26, 34, 20, 34, 8);
+      graphics.fillStyle(0x9c7cff);
+      graphics.fillEllipse(36, 50 + frame.tutu, 38, 16);
+
+      graphics.lineStyle(5, colors.suitPurple, 1);
+      graphics.lineBetween(27, 42, 16, 55 + frame.arm);
+      graphics.lineBetween(45, 42, 56, 55 - frame.arm);
+      graphics.lineStyle(5, colors.balletTeal, 1);
+      graphics.lineBetween(31, 66, 22, 82 + frame.leg);
+      graphics.lineBetween(41, 66, 50, 82 - frame.leg);
+      graphics.fillStyle(colors.balletTeal);
+      graphics.fillEllipse(20, 84 + frame.leg, 19, 7);
+      graphics.fillEllipse(52, 84 - frame.leg, 19, 7);
+
+      graphics.generateTexture(frame.key, 72, 92);
+    }
+
+    graphics.clear();
+  }
+
+  private createRobotSprites(graphics: Phaser.GameObjects.Graphics): void {
+    for (const [index, lean] of [0, 2].entries()) {
+      graphics.clear();
+      graphics.fillStyle(0x4c566f);
+      graphics.fillRoundedRect(12 + lean, 18, 38, 40, 5);
+      graphics.fillStyle(colors.robot);
+      graphics.fillRoundedRect(15 + lean, 8, 32, 24, 4);
+      graphics.fillStyle(0xdce3f2);
+      graphics.fillRect(21 + lean, 17, 7, 6);
+      graphics.fillRect(34 + lean, 17, 7, 6);
+      graphics.fillStyle(colors.danger);
+      graphics.fillRect(18 + lean, 36, 26, 5);
+      graphics.lineStyle(6, 0x707b92, 1);
+      graphics.lineBetween(15 + lean, 43, 5, 59 - lean);
+      graphics.lineBetween(48 + lean, 43, 59, 59 + lean);
+      graphics.lineBetween(22 + lean, 58, 18, 73 + lean);
+      graphics.lineBetween(40 + lean, 58, 45, 73 - lean);
+      graphics.generateTexture(`robot-walk-${index}`, 64, 82);
+    }
+
+    graphics.clear();
+  }
+
+  private createGunnerSprites(graphics: Phaser.GameObjects.Graphics): void {
+    for (const [index, coat] of [0, 3].entries()) {
+      graphics.clear();
+      graphics.fillStyle(0x0d1018);
+      graphics.fillRoundedRect(13, 7, 36, 56, 16);
+      graphics.fillStyle(colors.gunner);
+      graphics.fillTriangle(13, 30, 5, 75 + coat, 31, 60);
+      graphics.fillTriangle(49, 30, 58, 75 - coat, 31, 60);
+      graphics.fillStyle(0xf3f3ff);
+      graphics.fillCircle(31, 22, 8);
+      graphics.fillStyle(0x242a3b);
+      graphics.fillRect(31, 39, 30, 7);
+      graphics.fillStyle(0x12151f);
+      graphics.fillRect(55, 38, 12, 5);
+      graphics.fillStyle(colors.danger);
+      graphics.fillCircle(66, 40, 3);
+      graphics.lineStyle(5, 0x2a3143, 1);
+      graphics.lineBetween(23, 61, 18, 78 - coat);
+      graphics.lineBetween(39, 61, 45, 78 + coat);
+      graphics.generateTexture(`gunner-walk-${index}`, 72, 86);
+    }
+
+    graphics.clear();
+  }
+
+  private createAnimations(): void {
+    this.anims.remove("player-idle");
+    this.anims.remove("player-run");
+    this.anims.remove("robot-walk");
+    this.anims.remove("gunner-walk");
+
+    this.anims.create({
+      key: "player-idle",
+      frames: [{ key: "player-idle-0" }, { key: "player-idle-1" }],
+      frameRate: 4,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "player-run",
+      frames: [{ key: "player-run-0" }, { key: "player-run-1" }],
+      frameRate: 9,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "robot-walk",
+      frames: [{ key: "robot-walk-0" }, { key: "robot-walk-1" }],
+      frameRate: 5,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "gunner-walk",
+      frames: [{ key: "gunner-walk-0" }, { key: "gunner-walk-1" }],
+      frameRate: 4,
+      repeat: -1,
+    });
   }
 
   private createWorld(): void {
@@ -214,11 +337,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createPlayer(): void {
-    const player = this.physics.add.sprite(120, 600, "player");
+    const player = this.physics.add.sprite(120, 600, "player-idle-0");
     player.setCollideWorldBounds(true);
     player.setDragX(880);
     player.setMaxVelocity(760, 980);
-    player.body?.setSize(30, 66).setOffset(13, 8);
+    player.body?.setSize(32, 72).setOffset(20, 13);
+    player.play("player-idle");
     this.physics.add.collider(player, this.requirePlatforms());
     this.player = player;
   }
@@ -234,11 +358,14 @@ export class GameScene extends Phaser.Scene {
 
     for (const enemyState of this.state.enemies) {
       const placement = placements[enemyState.id];
-      const sprite = this.physics.add.sprite(placement.x, placement.y, enemyState.kind === "gunner" ? "gunner" : "robot");
+      const texture = enemyState.kind === "gunner" ? "gunner-walk-0" : "robot-walk-0";
+      const sprite = this.physics.add.sprite(placement.x, placement.y, texture);
       sprite.setCollideWorldBounds(true);
       sprite.setDragX(600);
       sprite.setMaxVelocity(180, 900);
+      sprite.body?.setSize(enemyState.kind === "gunner" ? 34 : 38, enemyState.kind === "gunner" ? 72 : 70).setOffset(enemyState.kind === "gunner" ? 18 : 13, 10);
       sprite.body?.setAllowGravity(!placement.streetLane);
+      sprite.play(enemyState.kind === "gunner" ? "gunner-walk" : "robot-walk");
 
       if (placement.streetLane) {
         sprite.setDepth(placement.y);
@@ -368,7 +495,12 @@ export class GameScene extends Phaser.Scene {
 
     if (actions.glide && !this.playerOnStreet && !grounded && player.body && player.body.velocity.y > 80) {
       player.setVelocityY(Math.min(player.body.velocity.y, 170));
+      player.setTexture("player-glide");
       this.state.player.message = "Web-wings slowed the fall.";
+    } else if (Math.abs(player.body?.velocity.x ?? 0) > 80) {
+      player.play("player-run", true);
+    } else if (!actions.glide) {
+      player.play("player-idle", true);
     }
 
     if (this.wasPressed(actions, "attack") && this.time.now >= this.attackCooldownUntil) {
