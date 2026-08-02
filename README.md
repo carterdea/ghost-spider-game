@@ -46,7 +46,7 @@ bun test
 - `J`: web-glob strike, or a close-range kick near enemies
 - `Q`: cycle gadget · `K`: use gadget
 - `Shift`: slow the fall with web-wings
-- `R`: restart
+- `M`: mute · `R`: restart
 
 ## Game Loop
 
@@ -62,6 +62,12 @@ robots, tech enforcers and survey drones, and touch the beacon to move on:
 
 Clearing the fifth district wins the run.
 
+Enemies have to actually see you — range, a forward cone and a clear line —
+and every attack is telegraphed and followed by a recovery window, so fights
+are meant to be read and played around rather than absorbed. Robots close and
+lunge, gunners hold a stand-off and draw a sight line before firing, drones
+orbit above and dive.
+
 ## Architecture
 
 Game rules are pure and framework-free; Phaser is only the presentation and
@@ -76,12 +82,26 @@ collision layer. That split is what makes the physics testable.
   web always attaches to something real. `levels.test.ts` asserts each level is
   actually playable: no unspannable gaps, no anchor dead zones, patrols that
   stand on real roofs.
+- `src/game/simulation/ai/` — enemy decision making, same shape as the physics:
+  a perception snapshot goes in, an intent comes out, and the Phaser layer only
+  senses and applies.
 - `src/game/simulation/systems/` — combat and level progression.
 - `src/phaser/` — the engine layer. `actors/PlayerController.ts` bridges the
   pure solvers to an Arcade body, `world/LevelBuilder.ts` turns level data into
   scene geometry, `scenes/GameScene.ts` orchestrates.
 - `src/ui/hud/` — DOM HUD that diffs against the last rendered values instead of
   rebuilding itself every frame.
+
+## Sound
+
+There are no audio files. Every sound is synthesised at runtime with the Web
+Audio API, so the whole palette is editable in code — `src/audio/events.ts` is
+a declarative table of oscillator and noise layers, one entry per game event.
+
+The score lives in `src/audio/music/`, composed as note data rather than
+waveforms: A natural minor, 104 BPM, an 18.5 second loop whose stems layer up
+across the five districts so the run escalates as you go. `toMidiFile()`
+exports it as a real MIDI file if you want to edit the song in a DAW.
 
 ## Art
 
