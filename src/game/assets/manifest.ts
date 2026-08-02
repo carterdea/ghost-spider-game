@@ -37,23 +37,34 @@ export const art = {
       path: "/assets/environments/wet-asphalt.webp",
     },
   ],
-  hero: framePaths("hero", 6),
-  robot: framePaths("robot", 2),
-  enforcer: framePaths("enforcer", 2),
-  drone: framePaths("drone", 2),
+  hero: framePaths("hero", 20),
+  robot: framePaths("robot", 6),
+  enforcer: framePaths("enforcer", 6),
+  drone: framePaths("drone", 6),
   npcs: framePaths("npcs", 6),
 } as const;
 
+/** Frames `first`..`first + count - 1`, one-based to match the file names. */
+const cycle = (
+  frames: readonly { key: string; path: string }[],
+  first: number,
+  count: number,
+): readonly string[] =>
+  frames.slice(first - 1, first - 1 + count).map(({ key }) => key);
+
+// Hero frames 01-06 are the original two-pose sets, kept so the art stays
+// recoverable. Frames 07+ are the hand-directed multi-pose cycles.
 export const artKeys = {
   hero: {
-    idle: [art.hero[0].key, art.hero[1].key],
-    run: [art.hero[2].key, art.hero[3].key],
+    idle: cycle(art.hero, 13, 4),
+    run: cycle(art.hero, 7, 6),
     glide: art.hero[4].key,
     swing: art.hero[5].key,
+    swingCycle: cycle(art.hero, 17, 4),
   },
-  robot: art.robot.map(({ key }) => key),
-  enforcer: art.enforcer.map(({ key }) => key),
-  drone: art.drone.map(({ key }) => key),
+  robot: cycle(art.robot, 3, 4),
+  enforcer: cycle(art.enforcer, 3, 4),
+  drone: cycle(art.drone, 3, 4),
   npcs: art.npcs.map(({ key }) => key),
   street: art.environments[3].key,
 } as const;
