@@ -13,7 +13,7 @@ export const parkSidePursuit = {
   width: 4000,
   height: WORLD_HEIGHT,
   streetY: STREET_Y,
-  spawnX: 260,
+  spawnX: 80,
   goalX: 3800,
   threatScale: 1.1,
   buildingRows: [
@@ -28,8 +28,8 @@ export const parkSidePursuit = {
       id: "park-robot-roof",
       kind: "robot",
       lane: "roof",
-      patrolMinX: 60,
-      patrolMaxX: 460,
+      patrolMinX: 320,
+      patrolMaxX: 500,
     },
     {
       id: "park-gunner-street",

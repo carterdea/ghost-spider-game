@@ -13,7 +13,7 @@ export const bridgeLineFinale = {
   width: 5600,
   height: WORLD_HEIGHT,
   streetY: STREET_Y,
-  spawnX: 260,
+  spawnX: 80,
   goalX: 5420,
   threatScale: 1.6,
   buildingRows: [
@@ -30,8 +30,8 @@ export const bridgeLineFinale = {
       id: "finale-robot-approach",
       kind: "robot",
       lane: "roof",
-      patrolMinX: 60,
-      patrolMaxX: 460,
+      patrolMinX: 320,
+      patrolMaxX: 500,
     },
     {
       id: "finale-drone-span",

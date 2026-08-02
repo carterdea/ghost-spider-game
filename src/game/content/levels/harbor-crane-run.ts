@@ -13,7 +13,7 @@ export const harborCraneRun = {
   width: 4800,
   height: WORLD_HEIGHT,
   streetY: STREET_Y,
-  spawnX: 260,
+  spawnX: 80,
   goalX: 4590,
   threatScale: 1.4,
   buildingRows: [
@@ -29,8 +29,8 @@ export const harborCraneRun = {
       id: "harbor-gunner-dock",
       kind: "gunner",
       lane: "roof",
-      patrolMinX: 60,
-      patrolMaxX: 460,
+      patrolMinX: 320,
+      patrolMaxX: 500,
     },
     {
       id: "harbor-drone-inlet",

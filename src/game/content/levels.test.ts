@@ -32,6 +32,13 @@ const CRUISE_HEIGHT = 260; // swing altitude above the pavement
 const SAMPLE_STEP = 200; // x sampling interval for dead-zone detection
 const MAX_ANCHOR_SPACING = 300; // no x may be further than this from an anchor
 const MIN_BUILDING_GAP = 140;
+/**
+ * Horizontal room between the player spawn and the nearest patrol band. A
+ * spawn inside a band puts the hero in a robot's face before the level has
+ * started — the park roof did exactly that and tackled a test bot seven times
+ * in a row.
+ */
+const SPAWN_PATROL_CLEARANCE = 200;
 const ALLOWED_BACKDROPS = new Set([
   "environment-midtown",
   "environment-park",
@@ -237,6 +244,20 @@ describe.each(
       expect(enemy.health).toBeGreaterThan(0);
       expect(enemy.damage).toBeGreaterThan(0);
       expect(enemy.speed).toBeGreaterThan(0);
+    }
+  });
+
+  test("no patrol band reaches the spawn: the hero gets a beat first", () => {
+    for (const enemy of level.enemies) {
+      const distanceToBand = Math.max(
+        enemy.patrolMinX - level.playerSpawn.x,
+        level.playerSpawn.x - enemy.patrolMaxX,
+        0,
+      );
+      expect({
+        id: enemy.id,
+        clearOfSpawn: distanceToBand >= SPAWN_PATROL_CLEARANCE,
+      }).toEqual({ id: enemy.id, clearOfSpawn: true });
     }
   });
 
