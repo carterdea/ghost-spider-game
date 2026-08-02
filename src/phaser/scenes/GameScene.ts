@@ -49,6 +49,7 @@ export class GameScene extends Phaser.Scene {
   private builder?: LevelBuilder;
   private enemies?: EnemyDirector;
   private webs?: WebRenderer;
+  private projectiles?: Phaser.Physics.Arcade.Group;
   private world?: LevelWorld;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
 
@@ -78,6 +79,7 @@ export class GameScene extends Phaser.Scene {
     createPropTextures(this);
     this.createAnimations();
 
+    this.projectiles = this.physics.add.group({ allowGravity: false });
     this.builder = new LevelBuilder(this);
     this.enemies = new EnemyDirector(this);
     this.webs = new WebRenderer(this);
@@ -221,6 +223,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.colliders = [];
     this.enemies?.clear();
+    this.projectiles?.clear(true, true);
     this.shieldView?.destroy();
     this.shieldView = undefined;
 
@@ -252,6 +255,32 @@ export class GameScene extends Phaser.Scene {
     );
 
     for (const enemy of enemies.all) {
+      // Sprite first, group second: Arcade hands the callback the lone sprite
+      // before the group member, so the other order would treat the enemy as
+      // the projectile and destroy it on the first hit.
+      this.colliders.push(
+        this.physics.add.overlap(
+          enemy.sprite,
+          this.requireProjectiles(),
+          (_, projectileObject) => {
+            const projectile = projectileObject as Phaser.Physics.Arcade.Sprite;
+            if (!projectile.active) {
+              return;
+            }
+            const power = projectile.getData("power") as "glob" | "net";
+            projectile.destroy();
+            if (power === "net") {
+              enemies.snare(enemy);
+            }
+            if (
+              damageEnemy(this.state, enemy.state, power === "net" ? 12 : 16)
+            ) {
+              enemies.defeat(enemy);
+            }
+          },
+        ),
+      );
+
       this.colliders.push(
         this.physics.add.overlap(player, enemy.sprite, () => {
           if (
@@ -392,37 +421,18 @@ export class GameScene extends Phaser.Scene {
     facing: number,
     power: "glob" | "net",
   ): void {
-    const enemies = this.enemies;
-    if (!enemies) {
-      return;
-    }
-
-    const projectile = this.physics.add.sprite(
+    const projectile = this.requireProjectiles().create(
       x,
       y,
       power === "net" ? "webNet" : "webGlob",
-    );
-    projectile.body.setAllowGravity(false);
+    ) as Phaser.Physics.Arcade.Sprite;
+
+    projectile.setData("power", power);
     projectile.setDepth(9);
     projectile.setVelocity(
       facing * (power === "net" ? 430 : 560),
       power === "net" ? -20 : 0,
     );
-
-    for (const enemy of enemies.all) {
-      this.physics.add.overlap(projectile, enemy.sprite, () => {
-        if (!projectile.active) {
-          return;
-        }
-        projectile.destroy();
-        if (power === "net") {
-          enemies.snare(enemy);
-        }
-        if (damageEnemy(this.state, enemy.state, power === "net" ? 12 : 16)) {
-          enemies.defeat(enemy);
-        }
-      });
-    }
 
     this.time.delayedCall(1100, () => projectile.destroy());
   }
@@ -552,6 +562,13 @@ export class GameScene extends Phaser.Scene {
       throw new Error("Player has not been created.");
     }
     return this.player;
+  }
+
+  private requireProjectiles(): Phaser.Physics.Arcade.Group {
+    if (!this.projectiles) {
+      throw new Error("Projectiles have not been created.");
+    }
+    return this.projectiles;
   }
 
   private requireController(): PlayerController {
