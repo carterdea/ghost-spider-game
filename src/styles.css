@@ -47,6 +47,8 @@ body {
   inset: 0;
   z-index: 3;
   color: var(--ink);
+  /* Overwritten per level so each district tints its own HUD. */
+  --level-accent: var(--teal);
 }
 
 .hud-top {
@@ -89,7 +91,7 @@ body {
 }
 
 .level-kicker {
-  color: var(--teal);
+  color: var(--level-accent);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -120,11 +122,20 @@ body {
   height: 3px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.16);
+  transition:
+    width 200ms ease,
+    background 200ms ease;
 }
 
 .level-dot.is-active {
-  background: linear-gradient(90deg, var(--teal), var(--pink));
-  box-shadow: 0 0 8px rgba(38, 214, 207, 0.55);
+  background: linear-gradient(90deg, var(--level-accent), var(--pink));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--level-accent) 55%, transparent);
+}
+
+.level-dot.is-current {
+  width: 30px;
+  background: var(--level-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--level-accent) 75%, transparent);
 }
 
 .hero-row {
@@ -143,8 +154,49 @@ body {
 }
 
 .objective {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
   color: #cfd4ff;
   font-size: 12px;
+}
+
+.objective-threats {
+  color: var(--level-accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gadget-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.gadget-chip {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 4px 0;
+  background: rgba(255, 255, 255, 0.03);
+  color: #9aa3c7;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-transform: uppercase;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.gadget-chip.is-active {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--level-accent), var(--pink));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--level-accent) 45%, transparent);
+  color: #0a0d18;
 }
 
 .bar {
@@ -158,8 +210,8 @@ body {
 .bar-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--teal), var(--pink));
-  transition: width 120ms ease;
+  background: linear-gradient(90deg, var(--level-accent), var(--pink));
+  transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .hint-chip {
@@ -174,7 +226,18 @@ body {
   line-height: 1.45;
 }
 
-.hint-chip span {
+.hint {
+  white-space: nowrap;
+}
+
+.hint + .hint::before {
+  content: "·";
+  margin: 0 6px;
+  color: rgba(220, 226, 255, 0.45);
+}
+
+.hint-key {
+  margin-right: 4px;
   color: var(--gold);
   font-weight: 800;
 }
@@ -185,13 +248,87 @@ body {
   bottom: max(62px, calc(env(safe-area-inset-bottom) + 52px));
   transform: translateX(-50%);
   max-width: min(560px, calc(100vw - 28px));
-  border: 1px solid rgba(38, 214, 207, 0.34);
+  border: 1px solid color-mix(in srgb, var(--level-accent) 40%, transparent);
   border-radius: 8px;
   padding: 10px 12px;
   background: rgba(9, 14, 22, 0.78);
   color: #e8fbff;
   font-size: 13px;
   text-align: center;
+}
+
+.message:empty {
+  display: none;
+}
+
+.run-banner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  max-width: min(520px, calc(100vw - 32px));
+  transform: translate(-50%, -50%);
+  border: 1px solid color-mix(in srgb, var(--level-accent) 55%, transparent);
+  border-radius: 12px;
+  padding: 20px 28px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.07), transparent 55%),
+    rgba(9, 12, 22, 0.9);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  text-align: center;
+  animation: banner-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.run-banner[hidden] {
+  display: none;
+}
+
+.run-banner-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.run-banner-hint {
+  color: #cfd4ff;
+  font-size: 13px;
+}
+
+.run-banner.is-cleared .run-banner-title {
+  background: linear-gradient(90deg, var(--gold), var(--level-accent));
+  background-clip: text;
+  color: transparent;
+}
+
+.run-banner.is-knockedOut {
+  border-color: rgba(255, 77, 109, 0.55);
+}
+
+.run-banner.is-knockedOut .run-banner-title {
+  color: var(--danger);
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px)) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar-fill,
+  .gadget-chip,
+  .level-dot {
+    transition: none;
+  }
+
+  .run-banner {
+    animation: none;
+  }
 }
 
 @media (max-width: 720px) {
