@@ -5,6 +5,20 @@ import type {
   EnemySpawn,
   LevelDefinition,
 } from "../../game/content/levels";
+import {
+  AI_TUNING,
+  type AiIntent,
+  type AiMemory,
+  type AiPerception,
+  createAiMemory,
+  type EnemyAiState,
+  stepEnemyBrain,
+} from "../../game/simulation/ai";
+import {
+  clamp,
+  type Rect,
+  type Vec2,
+} from "../../game/simulation/physics/vector";
 import type {
   EnemyKind,
   EnemyState,
@@ -16,35 +30,39 @@ export interface EnemyView {
   state: EnemyState;
   sprite: Phaser.Physics.Arcade.Sprite;
   lane: EnemyLane;
-  direction: number;
-  nextShotAt: number;
+  /** Which way the sprite currently faces. */
+  direction: -1 | 1;
+  /** The pure brain's timers. Owned here, handed back every frame. */
+  brain: AiMemory;
+  /** Last decision the brain reached — handy for HUD and debugging. */
+  aiState: EnemyAiState;
   snaredUntil: number;
   /** Y the drone bobs around; air enemies ignore gravity. */
   hoverY: number;
 }
 
-const SHOT_INTERVAL: Record<EnemyKind, number> = {
-  robot: Number.POSITIVE_INFINITY,
-  gunner: 1550,
-  drone: 1900,
-};
-
-const SIGHT_RANGE: Record<EnemyKind, number> = {
-  robot: 0,
-  gunner: 680,
-  drone: 560,
-};
-
 const SNARE_DURATION = 1800;
+const BULLET_LIFETIME = 2600;
+/** A frame this long or longer is a stall; the AI must not teleport through it. */
+const MAX_STEP = 0.05;
+/** Bullets leave from here rather than the sprite centre. */
+const MUZZLE_OFFSET = 26;
 
 /** Owns every enemy sprite and their bullets for the level currently loaded. */
 export class EnemyDirector {
   private readonly scene: Phaser.Scene;
   private views: EnemyView[] = [];
   private bulletGroup?: Phaser.Physics.Arcade.Group;
+  private telegraph?: Phaser.GameObjects.Graphics;
+  private colliders: Phaser.Physics.Arcade.Collider[] = [];
+  private blockers: readonly Rect[] = [];
+  private lastTime = 0;
+  private readonly onShot?: () => void;
 
-  public constructor(scene: Phaser.Scene) {
+  /** `onShot` fires once per bullet, for the presentation layer's sound. */
+  public constructor(scene: Phaser.Scene, onShot?: () => void) {
     this.scene = scene;
+    this.onShot = onShot;
   }
 
   public get bullets(): Phaser.Physics.Arcade.Group {
@@ -64,11 +82,17 @@ export class EnemyDirector {
     platforms: Phaser.Physics.Arcade.StaticGroup,
   ): void {
     this.clear();
+    this.blockers = level.buildings.map((building) => building.bounds);
 
     for (const spawn of level.enemies) {
       const enemyState = state.enemies.find((entry) => entry.id === spawn.id);
       if (!enemyState) {
         continue;
+      }
+      if (enemyState.kind !== spawn.kind) {
+        throw new Error(
+          `Enemy "${spawn.id}" is authored as ${spawn.kind} but its state says ${enemyState.kind}.`,
+        );
       }
       this.views.push(this.createView(spawn, enemyState, platforms));
     }
@@ -96,7 +120,7 @@ export class EnemyDirector {
       sprite.setPosition(spawn.position.x, spawn.position.y);
     } else {
       standOn(sprite, spawn.position.x, spawn.position.y);
-      this.scene.physics.add.collider(sprite, platforms);
+      this.colliders.push(this.scene.physics.add.collider(sprite, platforms));
     }
 
     return {
@@ -104,99 +128,169 @@ export class EnemyDirector {
       sprite,
       lane: spawn.lane,
       direction: 1,
-      nextShotAt: 0,
+      // A per-enemy phase offset keeps bobbing and strafing out of lockstep.
+      brain: createAiMemory(1, spawn.position.x * 0.01),
+      aiState: "patrol",
       snaredUntil: 0,
       hoverY: spawn.position.y,
     };
   }
 
   public update(time: number, player: Phaser.Physics.Arcade.Sprite): void {
+    const dt = clamp((time - this.lastTime) / 1000, 0, MAX_STEP);
+    this.lastTime = time;
+
+    const overlay = this.requireTelegraph();
+    overlay.clear();
+    this.cullBullets(time);
+
     for (const view of this.views) {
       if (!view.sprite.active) {
         continue;
       }
 
-      if (time < view.snaredUntil) {
-        view.sprite.setVelocityX(0);
-        continue;
-      }
-
-      this.patrol(view, time);
-      this.maybeShoot(view, time, player);
+      const step = stepEnemyBrain(
+        view.state.kind,
+        view.brain,
+        this.perceive(view, player, time),
+        AI_TUNING[view.state.kind],
+        dt,
+      );
+      view.brain = step.memory;
+      view.aiState = step.intent.state;
+      this.applyIntent(view, step.intent, time);
+      this.drawTelegraph(overlay, view, step.intent, player);
     }
   }
 
-  private patrol(view: EnemyView, time: number): void {
-    const { sprite, state } = view;
-
-    if (sprite.x <= state.patrolMinX) {
-      view.direction = 1;
-    } else if (sprite.x >= state.patrolMaxX) {
-      view.direction = -1;
-    }
-
-    sprite.setVelocityX(view.direction * state.speed);
-    sprite.setFlipX(view.direction < 0);
-
-    if (view.lane === "air") {
-      const bob = Math.sin(time / 260 + sprite.x * 0.01) * 52;
-      sprite.setVelocityY((view.hoverY + bob - sprite.y) * 2);
-    }
-  }
-
-  private maybeShoot(
+  private perceive(
     view: EnemyView,
+    player: Phaser.Physics.Arcade.Sprite,
     time: number,
+  ): AiPerception {
+    const velocity = player.body?.velocity;
+    return {
+      position: { x: view.sprite.x, y: view.sprite.y },
+      player: {
+        position: { x: player.x, y: player.y },
+        velocity: { x: velocity?.x ?? 0, y: velocity?.y ?? 0 },
+      },
+      patrol: { minX: view.state.patrolMinX, maxX: view.state.patrolMaxX },
+      speed: view.state.speed,
+      airborne: view.lane === "air",
+      homeY: view.hoverY,
+      blockers: this.blockers,
+      snared: time < view.snaredUntil,
+    };
+  }
+
+  private applyIntent(view: EnemyView, intent: AiIntent, time: number): void {
+    const { sprite } = view;
+    sprite.setVelocityX(intent.velocityX);
+    if (intent.velocityY !== null) {
+      sprite.setVelocityY(intent.velocityY);
+    }
+
+    view.direction = intent.facing;
+    sprite.setFlipX(intent.facing < 0);
+    this.paint(view, intent.telegraph, time);
+
+    if (intent.attack?.kind === "shot") {
+      this.fire(intent.attack.origin, intent.attack.velocity);
+    }
+  }
+
+  /** One place decides the sprite's tint, so a snare and a wind-up cannot fight. */
+  private paint(view: EnemyView, telegraph: number, time: number): void {
+    if (time < view.snaredUntil) {
+      view.sprite.setTint(colors.web);
+      return;
+    }
+    if (telegraph > 0) {
+      view.sprite.setTint(telegraphTint(telegraph));
+      return;
+    }
+    view.sprite.clearTint();
+  }
+
+  private drawTelegraph(
+    overlay: Phaser.GameObjects.Graphics,
+    view: EnemyView,
+    intent: AiIntent,
     player: Phaser.Physics.Arcade.Sprite,
   ): void {
-    if (time < view.nextShotAt) {
+    const { x, y } = view.sprite;
+
+    if (intent.state === "alert") {
+      // An exclamation mark riding clear of the sprite, whatever its height.
+      const top = y - view.sprite.displayHeight * 0.5 - 30;
+      overlay.lineStyle(5, colors.balletTeal, 0.95);
+      overlay.lineBetween(x, top, x, top + 18);
+      overlay.lineBetween(x, top + 25, x, top + 27);
       return;
     }
 
-    const range = SIGHT_RANGE[view.state.kind];
-    const distance = Phaser.Math.Distance.Between(
-      player.x,
-      player.y,
-      view.sprite.x,
-      view.sprite.y,
-    );
-    if (range === 0 || distance > range) {
+    if (intent.telegraph <= 0) {
       return;
     }
 
-    this.fire(view, player);
-    view.nextShotAt = time + SHOT_INTERVAL[view.state.kind];
+    const amount = clamp(intent.telegraph, 0, 1);
+    overlay.lineStyle(2, colors.danger, 0.3 + 0.6 * amount);
+
+    if (view.state.kind === "gunner") {
+      // A charging sight-line that reaches the hero exactly as the shot leaves.
+      overlay.lineBetween(
+        x,
+        y,
+        x + (player.x - x) * amount,
+        y + (player.y - y) * amount,
+      );
+      return;
+    }
+
+    overlay.strokeCircle(x, y, Phaser.Math.Linear(78, 22, amount));
   }
 
-  private fire(view: EnemyView, player: Phaser.Physics.Arcade.Sprite): void {
-    const drone = view.state.kind === "drone";
+  private fire(origin: Vec2, velocity: Vec2): void {
+    const heading = Math.atan2(velocity.y, velocity.x);
     const bullet = this.bullets.create(
-      view.sprite.x,
-      view.sprite.y + (drone ? 18 : 4),
+      origin.x + Math.cos(heading) * MUZZLE_OFFSET,
+      origin.y + Math.sin(heading) * MUZZLE_OFFSET,
       "bullet",
     ) as Phaser.Physics.Arcade.Sprite;
 
-    const angle = Phaser.Math.Angle.Between(
-      view.sprite.x,
-      view.sprite.y,
-      player.x,
-      player.y,
-    );
-    const speed = drone ? 300 : 360;
-    bullet.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-    bullet.setTint(drone ? colors.balletTeal : colors.danger);
+    bullet.setVelocity(velocity.x, velocity.y);
+    bullet.setTint(colors.danger);
     bullet.setDepth(4);
-    this.scene.time.delayedCall(2600, () => bullet.destroy());
+    bullet.setData("expiresAt", this.scene.time.now + BULLET_LIFETIME);
+    this.onShot?.();
+  }
+
+  /** Bullets expire on a stamp rather than a timer, so nothing outlives `clear()`. */
+  private cullBullets(time: number): void {
+    if (!this.bulletGroup) {
+      return;
+    }
+    for (const child of [...this.bulletGroup.getChildren()]) {
+      const bullet = child as Phaser.Physics.Arcade.Sprite;
+      const expiresAt = bullet.getData("expiresAt") as number | undefined;
+      if (bullet.active && expiresAt !== undefined && time >= expiresAt) {
+        bullet.destroy();
+      }
+    }
+  }
+
+  private requireTelegraph(): Phaser.GameObjects.Graphics {
+    if (!this.telegraph) {
+      this.telegraph = this.scene.add.graphics().setDepth(7);
+    }
+    return this.telegraph;
   }
 
   public snare(view: EnemyView): void {
     view.snaredUntil = this.scene.time.now + SNARE_DURATION;
+    view.sprite.setVelocity(0, 0);
     view.sprite.setTint(colors.web);
-    this.scene.time.delayedCall(SNARE_DURATION, () => {
-      if (view.sprite.active) {
-        view.sprite.clearTint();
-      }
-    });
   }
 
   public defeat(view: EnemyView): void {
@@ -204,13 +298,49 @@ export class EnemyDirector {
   }
 
   public clear(): void {
+    for (const collider of this.colliders) {
+      collider.destroy();
+    }
+    this.colliders = [];
+
     for (const view of this.views) {
       view.sprite.destroy();
     }
     this.views = [];
-    this.bulletGroup?.clear(true, true);
+
+    this.blockers = [];
+    this.lastTime = 0;
+    this.telegraph?.clear();
+    this.liveBullets?.clear(true, true);
+  }
+
+  /** Full teardown for scene shutdown: nothing survives to the next boot. */
+  public destroy(): void {
+    this.clear();
+    this.liveBullets?.destroy(true);
+    this.bulletGroup = undefined;
+    this.telegraph?.destroy();
+    this.telegraph = undefined;
+  }
+
+  /**
+   * The bullet group, unless Phaser has already taken it. Arcade Physics tears
+   * its groups down on scene shutdown before any listener registered by the
+   * scene runs, and a destroyed group drops its child list: touching one from
+   * our own teardown throws and abandons the rest of the restart.
+   */
+  private get liveBullets(): Phaser.Physics.Arcade.Group | undefined {
+    return this.bulletGroup?.scene ? this.bulletGroup : undefined;
   }
 }
+
+/** White at rest, hot pink at the moment of the strike. */
+const telegraphTint = (amount: number): number => {
+  const mix = clamp(amount, 0, 1);
+  const green = Math.round(255 - 178 * mix);
+  const blue = Math.round(255 - 146 * mix);
+  return (255 << 16) | (green << 8) | blue;
+};
 
 const textureFor = (kind: EnemyKind): string => {
   if (kind === "gunner") {
