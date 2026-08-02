@@ -29,6 +29,10 @@ export interface EnemyState {
 export interface GameState {
   player: PlayerState;
   enemies: EnemyState[];
+  progression: {
+    levelIndex: number;
+    visitedLevelIds: string[];
+  };
   world: {
     width: number;
     height: number;
@@ -112,7 +116,27 @@ export const createInitialGameState = (): GameState => ({
       patrolMinX: 5000,
       patrolMaxX: 5400,
     },
+    {
+      id: "drone-waterfront-1",
+      kind: "drone",
+      health: 34,
+      damage: 9,
+      patrolMinX: 4040,
+      patrolMaxX: 4480,
+    },
+    {
+      id: "gunner-waterfront-2",
+      kind: "gunner",
+      health: 62,
+      damage: 15,
+      patrolMinX: 5200,
+      patrolMaxX: 5520,
+    },
   ],
+  progression: {
+    levelIndex: 0,
+    visitedLevelIds: ["midtown-after-dark"],
+  },
   world: {
     width: 5600,
     height: 1600,

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { colors } from "../../game/assets/manifest";
+import { artKeys, colors, preloadArt } from "../../game/assets/manifest";
+import { LEVELS } from "../../game/content/levels";
 import { type ActionState, createEmptyActions } from "../../game/input/actions";
 import { createKeyboardBindings, readActions } from "../../game/input/bindings";
 import {
@@ -13,6 +14,7 @@ import {
   damageEnemy,
   damagePlayer,
 } from "../../game/simulation/systems/combat";
+import { syncLevelProgress } from "../../game/simulation/systems/progression";
 import { Hud } from "../../ui/hud/hud";
 
 interface EnemyView {
@@ -48,7 +50,6 @@ const STREET_MIN_Y = 1210;
 const STREET_MAX_Y = 1400;
 const STREET_ENTRY_Y = 1190;
 const ENEMY_STREET_MAX_Y = STREET_MAX_Y - 34;
-const FACADE_TOP_Y = 1016;
 const SIDEWALK_Y = 1192;
 const GADGETS: GadgetKind[] = ["web-net", "web-shield", "web-wings"];
 const WEB_ANCHOR_CANDIDATES: WebAnchor[] = [
@@ -124,6 +125,12 @@ export class GameScene extends Phaser.Scene {
     super("game");
   }
 
+  public preload(): void {
+    for (const asset of preloadArt) {
+      this.load.image(asset.key, asset.path);
+    }
+  }
+
   public create(): void {
     this.state = createInitialGameState();
     this.enemies = [];
@@ -139,6 +146,7 @@ export class GameScene extends Phaser.Scene {
     this.createAnimations();
     this.createWorld();
     this.createPlayer();
+    this.createNpcs();
     this.createEnemies();
     this.createCombat();
     this.createCamera();
@@ -173,6 +181,9 @@ export class GameScene extends Phaser.Scene {
 
     this.updateStreetMode(player, actions);
     this.updatePlayer(player, actions, delta);
+    if (syncLevelProgress(this.state, player.x)) {
+      this.cameras.main.flash(320, 84, 230, 236, false);
+    }
     this.updateEnemies(time);
     this.updateWebLine(player);
     this.updateFadingWebs();
@@ -806,31 +817,31 @@ export class GameScene extends Phaser.Scene {
 
     this.anims.create({
       key: "player-idle",
-      frames: [{ key: "player-idle-0" }, { key: "player-idle-1" }],
+      frames: artKeys.hero.idle.map((key) => ({ key })),
       frameRate: 4,
       repeat: -1,
     });
     this.anims.create({
       key: "player-run",
-      frames: [{ key: "player-run-0" }, { key: "player-run-1" }],
+      frames: artKeys.hero.run.map((key) => ({ key })),
       frameRate: 9,
       repeat: -1,
     });
     this.anims.create({
       key: "robot-walk",
-      frames: [{ key: "robot-walk-0" }, { key: "robot-walk-1" }],
+      frames: artKeys.robot.map((key) => ({ key })),
       frameRate: 5,
       repeat: -1,
     });
     this.anims.create({
       key: "gunner-walk",
-      frames: [{ key: "gunner-walk-0" }, { key: "gunner-walk-1" }],
+      frames: artKeys.enforcer.map((key) => ({ key })),
       frameRate: 4,
       repeat: -1,
     });
     this.anims.create({
       key: "drone-fly",
-      frames: [{ key: "drone-fly-0" }, { key: "drone-fly-1" }],
+      frames: artKeys.drone.map((key) => ({ key })),
       frameRate: 10,
       repeat: -1,
     });
@@ -852,9 +863,10 @@ export class GameScene extends Phaser.Scene {
         0x10172b,
       )
       .setDepth(-10);
-    this.createReferenceStyleSkyline();
+    this.createLevelBackdrops();
     this.add
-      .rectangle(2800, 1320, this.state.world.width, 330, 0x0c0f16)
+      .tileSprite(2800, 1320, this.state.world.width, 330, artKeys.street)
+      .setAlpha(0.92)
       .setDepth(-8);
     this.add
       .rectangle(2800, STREET_MIN_Y, this.state.world.width, 4, 0x44516f, 0.35)
@@ -863,7 +875,6 @@ export class GameScene extends Phaser.Scene {
       .rectangle(2800, STREET_MAX_Y, this.state.world.width, 4, 0x44516f, 0.25)
       .setDepth(-7);
     this.createStreetDetails();
-    this.createCentralPark();
     this.createNightLife();
 
     this.platforms = this.physics.add.staticGroup();
@@ -879,177 +890,32 @@ export class GameScene extends Phaser.Scene {
     ];
 
     for (const building of buildings) {
-      this.add
-        .image(building.x, building.y, "building")
-        .setDisplaySize(building.w, building.h)
-        .setDepth(-9);
-      this.paintWindows(building);
       this.createRoofPlatform(building);
     }
   }
 
-  private createReferenceStyleSkyline(): void {
-    const backBlocks = [
-      { x: 180, y: 610, w: 420, h: 980, color: 0x17244a },
-      { x: 690, y: 560, w: 620, h: 1060, color: 0x1b315c },
-      { x: 1380, y: 610, w: 560, h: 980, color: 0x182a53 },
-      { x: 2060, y: 545, w: 690, h: 1110, color: 0x1c3561 },
-      { x: 2860, y: 600, w: 620, h: 1000, color: 0x17284f },
-      { x: 3620, y: 555, w: 720, h: 1090, color: 0x1d3763 },
-      { x: 4460, y: 605, w: 660, h: 990, color: 0x182d56 },
-      { x: 5220, y: 570, w: 600, h: 1060, color: 0x1a315d },
-    ];
-
-    for (const block of backBlocks) {
+  private createLevelBackdrops(): void {
+    for (const level of LEVELS) {
+      const width = level.endX - level.startX;
       this.add
-        .rectangle(block.x, block.y, block.w, block.h, block.color)
-        .setDepth(-9.7);
+        .image(level.startX + width / 2, 620, level.backdropKey)
+        .setDisplaySize(width + 8, 1040)
+        .setDepth(-9.85);
+
       this.add
-        .rectangle(
-          block.x,
-          block.y - block.h / 2 + 260,
-          block.w - 52,
-          16,
-          0x1592aa,
-          0.68,
-        )
-        .setDepth(-9.55);
-      this.add
-        .rectangle(
-          block.x,
-          block.y + block.h / 2 - 250,
-          block.w - 72,
-          12,
-          0x24c6d5,
-          0.55,
-        )
-        .setDepth(-9.55);
-      this.paintBackdropWindows(block.x, block.y, block.w, block.h, -9.5);
-    }
-
-    const midBlocks = [
-      { x: 420, y: 760, w: 390, h: 680, color: 0x203d66 },
-      { x: 1080, y: 745, w: 470, h: 710, color: 0x1c365f },
-      { x: 1780, y: 790, w: 430, h: 620, color: 0x24456b },
-      { x: 2480, y: 745, w: 510, h: 710, color: 0x1d3b65 },
-      { x: 3180, y: 780, w: 470, h: 640, color: 0x24466e },
-      { x: 3920, y: 742, w: 540, h: 716, color: 0x1c3864 },
-      { x: 4680, y: 780, w: 470, h: 640, color: 0x25486f },
-    ];
-
-    for (const block of midBlocks) {
-      this.add
-        .rectangle(block.x, block.y, block.w, block.h, block.color)
-        .setDepth(-9.25);
-      this.add
-        .rectangle(
-          block.x,
-          block.y + block.h / 2 - 98,
-          block.w - 44,
-          14,
-          0x18a9c6,
-          0.74,
-        )
-        .setDepth(-9.05);
-      this.paintBackdropWindows(block.x, block.y, block.w, block.h, -9.02);
-    }
-
-    this.add.rectangle(5180, 350, 360, 210, 0xf3fbff, 0.94).setDepth(-8.95);
-    this.add.rectangle(5180, 350, 392, 242, 0x72f1ff, 0.18).setDepth(-8.96);
-    this.add
-      .rectangle(5180, 350, 400, 250)
-      .setStrokeStyle(8, 0xc7f7ff, 0.82)
-      .setDepth(-8.94);
-    this.add
-      .text(5180, 335, "BIG\nSTINKY\nPANTS", {
-        align: "center",
-        color: "#172033",
-        fontFamily: "Arial Black, Impact, sans-serif",
-        fontSize: "38px",
-        lineSpacing: -5,
-      })
-      .setOrigin(0.5)
-      .setDepth(-8.93);
-
-    this.add
-      .polygon(
-        3120,
-        1085,
-        [-1700, 160, 1850, -40, 1970, 60, -1600, 260],
-        0x4d2b6d,
-        0.92,
-      )
-      .setDepth(-7.6);
-    this.add
-      .polygon(
-        3120,
-        1120,
-        [-1680, 132, 1810, -62, 1840, -30, -1660, 166],
-        0xb744a2,
-        0.62,
-      )
-      .setDepth(-7.55);
-  }
-
-  private paintBackdropWindows(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    depth: number,
-  ): void {
-    const left = x - width / 2 + 46;
-    const top = y - height / 2 + 54;
-    const columns = Math.max(3, Math.floor((width - 76) / 72));
-    const rows = Math.max(4, Math.floor((height - 100) / 86));
-    const windowColors = [0xf6d971, 0xb8efff, 0x65d4e5, 0x51345d, 0x0f1835];
-
-    for (let row = 0; row < rows; row += 1) {
-      for (let column = 0; column < columns; column += 1) {
-        const seed =
-          (row * 7 + column * 11 + Math.floor(x / 100)) % windowColors.length;
-        const lit = (row + column + Math.floor(x / 80)) % 4 !== 0;
-        const color = lit ? windowColors[seed] : 0x101934;
-        const windowWidth = 18 + ((row + column) % 3) * 8;
-        const windowHeight = 34 + (column % 2) * 18;
-        this.add
-          .rectangle(
-            left + column * 72,
-            top + row * 86,
-            windowWidth,
-            windowHeight,
-            color,
-            lit ? 0.88 : 0.76,
-          )
-          .setDepth(depth);
-
-        if (lit && (row + column) % 5 === 0) {
-          this.add
-            .rectangle(
-              left + column * 72 + 7,
-              top + row * 86,
-              4,
-              windowHeight,
-              0x1a2242,
-              0.9,
-            )
-            .setDepth(depth + 0.01);
-        }
-      }
+        .text(level.startX + 72, 950, `0${LEVELS.indexOf(level) + 1}`, {
+          color: level.accent,
+          fontFamily: "Arial Black, Impact, sans-serif",
+          fontSize: "44px",
+          stroke: "#08101c",
+          strokeThickness: 8,
+        })
+        .setAlpha(0.7)
+        .setDepth(-7.4);
     }
   }
 
   private createStreetDetails(): void {
-    for (let x = 96; x < this.state.world.width; x += 192) {
-      if (x > 3300 && x < 4040) {
-        continue;
-      }
-      this.add
-        .image(x, FACADE_TOP_Y, "brickFacade")
-        .setOrigin(0.5, 0)
-        .setDepth(-6.5);
-    }
-
     for (let x = 48; x < this.state.world.width; x += 96) {
       this.add
         .image(x, SIDEWALK_Y, "sidewalkTile")
@@ -1064,78 +930,6 @@ export class GameScene extends Phaser.Scene {
     for (let x = 690; x < this.state.world.width; x += 1480) {
       for (let stripe = 0; stripe < 6; stripe += 1) {
         this.add.image(x + stripe * 48, 1334, "crosswalkStripe").setDepth(-4);
-      }
-    }
-
-    const storefronts = [
-      {
-        x: 220,
-        texture: "storefront",
-        height: 124,
-        name: "JOE'S PIZZA",
-        accent: "#f25f8f",
-      },
-      { x: 600, texture: "apartmentDoor", height: 132 },
-      {
-        x: 1120,
-        texture: "storefront",
-        height: 124,
-        name: "MOON BOOKS",
-        accent: "#87f0ff",
-      },
-      { x: 1500, texture: "apartmentDoor", height: 132 },
-      {
-        x: 2050,
-        texture: "storefront",
-        height: 124,
-        name: "NIGHT OWL COFFEE",
-        accent: "#f5d46c",
-      },
-      { x: 2530, texture: "apartmentDoor", height: 132 },
-      {
-        x: 3230,
-        texture: "storefront",
-        height: 124,
-        name: "SLICE SLICE BABY",
-        accent: "#39e7d0",
-      },
-      { x: 3720, texture: "apartmentDoor", height: 132, hiddenByPark: true },
-      {
-        x: 4380,
-        texture: "storefront",
-        height: 124,
-        name: "GHOST BEAN",
-        accent: "#d9b6ff",
-      },
-      { x: 4930, texture: "apartmentDoor", height: 132 },
-    ] as const;
-
-    for (const detail of storefronts) {
-      if ("hiddenByPark" in detail) {
-        continue;
-      }
-      this.add
-        .image(detail.x, SIDEWALK_Y - detail.height / 2, detail.texture)
-        .setDepth(-3.5);
-      if ("name" in detail) {
-        this.add
-          .rectangle(
-            detail.x,
-            SIDEWALK_Y - detail.height + 6,
-            154,
-            18,
-            0x0a0d16,
-            0.78,
-          )
-          .setDepth(-3.25);
-        this.add
-          .text(detail.x, SIDEWALK_Y - detail.height + 6, detail.name, {
-            color: detail.accent,
-            fontFamily: "Arial Black, Impact, sans-serif",
-            fontSize: detail.name.length > 13 ? "11px" : "13px",
-          })
-          .setOrigin(0.5)
-          .setDepth(-3.2);
       }
     }
 
@@ -1154,29 +948,6 @@ export class GameScene extends Phaser.Scene {
       this.add.image(x + 190, 1192, "hydrant").setDepth(1200);
       this.add.image(x + 330, 1188, "planter").setDepth(1200);
     }
-  }
-
-  private createCentralPark(): void {
-    const parkX = 3650;
-    this.add.rectangle(parkX, 1132, 720, 126, 0x103a36, 0.96).setDepth(-3.45);
-    this.add.rectangle(parkX, 1190, 740, 20, 0x263149, 1).setDepth(-3.35);
-    this.add
-      .text(parkX - 285, 1092, "CENTRAL PARK", {
-        color: "#a7ffe9",
-        fontFamily: "Arial Black, Impact, sans-serif",
-        fontSize: "18px",
-      })
-      .setDepth(-3.05);
-
-    for (let x = parkX - 300; x <= parkX + 300; x += 88) {
-      const y = 1132 + ((x / 88) % 2) * 16;
-      this.add.image(x, y, "parkTree").setDepth(-3.15);
-    }
-
-    this.add.image(parkX - 155, 1182, "parkBench").setDepth(1195);
-    this.add.image(parkX + 185, 1182, "parkBench").setDepth(1195);
-    this.add.rectangle(parkX, 1172, 260, 18, 0x1b554d, 0.85).setDepth(-3.12);
-    this.add.rectangle(parkX, 1176, 250, 4, 0x6ee7d8, 0.24).setDepth(-3.1);
   }
 
   private createNightLife(): void {
@@ -1246,38 +1017,36 @@ export class GameScene extends Phaser.Scene {
     roof.refreshBody();
   }
 
-  private paintWindows({ x, y, w, h }: Building): void {
-    const top = y - h / 2 + 58;
-    const left = x - w / 2 + 38;
-    const rows = Math.max(2, Math.floor((h - 120) / 72));
-    const columns = Math.max(2, Math.floor((w - 80) / 64));
-
-    for (let row = 0; row < rows; row += 1) {
-      for (let column = 0; column < columns; column += 1) {
-        const lit = (row + column) % 3 !== 0;
-        this.add
-          .rectangle(
-            left + column * 64,
-            top + row * 72,
-            20,
-            28,
-            lit ? 0xf9d37a : 0x26314d,
-            lit ? 0.82 : 0.5,
-          )
-          .setDepth(-8.8);
-      }
-    }
-  }
-
   private createPlayer(): void {
-    const player = this.physics.add.sprite(120, 600, "player-idle-0");
+    const player = this.physics.add.sprite(120, 600, artKeys.hero.idle[0]);
     player.setCollideWorldBounds(true);
     player.setDragX(880);
     player.setMaxVelocity(760, 980);
-    player.body?.setSize(38, 96).setOffset(29, 30);
+    player.body?.setSize(42, 105).setOffset(75, 76);
     player.play("player-idle");
     this.physics.add.collider(player, this.requirePlatforms());
     this.player = player;
+  }
+
+  private createNpcs(): void {
+    const placements = [520, 1460, 2240, 3140, 4100, 4940];
+
+    for (const [index, texture] of artKeys.npcs.entries()) {
+      const npc = this.add
+        .image(placements[index], SIDEWALK_Y - 78, texture)
+        .setScale(0.82)
+        .setDepth(SIDEWALK_Y - 4);
+      npc.setFlipX(index === 0 || index === 4);
+
+      this.tweens.add({
+        targets: npc,
+        y: npc.y - (index % 2 === 0 ? 2 : 3),
+        duration: 1200 + index * 140,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
+    }
   }
 
   private createEnemies(): void {
@@ -1293,12 +1062,26 @@ export class GameScene extends Phaser.Scene {
       "robot-street-1": { x: 3600, y: 1348, streetLane: true },
       "gunner-roof-1": { x: 4660, y: 235, streetLane: false },
       "robot-roof-3": { x: 5200, y: 565, streetLane: false },
+      "drone-waterfront-1": {
+        x: 4220,
+        y: 690,
+        streetLane: false,
+        airborne: true,
+      },
+      "gunner-waterfront-2": { x: 5380, y: 1340, streetLane: true },
     };
 
     for (const enemyState of this.state.enemies) {
       const placement = placements[enemyState.id];
       const texture = this.getEnemyTexture(enemyState.kind);
       const sprite = this.physics.add.sprite(placement.x, placement.y, texture);
+      sprite.setScale(
+        enemyState.kind === "gunner"
+          ? 0.65
+          : enemyState.kind === "drone"
+            ? 0.58
+            : 0.58,
+      );
       sprite.setCollideWorldBounds(true);
       sprite.setDragX(600);
       sprite.setMaxVelocity(
@@ -1338,14 +1121,14 @@ export class GameScene extends Phaser.Scene {
 
   private getEnemyTexture(kind: EnemyState["kind"]): string {
     if (kind === "gunner") {
-      return "gunner-walk-0";
+      return artKeys.enforcer[0];
     }
 
     if (kind === "drone") {
-      return "drone-fly-0";
+      return artKeys.drone[0];
     }
 
-    return "robot-walk-0";
+    return artKeys.robot[0];
   }
 
   private getEnemyAnimation(kind: EnemyState["kind"]): string {
@@ -1365,16 +1148,16 @@ export class GameScene extends Phaser.Scene {
     kind: EnemyState["kind"],
   ): void {
     if (kind === "gunner") {
-      sprite.body?.setSize(40, 76).setOffset(20, 10);
+      sprite.body?.setSize(44, 120).setOffset(74, 58);
       return;
     }
 
     if (kind === "drone") {
-      sprite.body?.setSize(52, 34).setOffset(13, 18);
+      sprite.body?.setSize(150, 58).setOffset(21, 76);
       return;
     }
 
-    sprite.body?.setSize(42, 72).setOffset(15, 10);
+    sprite.body?.setSize(104, 128).setOffset(44, 52);
   }
 
   private createCombat(): void {
@@ -1532,7 +1315,7 @@ export class GameScene extends Phaser.Scene {
     ) {
       this.updateSwingAnchors(player, actions);
       this.applySwing(player, this.state.player.webAnchors, actions, delta);
-      player.setTexture("player-swing");
+      player.setTexture(artKeys.hero.swing);
     }
 
     if (
@@ -1544,7 +1327,7 @@ export class GameScene extends Phaser.Scene {
       player.body.velocity.y > 80
     ) {
       player.setVelocityY(Math.min(player.body.velocity.y, 170));
-      player.setTexture("player-glide");
+      player.setTexture(artKeys.hero.glide);
       this.state.player.message = "Web-wings slowed the fall.";
     } else if (
       !this.state.player.webAttached &&
@@ -2228,7 +2011,7 @@ export class GameScene extends Phaser.Scene {
 
   private startKnockout(player: Phaser.Physics.Arcade.Sprite): void {
     if (this.knockoutStarted) {
-      player.setTexture("player-downed");
+      player.setTexture(artKeys.hero.glide);
       return;
     }
 
@@ -2245,7 +2028,7 @@ export class GameScene extends Phaser.Scene {
     player.setAcceleration(0, 0);
     player.setVelocity(player.flipX ? 120 : -120, -210);
     player.setAngularVelocity(player.flipX ? 90 : -90);
-    player.setTexture("player-downed");
+    player.setTexture(artKeys.hero.glide);
     player.setTint(0xffd1f0);
     this.state.player.message =
       "Knocked out in slow motion. Press R to restart.";
@@ -2257,9 +2040,9 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(900, () => {
       player.setAngularVelocity(0);
       player.setVelocity(0, 0);
-      player.setAngle(0);
+      player.setAngle(90);
       player.clearTint();
-      player.setTexture("player-downed");
+      player.setTexture(artKeys.hero.glide);
     });
   }
 

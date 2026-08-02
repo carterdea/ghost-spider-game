@@ -1,6 +1,7 @@
 # Ghost Spider Swing
 
-A tiny Phaser 3 tracer-bullet prototype for a keyboard side-scroller about a ballerina spider hero swinging through NYC.
+A Phaser 3 side-scroller about an original masked rooftop dancer swinging
+through a painted, three-district New York night.
 
 ## Stack
 
@@ -43,8 +44,16 @@ bun run typecheck
 - `Shift`: slow fall with web-wings
 - `R`: restart
 
-## Prototype Loop
+## Game Loop
 
-Swing between rooftops or drop to street level, avoid robot and hooded gunner attacks, and clear enemies for score while protecting health.
+Swing between rooftops or drop to street level, protect the night crowd, and
+clear patrol robots, tech enforcers, and survey drones while moving through:
 
-Gadgets are based on Ghost-Spider / Gwen Stacy's Janet Van Dyne web-shooters: web-lines, globs, nets, shield-like web shapes, and web-wings.
+- Midtown After Dark
+- Park-Side Pursuit
+- Bridge-Line Finale
+
+The generated raster cast and panoramas use a repeatable chroma-key,
+shared-scale sprite pipeline. Source art lives in `artwork/source`, normalized
+runtime frames in `public/assets/characters`, and production backdrops in
+`public/assets/environments`.
