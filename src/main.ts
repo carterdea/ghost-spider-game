@@ -12,6 +12,7 @@ const config: Phaser.Types.Core.GameConfig = {
   physics: {
     default: "arcade",
     arcade: {
+      // The player sim applies its own gravity; only loose props fall by engine.
       gravity: { x: 0, y: 980 },
       debug: false,
     },
@@ -23,4 +24,9 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [GameScene],
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+// Dev-only handle so automated playtests can read live scene state.
+if (import.meta.env.DEV) {
+  window.__ghostSpider = game;
+}
