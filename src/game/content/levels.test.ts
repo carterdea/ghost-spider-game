@@ -1,0 +1,340 @@
+import { describe, expect, test } from "bun:test";
+import {
+  type Rect,
+  rectBottom,
+  rectLeft,
+  rectRight,
+  rectTop,
+} from "../simulation/physics/vector";
+import {
+  type AnchorPoint,
+  anchorsInReach,
+  type Building,
+  generateBuildingAnchors,
+  LEVELS,
+  type LevelDefinition,
+  MIN_ANCHOR_CLEARANCE,
+  ROOF_ANCHOR_SPACING,
+  roofYAt,
+  SWING_REACH,
+} from "./levels";
+
+/**
+ * Playability budget, all in world pixels.
+ *
+ * SWING_REACH (560) is the shared constant the anchor generator is tuned
+ * against: GameScene clamps a web-line to 585px before it reels the hero in, so
+ * a target further than ~560 away cannot be held through a swing. Every probe
+ * below asks "could the hero actually catch something from here?" using that
+ * same reach plus the engine's MIN_ANCHOR_CLEARANCE (80) overhead rule.
+ */
+const GAP_SAG = 180; // how far below the lower roof the hero drifts mid-gap
+const CRUISE_HEIGHT = 260; // swing altitude above the pavement
+const SAMPLE_STEP = 200; // x sampling interval for dead-zone detection
+const MAX_ANCHOR_SPACING = 300; // no x may be further than this from an anchor
+const MIN_BUILDING_GAP = 140;
+const ALLOWED_BACKDROPS = new Set([
+  "environment-midtown",
+  "environment-park",
+  "environment-waterfront",
+]);
+
+const sortedBuildings = (level: LevelDefinition): Building[] =>
+  [...level.buildings].sort((a, b) => rectLeft(a.bounds) - rectLeft(b.bounds));
+
+const overlaps = (a: Rect, b: Rect): boolean =>
+  rectLeft(a) < rectRight(b) &&
+  rectRight(a) > rectLeft(b) &&
+  rectTop(a) < rectBottom(b) &&
+  rectBottom(a) > rectTop(b);
+
+const isInsideSolid = (anchor: AnchorPoint, bounds: Rect): boolean =>
+  anchor.x > rectLeft(bounds) &&
+  anchor.x < rectRight(bounds) &&
+  anchor.y > rectTop(bounds) &&
+  anchor.y < rectBottom(bounds);
+
+const sampleXs = (level: LevelDefinition): number[] => {
+  const samples: number[] = [];
+  for (let x = 0; x <= level.width; x += SAMPLE_STEP) {
+    samples.push(x);
+  }
+  return samples;
+};
+
+const describeLevel = (level: LevelDefinition): string =>
+  `${level.id} (${LEVELS.indexOf(level) + 1}/${LEVELS.length})`;
+
+describe("level table", () => {
+  test("is non-empty and every level has a unique, non-empty id", () => {
+    expect(LEVELS.length).toBeGreaterThan(0);
+
+    const ids = LEVELS.map((level) => level.id);
+    for (const id of ids) {
+      expect(id.length).toBeGreaterThan(0);
+    }
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test("keeps the original three level identities in play order", () => {
+    const ids = LEVELS.map((level) => level.id);
+    expect(ids[0]).toBe("midtown-after-dark");
+    expect(ids[1]).toBe("park-side-pursuit");
+    expect(ids[ids.length - 1]).toBe("bridge-line-finale");
+  });
+
+  test("reuses only backdrops that already ship as art", () => {
+    for (const level of LEVELS) {
+      expect(ALLOWED_BACKDROPS.has(level.backdropKey)).toBe(true);
+    }
+  });
+
+  test("escalates: more enemies and more total threat every level", () => {
+    const counts = LEVELS.map((level) => level.enemies.length);
+    const threat = LEVELS.map((level) =>
+      level.enemies.reduce((total, enemy) => total + enemy.health, 0),
+    );
+
+    for (let index = 1; index < LEVELS.length; index += 1) {
+      expect(counts[index]).toBeGreaterThan(counts[index - 1]);
+      expect(threat[index]).toBeGreaterThan(threat[index - 1]);
+    }
+  });
+
+  test("enemy ids are unique across the whole game", () => {
+    const ids = LEVELS.flatMap((level) =>
+      level.enemies.map((enemy) => enemy.id),
+    );
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe.each(
+  LEVELS.map((level) => [describeLevel(level), level] as const),
+)("%s", (_label, level) => {
+  test("spawn and goal sit inside the level and far apart", () => {
+    for (const point of [level.playerSpawn, level.goal]) {
+      expect(point.x).toBeGreaterThanOrEqual(0);
+      expect(point.x).toBeLessThanOrEqual(level.width);
+      expect(point.y).toBeGreaterThanOrEqual(0);
+      expect(point.y).toBeLessThan(level.streetY);
+    }
+
+    const travel = Math.hypot(
+      level.goal.x - level.playerSpawn.x,
+      level.goal.y - level.playerSpawn.y,
+    );
+    expect(travel).toBeGreaterThan(level.width * 0.6);
+    expect(level.goal.radius).toBeGreaterThan(0);
+  });
+
+  test("spawn and goal stand on a roof, not in empty air", () => {
+    for (const point of [level.playerSpawn, level.goal]) {
+      const roofY = roofYAt(level.buildings, point.x);
+      expect(roofY).not.toBeNull();
+      const heightAboveRoof = (roofY ?? 0) - point.y;
+      expect(heightAboveRoof).toBeGreaterThan(0);
+      expect(heightAboveRoof).toBeLessThanOrEqual(160);
+    }
+  });
+
+  test("buildings never overlap and always meet the street", () => {
+    for (const [index, building] of level.buildings.entries()) {
+      expect(rectBottom(building.bounds)).toBe(level.streetY);
+      expect(rectTop(building.bounds)).toBeGreaterThan(0);
+      expect(rectLeft(building.bounds)).toBeGreaterThanOrEqual(0);
+      expect(rectRight(building.bounds)).toBeLessThanOrEqual(level.width);
+
+      for (const other of level.buildings.slice(index + 1)) {
+        expect(overlaps(building.bounds, other.bounds)).toBe(false);
+      }
+    }
+  });
+
+  test("the skyline spans the full level, with real gaps between blocks", () => {
+    const ordered = sortedBuildings(level);
+    expect(rectLeft(ordered[0].bounds)).toBe(0);
+    expect(rectRight(ordered[ordered.length - 1].bounds)).toBe(level.width);
+
+    for (let index = 1; index < ordered.length; index += 1) {
+      const gap =
+        rectLeft(ordered[index].bounds) - rectRight(ordered[index - 1].bounds);
+      expect(gap).toBeGreaterThanOrEqual(MIN_BUILDING_GAP);
+    }
+  });
+
+  test("every gap is spannable: an anchor is in reach above the crossing", () => {
+    const ordered = sortedBuildings(level);
+
+    for (let index = 1; index < ordered.length; index += 1) {
+      const previous = ordered[index - 1].bounds;
+      const next = ordered[index].bounds;
+      // Mid-gap the hero has fallen a little below the lower of the two
+      // roofs; that sagging point is the hardest place to find a web target.
+      const probe = {
+        x: (rectRight(previous) + rectLeft(next)) / 2,
+        y: Math.max(rectTop(previous), rectTop(next)) + GAP_SAG,
+      };
+
+      const reachable = anchorsInReach(level.anchors, probe, SWING_REACH);
+      expect({ gapCenterX: probe.x, spannable: reachable.length > 0 }).toEqual({
+        gapCenterX: probe.x,
+        spannable: true,
+      });
+    }
+  });
+
+  test("no dead zones: every sampled x can web something overhead", () => {
+    for (const x of sampleXs(level)) {
+      const probe = { x, y: level.streetY - CRUISE_HEIGHT };
+      expect({
+        x,
+        reachable: anchorsInReach(level.anchors, probe, SWING_REACH).length > 0,
+      }).toEqual({ x, reachable: true });
+    }
+  });
+
+  test("anchors are horizontally dense across the whole level", () => {
+    for (const x of sampleXs(level)) {
+      const nearest = Math.min(
+        ...level.anchors.map((anchor) => Math.abs(anchor.x - x)),
+      );
+      expect({ x, nearest: nearest <= MAX_ANCHOR_SPACING }).toEqual({
+        x,
+        nearest: true,
+      });
+    }
+  });
+
+  test("anchors are above the street, inside bounds, and never buried", () => {
+    expect(level.anchors.length).toBeGreaterThan(0);
+
+    for (const anchor of level.anchors) {
+      expect(anchor.x).toBeGreaterThanOrEqual(0);
+      expect(anchor.x).toBeLessThanOrEqual(level.width);
+      expect(anchor.y).toBeGreaterThanOrEqual(0);
+      expect(anchor.y).toBeLessThanOrEqual(
+        level.streetY - MIN_ANCHOR_CLEARANCE,
+      );
+
+      for (const building of level.buildings) {
+        expect({
+          anchor,
+          buried: isInsideSolid(anchor, building.bounds),
+        }).toEqual({ anchor, buried: false });
+      }
+    }
+  });
+
+  test("enemies spawn in bounds with a usable patrol range", () => {
+    for (const enemy of level.enemies) {
+      expect(enemy.patrolMaxX).toBeGreaterThan(enemy.patrolMinX);
+      expect(enemy.patrolMinX).toBeGreaterThanOrEqual(0);
+      expect(enemy.patrolMaxX).toBeLessThanOrEqual(level.width);
+      expect(enemy.position.x).toBeGreaterThanOrEqual(enemy.patrolMinX);
+      expect(enemy.position.x).toBeLessThanOrEqual(enemy.patrolMaxX);
+      expect(enemy.position.y).toBeGreaterThan(0);
+      expect(enemy.position.y).toBeLessThan(level.streetY);
+      expect(enemy.health).toBeGreaterThan(0);
+      expect(enemy.damage).toBeGreaterThan(0);
+      expect(enemy.speed).toBeGreaterThan(0);
+    }
+  });
+
+  test("roof patrols stand on a building that contains their whole route", () => {
+    for (const enemy of level.enemies.filter(
+      (candidate) => candidate.lane === "roof",
+    )) {
+      const host = level.buildings.find(
+        (building) =>
+          enemy.patrolMinX >= rectLeft(building.bounds) &&
+          enemy.patrolMaxX <= rectRight(building.bounds),
+      );
+
+      expect({ id: enemy.id, hosted: host !== undefined }).toEqual({
+        id: enemy.id,
+        hosted: true,
+      });
+      if (!host) {
+        continue;
+      }
+
+      const roofY = rectTop(host.bounds);
+      expect(enemy.position.y).toBeLessThanOrEqual(roofY);
+      expect(enemy.position.y).toBeGreaterThanOrEqual(roofY - 90);
+    }
+  });
+
+  test("air patrols fly clear of every building they pass over", () => {
+    for (const enemy of level.enemies.filter(
+      (candidate) => candidate.lane === "air",
+    )) {
+      for (const building of level.buildings) {
+        const passesOver =
+          enemy.patrolMaxX >= rectLeft(building.bounds) &&
+          enemy.patrolMinX <= rectRight(building.bounds);
+        if (!passesOver) {
+          continue;
+        }
+
+        expect({
+          id: enemy.id,
+          clear: enemy.position.y < rectTop(building.bounds),
+        }).toEqual({ id: enemy.id, clear: true });
+      }
+    }
+  });
+});
+
+describe("generateBuildingAnchors", () => {
+  const streetY = 1000;
+  const buildings: Building[] = [
+    { bounds: { x: 0, y: 400, width: 500, height: 600 }, kind: "block" },
+    { bounds: { x: 800, y: 700, width: 200, height: 300 }, kind: "lowrise" },
+  ];
+  const anchors = generateBuildingAnchors(buildings, streetY);
+
+  test("covers both roofs corner to corner", () => {
+    for (const { bounds } of buildings) {
+      const roofRow = anchors.filter((anchor) => anchor.y < rectTop(bounds));
+      const xs = roofRow
+        .filter(
+          (anchor) =>
+            anchor.x >= rectLeft(bounds) && anchor.x <= rectRight(bounds),
+        )
+        .map((anchor) => anchor.x)
+        .sort((a, b) => a - b);
+
+      expect(xs[0]).toBe(rectLeft(bounds));
+      expect(xs[xs.length - 1]).toBe(rectRight(bounds));
+      for (let index = 1; index < xs.length; index += 1) {
+        expect(xs[index] - xs[index - 1]).toBeLessThanOrEqual(
+          ROOF_ANCHOR_SPACING,
+        );
+      }
+    }
+  });
+
+  test("hangs facade anchors down the corners of tall buildings", () => {
+    const tallEdges = anchors.filter(
+      (anchor) => anchor.y > 400 && (anchor.x === 0 || anchor.x === 500),
+    );
+    expect(tallEdges.length).toBeGreaterThan(0);
+    for (const anchor of tallEdges) {
+      expect(anchor.y).toBeLessThanOrEqual(streetY - 140);
+    }
+  });
+
+  test("marks generated anchors as building-derived and never buries them", () => {
+    for (const anchor of anchors) {
+      expect(anchor.source).toBe("building");
+      for (const { bounds } of buildings) {
+        expect(isInsideSolid(anchor, bounds)).toBe(false);
+      }
+    }
+  });
+
+  test("returns nothing for an empty skyline", () => {
+    expect(generateBuildingAnchors([], streetY)).toEqual([]);
+  });
+});

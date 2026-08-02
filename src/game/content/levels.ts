@@ -1,46 +1,48 @@
-export interface LevelDefinition {
-  id: string;
-  name: string;
-  subtitle: string;
-  startX: number;
-  endX: number;
-  backdropKey: string;
-  accent: string;
-}
+import { compileLevel } from "./levels/authoring";
+import { bridgeLineFinale } from "./levels/bridge-line-finale";
+import { harborCraneRun } from "./levels/harbor-crane-run";
+import { midtownAfterDark } from "./levels/midtown-after-dark";
+import { parkSidePursuit } from "./levels/park-side-pursuit";
+import { spireAscent } from "./levels/spire-ascent";
+import type { LevelDefinition } from "./levels/types";
 
-export const LEVELS = [
-  {
-    id: "midtown-after-dark",
-    name: "Midtown After Dark",
-    subtitle: "Warm up across the water-tower rooftops.",
-    startX: 0,
-    endX: 1867,
-    backdropKey: "environment-midtown",
-    accent: "#55e8f0",
-  },
-  {
-    id: "park-side-pursuit",
-    name: "Park-Side Pursuit",
-    subtitle: "Protect the night crowd beneath the trees.",
-    startX: 1867,
-    endX: 3734,
-    backdropKey: "environment-park",
-    accent: "#90f0c8",
-  },
-  {
-    id: "bridge-line-finale",
-    name: "Bridge-Line Finale",
-    subtitle: "Clear the waterfront route before sunrise.",
-    startX: 3734,
-    endX: 5600,
-    backdropKey: "environment-waterfront",
-    accent: "#f68bd7",
-  },
-] as const satisfies readonly LevelDefinition[];
+export {
+  anchorsInReach,
+  FACADE_ANCHOR_SPACING,
+  generateBuildingAnchors,
+  MIN_ANCHOR_CLEARANCE,
+  ROOF_ANCHOR_SPACING,
+  ROOF_LEDGE_LIFT,
+  SWING_REACH,
+} from "./levels/anchors";
+export {
+  type BuildingRow,
+  compileLevel,
+  type EnemyRow,
+  type LevelBlueprint,
+  roofYAt,
+  STREET_Y,
+  WORLD_HEIGHT,
+} from "./levels/authoring";
+export type {
+  AnchorPoint,
+  AnchorSource,
+  Building,
+  BuildingKind,
+  EnemyLane,
+  EnemySpawn,
+  LevelDefinition,
+  LevelGoal,
+} from "./levels/types";
 
-export const getLevelAtX = (x: number): number => {
-  const index = LEVELS.findIndex(
-    (level) => x >= level.startX && x < level.endX,
-  );
-  return index === -1 ? LEVELS.length - 1 : index;
-};
+/** Play order. Each entry is a discrete world with its own spawn, goal, and bounds. */
+export const LEVELS: readonly LevelDefinition[] = [
+  midtownAfterDark,
+  parkSidePursuit,
+  spireAscent,
+  harborCraneRun,
+  bridgeLineFinale,
+].map(compileLevel);
+
+export const getLevelById = (id: string): LevelDefinition | undefined =>
+  LEVELS.find((level) => level.id === id);

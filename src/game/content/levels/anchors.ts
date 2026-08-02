@@ -1,0 +1,114 @@
+import {
+  rectBottom,
+  rectLeft,
+  rectRight,
+  rectTop,
+} from "../../simulation/physics/vector";
+import type { AnchorPoint, Building } from "./types";
+
+/**
+ * Longest web-line the swing solver holds before it reels the hero in
+ * (GameScene clamps rope length to 585). Generated anchors stay dense enough
+ * that a real target is always inside this reach, so the hero never has to
+ * attach to fabricated empty sky.
+ */
+export const SWING_REACH = 560;
+
+/** The scene only attaches to anchors at least this far above the hero. */
+export const MIN_ANCHOR_CLEARANCE = 80;
+
+/** Horizontal spacing between roof-edge anchors. Both corners are always included. */
+export const ROOF_ANCHOR_SPACING = 180;
+
+/** Roof anchors sit just above the roof slab, on the ledge the roof art draws. */
+export const ROOF_LEDGE_LIFT = 12;
+
+/** Vertical spacing of facade anchors running down a building's two corners. */
+export const FACADE_ANCHOR_SPACING = 260;
+
+/** Facade anchors stop this far above the building's base so they stay overhead. */
+export const FACADE_ANCHOR_FLOOR_MARGIN = 140;
+
+const anchorKey = (anchor: AnchorPoint): string =>
+  `${Math.round(anchor.x)}:${Math.round(anchor.y)}`;
+
+/** Evenly spaced points along the roof line, always including both corners. */
+const roofAnchors = (building: Building): AnchorPoint[] => {
+  const { bounds } = building;
+  const y = rectTop(bounds) - ROOF_LEDGE_LIFT;
+  const segments = Math.max(1, Math.ceil(bounds.width / ROOF_ANCHOR_SPACING));
+
+  return Array.from({ length: segments + 1 }, (_, index) => ({
+    x: rectLeft(bounds) + (bounds.width * index) / segments,
+    y,
+    source: "building" as const,
+  }));
+};
+
+/** Corner-ledge points down both faces, so low-flying heroes still have a target. */
+const facadeAnchors = (building: Building, streetY: number): AnchorPoint[] => {
+  const { bounds } = building;
+  const lowest =
+    Math.min(rectBottom(bounds), streetY) - FACADE_ANCHOR_FLOOR_MARGIN;
+  const anchors: AnchorPoint[] = [];
+
+  for (
+    let y = rectTop(bounds) + FACADE_ANCHOR_SPACING;
+    y <= lowest;
+    y += FACADE_ANCHOR_SPACING
+  ) {
+    anchors.push(
+      { x: rectLeft(bounds), y, source: "building" },
+      { x: rectRight(bounds), y, source: "building" },
+    );
+  }
+
+  return anchors;
+};
+
+/**
+ * Derives every web target from real building geometry: roof ledges plus the
+ * corner ledges down each facade. This is the backbone of a level's anchor set
+ * — authored anchors only ever supplement it.
+ */
+export const generateBuildingAnchors = (
+  buildings: readonly Building[],
+  streetY: number,
+): AnchorPoint[] => {
+  const seen = new Set<string>();
+  const anchors: AnchorPoint[] = [];
+
+  for (const building of buildings) {
+    for (const anchor of [
+      ...roofAnchors(building),
+      ...facadeAnchors(building, streetY),
+    ]) {
+      const key = anchorKey(anchor);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      anchors.push(anchor);
+    }
+  }
+
+  return anchors.sort((a, b) => a.x - b.x || a.y - b.y);
+};
+
+/** Anchors the hero at `from` could actually catch, nearest first. */
+export const anchorsInReach = (
+  anchors: readonly AnchorPoint[],
+  from: { x: number; y: number },
+  reach = SWING_REACH,
+): AnchorPoint[] =>
+  anchors
+    .filter(
+      (anchor) =>
+        anchor.y <= from.y - MIN_ANCHOR_CLEARANCE &&
+        Math.hypot(anchor.x - from.x, anchor.y - from.y) <= reach,
+    )
+    .sort(
+      (a, b) =>
+        Math.hypot(a.x - from.x, a.y - from.y) -
+        Math.hypot(b.x - from.x, b.y - from.y),
+    );
