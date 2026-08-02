@@ -1,3 +1,4 @@
+import { DEFAULT_ATTACHMENT_TUNING } from "../../simulation/physics/attachment";
 import {
   rectBottom,
   rectLeft,
@@ -7,15 +8,13 @@ import {
 import type { AnchorPoint, Building } from "./types";
 
 /**
- * Longest web-line the swing solver holds before it reels the hero in
- * (GameScene clamps rope length to 585). Generated anchors stay dense enough
- * that a real target is always inside this reach, so the hero never has to
- * attach to fabricated empty sky.
+ * Reach and clearance come from the attachment solver the running game uses,
+ * not from copies. Level authoring and the playability tests have to agree with
+ * the real catch rules — duplicating these would let the tests keep passing
+ * against stale numbers while the levels became unplayable.
  */
-export const SWING_REACH = 560;
-
-/** The scene only attaches to anchors at least this far above the hero. */
-export const MIN_ANCHOR_CLEARANCE = 80;
+export const SWING_REACH = DEFAULT_ATTACHMENT_TUNING.reach;
+export const MIN_ANCHOR_CLEARANCE = DEFAULT_ATTACHMENT_TUNING.minClearance;
 
 /** Horizontal spacing between roof-edge anchors. Both corners are always included. */
 export const ROOF_ANCHOR_SPACING = 180;

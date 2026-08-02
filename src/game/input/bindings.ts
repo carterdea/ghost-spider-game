@@ -13,8 +13,8 @@ export const createKeyboardBindings = (scene: Phaser.Scene): KeyMap => {
   return {
     moveLeft: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
     moveRight: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    moveUp: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-    moveDown: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+    reelIn: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+    reelOut: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
     jump: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
     web: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
     attack: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),

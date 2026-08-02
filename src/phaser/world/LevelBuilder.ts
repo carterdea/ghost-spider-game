@@ -9,7 +9,6 @@ import {
 
 export interface LevelWorld {
   platforms: Phaser.Physics.Arcade.StaticGroup;
-  goal: Phaser.GameObjects.Image;
   /** Everything built for this level, torn down on transition. */
   scenery: Phaser.GameObjects.GameObject[];
 }
@@ -53,9 +52,9 @@ export class LevelBuilder {
     }
 
     this.buildAmbience(level, track);
-    const goal = this.buildGoal(level, track);
+    this.buildGoal(level, track);
 
-    return { platforms, goal, scenery };
+    return { platforms, scenery };
   }
 
   private buildSky(
@@ -327,7 +326,7 @@ export class LevelBuilder {
   private buildGoal(
     level: LevelDefinition,
     track: <T extends Phaser.GameObjects.GameObject>(o: T) => T,
-  ): Phaser.GameObjects.Image {
+  ): void {
     const goal = track(
       this.scene.add
         .image(level.goal.x, level.goal.y, "goalBeacon")
@@ -350,7 +349,5 @@ export class LevelBuilder {
       repeat: -1,
       ease: "Sine.inOut",
     });
-
-    return goal;
   }
 }

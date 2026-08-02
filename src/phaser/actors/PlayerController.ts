@@ -225,7 +225,8 @@ export class PlayerController {
       return false;
     }
 
-    const commanded = Number(actions.moveDown) - Number(actions.moveUp);
+    // The swing solver reads -1 as reel in, +1 as let out.
+    const commanded = Number(actions.reelOut) - Number(actions.reelIn);
     const autoReel = rope.length > this.targetLength ? -1 : 0;
 
     const result = stepSwing(

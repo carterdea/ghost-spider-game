@@ -22,11 +22,10 @@ import {
 /**
  * Playability budget, all in world pixels.
  *
- * SWING_REACH (560) is the shared constant the anchor generator is tuned
- * against: GameScene clamps a web-line to 585px before it reels the hero in, so
- * a target further than ~560 away cannot be held through a swing. Every probe
- * below asks "could the hero actually catch something from here?" using that
- * same reach plus the engine's MIN_ANCHOR_CLEARANCE (80) overhead rule.
+ * SWING_REACH and MIN_ANCHOR_CLEARANCE are re-exported from the attachment
+ * solver the running game uses, so every probe below asks "could the hero
+ * actually catch something from here?" against the real catch rules rather than
+ * against numbers copied into the level tooling.
  */
 const GAP_SAG = 180; // how far below the lower roof the hero drifts mid-gap
 const CRUISE_HEIGHT = 260; // swing altitude above the pavement

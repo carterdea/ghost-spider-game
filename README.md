@@ -39,7 +39,7 @@ bun test
 ## Controls
 
 - `A` / `D`: run, and pump the swing along your direction of travel
-- `W` / `S`: reel the web-line in and out while swinging
+- `W` / `S`: reel the web-line in / let it out while swinging
 - `Space`: jump — tap for a short hop, hold for full height
 - `E`: hold to swing; the web catches the best arc ahead of you and lets go at
   the top so you keep your momentum

@@ -20,7 +20,6 @@ export interface EnemyState {
   id: string;
   kind: EnemyKind;
   health: number;
-  maxHealth: number;
   damage: number;
   speed: number;
   patrolMinX: number;
@@ -42,7 +41,6 @@ export const createEnemyState = (spawn: EnemySpawn): EnemyState => ({
   id: spawn.id,
   kind: spawn.kind,
   health: spawn.health,
-  maxHealth: spawn.health,
   damage: spawn.damage,
   speed: spawn.speed,
   patrolMinX: spawn.patrolMinX,
