@@ -30,24 +30,39 @@ export const applyBodyBox = (
 };
 
 /**
+ * The slice of a Phaser sprite placement reads. Narrow on purpose: it is what
+ * makes the offset maths below unit-testable without booting the engine.
+ */
+export interface PlaceableSprite {
+  readonly scaleY: number;
+  readonly displayOriginY: number;
+  readonly body: {
+    readonly offset: { readonly y: number };
+    readonly height: number;
+  } | null;
+  setPosition(x: number, y: number): unknown;
+}
+
+/**
  * Distance from the sprite's origin down to the bottom of its collision box.
  * Lets level data express spawns as ground positions rather than sprite centres.
+ *
+ * Arcade places the body at `sprite.y + scaleY * (offset.y - displayOriginY)`
+ * and keeps `body.height` *already scaled* (`sourceHeight * scaleY`). Only the
+ * source-space terms may take the scale — scaling the height again shrank every
+ * scaled actor's feet offset, which sank the enemies into the pavement.
  */
-export const feetOffset = (sprite: Phaser.Physics.Arcade.Sprite): number => {
+export const feetOffset = (sprite: PlaceableSprite): number => {
   const body = sprite.body;
   if (!body) {
     return 0;
   }
-  return (
-    body.offset.y * sprite.scaleY +
-    body.height * sprite.scaleY -
-    sprite.originY * sprite.frame.height * sprite.scaleY
-  );
+  return (body.offset.y - sprite.displayOriginY) * sprite.scaleY + body.height;
 };
 
 /** Places a sprite so the bottom of its collision box rests on `groundY`. */
 export const standOn = (
-  sprite: Phaser.Physics.Arcade.Sprite,
+  sprite: PlaceableSprite,
   x: number,
   groundY: number,
 ): void => {

@@ -69,6 +69,26 @@ const arcScore = (
 };
 
 /**
+ * Keeps only the anchors whose arc can honour `groundClearance`. The pendulum
+ * bottoms out at `anchor.y + length` and the line can never shorten past
+ * `minRopeLength`, so an anchor slung low over the pavement scrapes the floor at
+ * every length it can hold. When nothing else is in reach the full set comes
+ * back untouched — a stubby swing beats no web at all — and `targetLength` then
+ * clamps to the minimum, which is the clearance being knowingly relaxed.
+ */
+const preferGroundClearing = (
+  anchors: readonly Vec2[],
+  groundY: number,
+  tuning: AttachmentTuning,
+): readonly Vec2[] => {
+  const clearing = anchors.filter(
+    (anchor) =>
+      anchor.y + tuning.minRopeLength <= groundY - tuning.groundClearance,
+  );
+  return clearing.length > 0 ? clearing : anchors;
+};
+
+/**
  * Chooses where a web should catch and how long the line should be.
  *
  * The lowest point of a pendulum is `anchor.y + length`, so a rope longer than
@@ -92,7 +112,11 @@ export const chooseAttachment = (
   const forward = candidates.filter(
     (anchor) => (anchor.x - from.x) * heading > tuning.forwardBias,
   );
-  const usable = forward.length > 0 ? forward : candidates;
+  const usable = preferGroundClearing(
+    forward.length > 0 ? forward : candidates,
+    groundY,
+    tuning,
+  );
   const high = usable.filter(
     (anchor) => from.y - anchor.y >= tuning.minSwingHeight,
   );

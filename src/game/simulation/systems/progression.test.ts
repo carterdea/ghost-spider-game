@@ -47,6 +47,24 @@ describe("isGoalReached", () => {
       }),
     ).toBe(false);
   });
+
+  test("catches a step that jumps clean over the goal circle", () => {
+    const level = LEVELS[0];
+    const before = { x: level.goal.x - level.goal.radius * 3, y: level.goal.y };
+    const after = { x: level.goal.x + level.goal.radius * 3, y: level.goal.y };
+
+    expect(isGoalReached(level, after)).toBe(false);
+    expect(isGoalReached(level, after, before)).toBe(true);
+  });
+
+  test("ignores a step that passes wide of the goal", () => {
+    const level = LEVELS[0];
+    const offset = level.goal.radius * 2;
+    const before = { x: level.goal.x - 400, y: level.goal.y + offset };
+    const after = { x: level.goal.x + 400, y: level.goal.y + offset };
+
+    expect(isGoalReached(level, after, before)).toBe(false);
+  });
 });
 
 describe("syncLevelProgress", () => {
@@ -99,6 +117,40 @@ describe("syncLevelProgress", () => {
     expect(state.progression.visitedLevelIds).toEqual(
       LEVELS.map((level) => level.id),
     );
+  });
+
+  test("reports the win once and then leaves the finished run alone", () => {
+    const state = createInitialGameState(LEVELS[0]);
+    state.progression.levelIndex = LEVELS.length - 1;
+    const goal = goalPosition(LEVELS.length - 1);
+
+    expect(syncLevelProgress(state, goal).kind).toBe("won");
+    expect(state.progression.status).toBe("cleared");
+    expect(syncLevelProgress(state, goal).kind).toBe("none");
+    expect(syncLevelProgress(state, goal).kind).toBe("none");
+  });
+
+  test("a knocked-out run makes no further progress", () => {
+    const state = createInitialGameState(LEVELS[0]);
+    state.progression.status = "knockedOut";
+
+    expect(syncLevelProgress(state, goalPosition(0)).kind).toBe("none");
+    expect(state.progression.levelIndex).toBe(0);
+  });
+
+  test("a swing that overshoots the goal between frames still counts", () => {
+    const state = createInitialGameState(LEVELS[0]);
+    const goal = goalPosition(0);
+    const radius = LEVELS[0].goal.radius;
+
+    const transition = syncLevelProgress(
+      state,
+      { x: goal.x + radius * 3, y: goal.y },
+      { x: goal.x - radius * 3, y: goal.y },
+    );
+
+    expect(transition.kind).toBe("advanced");
+    expect(state.progression.levelIndex).toBe(1);
   });
 
   test("does not advance past the final level", () => {

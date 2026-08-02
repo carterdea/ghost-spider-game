@@ -1,5 +1,13 @@
 import { LEVELS, type LevelDefinition } from "../../content/levels";
-import { clamp, distance, type Vec2 } from "../physics/vector";
+import {
+  add,
+  clamp,
+  distance,
+  dot,
+  scale,
+  subtract,
+  type Vec2,
+} from "../physics/vector";
 import type { GameState } from "../state";
 
 /** What a progress check produced. `won` fires once the final goal is touched. */
@@ -17,10 +25,34 @@ export const getCurrentLevel = (state: GameState): LevelDefinition =>
 export const isFinalLevelIndex = (index: number): boolean =>
   index >= LEVELS.length - 1;
 
+/** Shortest distance from `point` to the segment `from`→`to`. */
+const distanceToSegment = (point: Vec2, from: Vec2, to: Vec2): number => {
+  const span = subtract(to, from);
+  const spanLengthSquared = dot(span, span);
+  if (spanLengthSquared === 0) {
+    return distance(point, from);
+  }
+
+  const along = clamp(
+    dot(subtract(point, from), span) / spanLengthSquared,
+    0,
+    1,
+  );
+  return distance(point, add(from, scale(span, along)));
+};
+
+/**
+ * True when the hero touched the goal circle. The whole `previous`→`position`
+ * segment counts: a reeled-in swing covers well over a goal diameter between
+ * frames, and point-sampling the current position alone let it tunnel clean
+ * through. Omitting `previous` degrades to the old point test.
+ */
 export const isGoalReached = (
   level: LevelDefinition,
   position: Vec2,
-): boolean => distance(position, level.goal) <= level.goal.radius;
+  previous: Vec2 = position,
+): boolean =>
+  distanceToSegment(level.goal, previous, position) <= level.goal.radius;
 
 const markVisited = (state: GameState, levelId: string): void => {
   if (!state.progression.visitedLevelIds.includes(levelId)) {
@@ -29,23 +61,29 @@ const markVisited = (state: GameState, levelId: string): void => {
 };
 
 /**
- * Advances one level when the hero touches the current level's goal. Levels are
+ * Advances one level when the hero crosses the current level's goal. Levels are
  * discrete, so progress never skips ahead: only the active goal counts.
- * Returns `won` while the hero stands on the final goal; the caller is expected
- * to stop the run at that point.
+ * `won` fires exactly once — clearing the last goal ends the run here, and a
+ * finished run never progresses again.
  */
 export const syncLevelProgress = (
   state: GameState,
   position: Vec2,
+  previous: Vec2 = position,
 ): LevelTransition => {
+  if (state.progression.status !== "playing") {
+    return { kind: "none" };
+  }
+
   const level = getCurrentLevel(state);
   markVisited(state, level.id);
 
-  if (!isGoalReached(level, position)) {
+  if (!isGoalReached(level, position, previous)) {
     return { kind: "none" };
   }
 
   if (isFinalLevelIndex(state.progression.levelIndex)) {
+    state.progression.status = "cleared";
     state.player.message = `${level.name} cleared. The skyline is yours.`;
     return { kind: "won", level };
   }

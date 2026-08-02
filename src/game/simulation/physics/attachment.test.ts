@@ -103,6 +103,40 @@ describe("chooseAttachment", () => {
     }
   });
 
+  test("skips a low anchor whose shortest rope would still scrape the ground", () => {
+    // Sits at the ideal swing angle and would win on score alone, but its arc
+    // bottoms out at anchor.y + minRopeLength, below the clearance line.
+    const scraping = { x: 1155, y: 1250 };
+    const clearing = { x: 1500, y: 1200 };
+    const nearPavement: Vec2 = { x: 1050, y: 1400 };
+
+    expect(scraping.y + TUNING.minRopeLength).toBeGreaterThan(
+      GROUND_Y - TUNING.groundClearance,
+    );
+
+    const chosen = chooseAttachment(
+      [scraping, clearing],
+      nearPavement,
+      1,
+      GROUND_Y,
+    );
+
+    expect(chosen?.anchor).toEqual(clearing);
+    expect(
+      chosen ? chosen.anchor.y + chosen.targetLength : 0,
+    ).toBeLessThanOrEqual(GROUND_Y - TUNING.groundClearance);
+  });
+
+  test("still catches a scraping anchor when it is the only one in reach", () => {
+    const scraping = { x: 1155, y: 1250 };
+    const nearPavement: Vec2 = { x: 1050, y: 1400 };
+
+    const chosen = chooseAttachment([scraping], nearPavement, 1, GROUND_Y);
+
+    expect(chosen?.anchor).toEqual(scraping);
+    expect(chosen?.targetLength).toBe(TUNING.minRopeLength);
+  });
+
   test("never targets a length below the rope minimum", () => {
     // An anchor barely above the pavement: clearance maths would go negative.
     const lowAnchor = { x: 1300, y: GROUND_Y - 130 };
