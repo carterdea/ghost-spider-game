@@ -20,7 +20,7 @@ const randomBetween = (min: number, max: number): number =>
 export class WebRenderer {
   private readonly scene: Phaser.Scene;
   private readonly line: Phaser.GameObjects.Graphics;
-  private fading: FadingWeb[] = [];
+  private readonly fading: FadingWeb[] = [];
 
   public constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -29,7 +29,7 @@ export class WebRenderer {
 
   public drawLine(anchor: Vec2, hand: Vec2): void {
     this.line.clear();
-    this.drawStrand(this.line, anchor, hand, 0.88, 3);
+    this.drawStrand(this.line, anchor.x, anchor.y, hand.x, hand.y, 0.88, 3);
   }
 
   public clearLine(): void {
@@ -40,7 +40,7 @@ export class WebRenderer {
   public release(anchor: Vec2, hand: Vec2): void {
     this.clearLine();
     const graphic = this.scene.add.graphics().setDepth(19);
-    this.drawStrand(graphic, anchor, hand, 0.72, 0);
+    this.drawStrand(graphic, anchor.x, anchor.y, hand.x, hand.y, 0.72, 0);
     this.fading.push({
       graphic,
       anchor: { ...anchor },
@@ -51,8 +51,13 @@ export class WebRenderer {
     });
   }
 
+  /**
+   * Advances every cut strand. Runs each frame, so it compacts the list in
+   * place and passes plain coordinates around rather than minting arrays and
+   * point objects per web.
+   */
   public update(): void {
-    const live: FadingWeb[] = [];
+    let live = 0;
 
     for (const web of this.fading) {
       const progress = (this.scene.time.now - web.createdAt) / FADE_DURATION;
@@ -66,34 +71,45 @@ export class WebRenderer {
       web.graphic.clear();
       this.drawStrand(
         web.graphic,
-        { x: web.anchor.x + sway * 0.4, y: web.anchor.y + fall * 0.4 },
-        { x: web.hand.x + sway, y: web.hand.y + fall + web.drop * progress },
+        web.anchor.x + sway * 0.4,
+        web.anchor.y + fall * 0.4,
+        web.hand.x + sway,
+        web.hand.y + fall + web.drop * progress,
         (1 - progress) * 0.72,
         0,
       );
-      live.push(web);
+      this.fading[live] = web;
+      live += 1;
     }
 
-    this.fading = live;
+    this.fading.length = live;
   }
 
-  public destroy(): void {
-    this.line.destroy();
+  /** Drops everything drawn for the level being left; the renderer lives on. */
+  public reset(): void {
+    this.clearLine();
     for (const web of this.fading) {
       web.graphic.destroy();
     }
-    this.fading = [];
+    this.fading.length = 0;
+  }
+
+  public destroy(): void {
+    this.reset();
+    this.line.destroy();
   }
 
   private drawStrand(
     graphic: Phaser.GameObjects.Graphics,
-    anchor: Vec2,
-    hand: Vec2,
+    anchorX: number,
+    anchorY: number,
+    handX: number,
+    handY: number,
     alpha: number,
     seed: number,
   ): void {
-    const dx = hand.x - anchor.x;
-    const dy = hand.y - anchor.y;
+    const dx = handX - anchorX;
+    const dy = handY - anchorY;
     const length = Math.max(1, Math.hypot(dx, dy));
     const normalX = -dy / length;
     const normalY = dx / length;
@@ -101,20 +117,20 @@ export class WebRenderer {
 
     graphic.lineStyle(3, colors.web, alpha);
     graphic.beginPath();
-    graphic.moveTo(anchor.x, anchor.y);
+    graphic.moveTo(anchorX, anchorY);
     graphic.lineTo(
-      (anchor.x + hand.x) / 2 + normalX * wobble,
-      (anchor.y + hand.y) / 2 + normalY * wobble,
+      (anchorX + handX) / 2 + normalX * wobble,
+      (anchorY + handY) / 2 + normalY * wobble,
     );
-    graphic.lineTo(hand.x, hand.y);
+    graphic.lineTo(handX, handY);
     graphic.strokePath();
 
     graphic.lineStyle(1, 0xbff7ff, alpha * 0.82);
     for (let step = 1; step <= 4; step += 1) {
       const t = step / 5;
       const taper = 1 - Math.abs(0.5 - t);
-      const x = anchor.x + dx * t + normalX * wobble * taper;
-      const y = anchor.y + dy * t + normalY * wobble * taper;
+      const x = anchorX + dx * t + normalX * wobble * taper;
+      const y = anchorY + dy * t + normalY * wobble * taper;
       const branch = 10 + ((step + seed) % 3) * 5;
       const side = step % 2 === 0 ? 1 : -1;
       graphic.lineBetween(
@@ -126,6 +142,6 @@ export class WebRenderer {
       graphic.lineBetween(x, y, x - dx * 0.035, y - dy * 0.035);
     }
 
-    graphic.strokeCircle(hand.x, hand.y, 6);
+    graphic.strokeCircle(handX, handY, 6);
   }
 }

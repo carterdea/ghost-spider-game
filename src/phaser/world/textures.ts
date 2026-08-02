@@ -6,32 +6,6 @@ import { colors } from "../../game/assets/manifest";
  * the raster art pipeline instead — the scene used to also generate a full set
  * of vector character sprites that nothing ever referenced.
  */
-export const PROP_TEXTURES = [
-  "webGlob",
-  "webNet",
-  "bullet",
-  "roof",
-  "goalBeacon",
-  "sidewalkTile",
-  "storefront",
-  "apartmentDoor",
-  "streetLight",
-  "trashCan",
-  "hydrant",
-  "crosswalkStripe",
-  "laneDash",
-  "brickFacade",
-  "foodCart",
-  "newsStand",
-  "stoop",
-  "planter",
-  "roofVent",
-  "waterTower",
-  "parkTree",
-  "parkBench",
-  "bat",
-] as const;
-
 type Draw = (graphics: Phaser.GameObjects.Graphics) => void;
 
 const drawWebGlob: Draw = (graphics) => {
@@ -328,43 +302,51 @@ const drawBat: Draw = (graphics) => {
   graphics.generateTexture("bat", 46, 28);
 };
 
-const DRAWINGS: readonly Draw[] = [
-  drawWebGlob,
-  drawWebNet,
-  drawBullet,
-  drawRoof,
-  drawGoalBeacon,
-  drawSidewalkTile,
-  drawBrickFacade,
-  drawStorefront,
-  drawApartmentDoor,
-  drawStreetLight,
-  drawTrashCan,
-  drawHydrant,
-  drawCrosswalkStripe,
-  drawLaneDash,
-  drawFoodCart,
-  drawNewsStand,
-  drawStoop,
-  drawPlanter,
-  drawRoofVent,
-  drawWaterTower,
-  drawParkTree,
-  drawParkBench,
-  drawBat,
-];
+const DRAWINGS = {
+  webGlob: drawWebGlob,
+  webNet: drawWebNet,
+  bullet: drawBullet,
+  roof: drawRoof,
+  goalBeacon: drawGoalBeacon,
+  sidewalkTile: drawSidewalkTile,
+  brickFacade: drawBrickFacade,
+  storefront: drawStorefront,
+  apartmentDoor: drawApartmentDoor,
+  streetLight: drawStreetLight,
+  trashCan: drawTrashCan,
+  hydrant: drawHydrant,
+  crosswalkStripe: drawCrosswalkStripe,
+  laneDash: drawLaneDash,
+  foodCart: drawFoodCart,
+  newsStand: drawNewsStand,
+  stoop: drawStoop,
+  planter: drawPlanter,
+  roofVent: drawRoofVent,
+  waterTower: drawWaterTower,
+  parkTree: drawParkTree,
+  parkBench: drawParkBench,
+  bat: drawBat,
+} satisfies Record<string, Draw>;
 
+export const PROP_TEXTURES = Object.keys(DRAWINGS) as readonly PropTextureKey[];
+
+export type PropTextureKey = keyof typeof DRAWINGS;
+
+/**
+ * Generates the prop textures this scene is missing. Textures are game-global
+ * and shared with every object already drawing from them, so regenerating an
+ * existing key would invalidate live sprites on every level load.
+ */
 export const createPropTextures = (scene: Phaser.Scene): void => {
-  for (const key of PROP_TEXTURES) {
-    if (scene.textures.exists(key)) {
-      scene.textures.remove(key);
-    }
+  const missing = PROP_TEXTURES.filter((key) => !scene.textures.exists(key));
+  if (missing.length === 0) {
+    return;
   }
 
   const graphics = scene.add.graphics();
-  for (const draw of DRAWINGS) {
+  for (const key of missing) {
     graphics.clear();
-    draw(graphics);
+    DRAWINGS[key](graphics);
   }
   graphics.destroy();
 };

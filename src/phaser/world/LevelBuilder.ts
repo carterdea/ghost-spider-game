@@ -6,12 +6,7 @@ import {
   rectCenter,
   rectRight,
 } from "../../game/simulation/physics/vector";
-
-export interface LevelWorld {
-  platforms: Phaser.Physics.Arcade.StaticGroup;
-  /** Everything built for this level, torn down on transition. */
-  scenery: Phaser.GameObjects.GameObject[];
-}
+import { LevelWorld } from "./LevelWorld";
 
 const DEPTH = {
   sky: -12,
@@ -26,6 +21,50 @@ const DEPTH = {
 /** The street is a solid floor: fall off the roofs and you land on pavement. */
 const STREET_FLOOR_THICKNESS = 64;
 
+/**
+ * Roof slabs hang below the roof line rather than straddling it, so the surface
+ * an actor stands on is exactly `bounds.y` — the line the level data declares
+ * and the roof props are drawn against.
+ */
+const ROOF_THICKNESS = 20;
+
+const isPositive = (value: number): boolean =>
+  Number.isFinite(value) && value > 0;
+
+/**
+ * Rejects geometry that would produce degenerate bodies or NaN coordinates.
+ * Runs before anything is created so a bad level cannot half-build and leak.
+ */
+const assertBuildable = (level: LevelDefinition): void => {
+  const problems: string[] = [];
+
+  if (!isPositive(level.width)) {
+    problems.push(`width must be positive (got ${level.width})`);
+  }
+  if (!isPositive(level.height)) {
+    problems.push(`height must be positive (got ${level.height})`);
+  }
+  if (!isPositive(level.streetY) || level.streetY >= level.height) {
+    problems.push(
+      `streetY must sit inside the level (got ${level.streetY} of ${level.height})`,
+    );
+  }
+  if (!isPositive(level.goal.radius)) {
+    problems.push(`goal radius must be positive (got ${level.goal.radius})`);
+  }
+
+  level.buildings.forEach((building, index) => {
+    const { width, height } = building.bounds;
+    if (!isPositive(width) || !isPositive(height)) {
+      problems.push(`building ${index} is ${width}x${height}`);
+    }
+  });
+
+  if (problems.length > 0) {
+    throw new Error(`Cannot build level "${level.id}": ${problems.join("; ")}`);
+  }
+};
+
 export class LevelBuilder {
   private readonly scene: Phaser.Scene;
 
@@ -34,34 +73,26 @@ export class LevelBuilder {
   }
 
   public build(level: LevelDefinition): LevelWorld {
-    const scenery: Phaser.GameObjects.GameObject[] = [];
-    const track = <T extends Phaser.GameObjects.GameObject>(object: T): T => {
-      scenery.push(object);
-      return object;
-    };
+    assertBuildable(level);
 
     this.scene.physics.world.setBounds(0, 0, level.width, level.height);
-    this.buildSky(level, track);
-    this.buildStreet(level, track);
-    this.buildStreetProps(level, track);
 
-    const platforms = this.scene.physics.add.staticGroup();
-    this.buildStreetFloor(level, platforms);
+    const world = new LevelWorld(this.scene);
+    this.buildSky(level, world);
+    this.buildStreet(level, world);
+    this.buildStreetProps(level, world);
+    this.buildStreetFloor(level, world);
     for (const building of level.buildings) {
-      this.buildBuilding(building, level, platforms, track);
+      this.buildBuilding(building, level, world);
     }
+    this.buildAmbience(level, world);
+    this.buildGoal(level, world);
 
-    this.buildAmbience(level, track);
-    this.buildGoal(level, track);
-
-    return { platforms, scenery };
+    return world;
   }
 
-  private buildSky(
-    level: LevelDefinition,
-    track: <T extends Phaser.GameObjects.GameObject>(o: T) => T,
-  ): void {
-    track(
+  private buildSky(level: LevelDefinition, world: LevelWorld): void {
+    world.track(
       this.scene.add
         .rectangle(
           level.width / 2,
@@ -77,7 +108,7 @@ export class LevelBuilder {
     const panels = Math.max(1, Math.ceil(level.width / 1867));
     const panelWidth = level.width / panels;
     for (let panel = 0; panel < panels; panel += 1) {
-      track(
+      world.track(
         this.scene.add
           .image(
             panelWidth * (panel + 0.5),
@@ -91,12 +122,9 @@ export class LevelBuilder {
     }
   }
 
-  private buildStreet(
-    level: LevelDefinition,
-    track: <T extends Phaser.GameObjects.GameObject>(o: T) => T,
-  ): void {
+  private buildStreet(level: LevelDefinition, world: LevelWorld): void {
     const below = level.height - level.streetY;
-    track(
+    world.track(
       this.scene.add
         .tileSprite(
           level.width / 2,
@@ -110,7 +138,7 @@ export class LevelBuilder {
     );
 
     for (let x = 120; x < level.width; x += 420) {
-      track(
+      world.track(
         this.scene.add
           .image(x, level.streetY + 120, "laneDash")
           .setDepth(DEPTH.streetProp),
@@ -119,7 +147,7 @@ export class LevelBuilder {
 
     for (let x = 690; x < level.width; x += 1480) {
       for (let stripe = 0; stripe < 6; stripe += 1) {
-        track(
+        world.track(
           this.scene.add
             .image(x + stripe * 48, level.streetY + 118, "crosswalkStripe")
             .setDepth(DEPTH.streetProp),
@@ -128,15 +156,12 @@ export class LevelBuilder {
     }
   }
 
-  private buildStreetProps(
-    level: LevelDefinition,
-    track: <T extends Phaser.GameObjects.GameObject>(o: T) => T,
-  ): void {
+  private buildStreetProps(level: LevelDefinition, world: LevelWorld): void {
     const park = level.backdropKey === "environment-park";
     const curb = level.streetY;
 
     for (let x = 48; x < level.width; x += 96) {
-      track(
+      world.track(
         this.scene.add
           .image(x, curb, "sidewalkTile")
           .setOrigin(0.5, 0)
@@ -145,41 +170,42 @@ export class LevelBuilder {
     }
 
     for (let x = 420; x < level.width; x += 1040) {
-      track(this.scene.add.image(x, curb - 50, "stoop").setDepth(-3.4));
-      track(
+      world.track(this.scene.add.image(x, curb - 50, "stoop").setDepth(-3.4));
+      world.track(
         this.scene.add.image(x + 260, curb - 60, "newsStand").setDepth(-3.3),
       );
-      track(
+      world.track(
         this.scene.add.image(x + 560, curb - 52, "foodCart").setDepth(-3.2),
       );
-      track(
+      world.track(
         this.scene.add.image(x + 830, curb - 62, "storefront").setDepth(-3.3),
       );
     }
 
     for (let x = 360; x < level.width; x += 620) {
-      track(this.scene.add.image(x, curb - 32, "streetLight").setDepth(6));
+      world.track(
+        this.scene.add.image(x, curb - 32, "streetLight").setDepth(6),
+      );
     }
 
     for (let x = 520; x < level.width; x += 930) {
-      track(this.scene.add.image(x, curb - 4, "trashCan").setDepth(5));
-      track(this.scene.add.image(x + 190, curb, "hydrant").setDepth(5));
-      track(
+      world.track(this.scene.add.image(x, curb - 4, "trashCan").setDepth(5));
+      world.track(this.scene.add.image(x + 190, curb, "hydrant").setDepth(5));
+      world.track(
         this.scene.add
           .image(x + 330, curb - 4, park ? "parkTree" : "planter")
           .setDepth(5),
       );
       if (park) {
-        track(this.scene.add.image(x + 470, curb - 8, "parkBench").setDepth(5));
+        world.track(
+          this.scene.add.image(x + 470, curb - 8, "parkBench").setDepth(5),
+        );
       }
     }
   }
 
-  private buildStreetFloor(
-    level: LevelDefinition,
-    platforms: Phaser.Physics.Arcade.StaticGroup,
-  ): void {
-    const floor = platforms.create(
+  private buildStreetFloor(level: LevelDefinition, world: LevelWorld): void {
+    const floor = world.platforms.create(
       level.width / 2,
       level.streetY + STREET_FLOOR_THICKNESS / 2,
       "roof",
@@ -193,15 +219,14 @@ export class LevelBuilder {
   private buildBuilding(
     building: Building,
     level: LevelDefinition,
-    platforms: Phaser.Physics.Arcade.StaticGroup,
-    track: <T extends Phaser.GameObjects.GameObject>(o: T) => T,
+    world: LevelWorld,
   ): void {
     const { bounds } = building;
     const center = rectCenter(bounds);
 
     // A translucent silhouette: solid enough to read as geometry, sheer enough
     // that the painted skyline behind it still carries the scene.
-    track(
+    world.track(
       this.scene.add
         .rectangle(
           center.x,
@@ -213,7 +238,7 @@ export class LevelBuilder {
         )
         .setDepth(DEPTH.facade),
     );
-    track(
+    world.track(
       this.scene.add
         .tileSprite(
           center.x,
@@ -227,7 +252,7 @@ export class LevelBuilder {
         .setTint(building.kind === "tower" ? 0x9fb0d8 : 0xc3cde6),
     );
     // Bright cap on the roof line so the landable edge is unmistakable.
-    track(
+    world.track(
       this.scene.add
         .rectangle(
           center.x,
@@ -239,20 +264,20 @@ export class LevelBuilder {
         )
         .setDepth(DEPTH.roofDecor),
     );
-    track(
+    world.track(
       this.scene.add
         .rectangle(center.x, bounds.y + 3, bounds.width - 8, 16, 0x55e8f0, 0.9)
         .setDepth(-7.1),
     );
     // Roof props stand on the roof line, not hovering above it.
-    track(
+    world.track(
       this.scene.add
         .image(bounds.x + 70, bounds.y, "roofVent")
         .setOrigin(0.5, 1)
         .setDepth(-6.8),
     );
     if (bounds.width > 400) {
-      track(
+      world.track(
         this.scene.add
           .image(rectRight(bounds) - 90, bounds.y, "waterTower")
           .setOrigin(0.5, 1)
@@ -260,38 +285,35 @@ export class LevelBuilder {
       );
     }
     if (rectBottom(bounds) >= level.streetY - 4) {
-      track(
+      world.track(
         this.scene.add
           .image(center.x, level.streetY - 66, "apartmentDoor")
           .setDepth(-3.1),
       );
     }
 
-    const roof = platforms.create(
+    const roof = world.platforms.create(
       center.x,
-      bounds.y,
+      bounds.y + ROOF_THICKNESS / 2,
       "roof",
     ) as Phaser.Physics.Arcade.Sprite;
     roof.setVisible(false);
     roof.displayWidth = bounds.width;
-    roof.displayHeight = 20;
+    roof.displayHeight = ROOF_THICKNESS;
     roof.refreshBody();
   }
 
-  private buildAmbience(
-    level: LevelDefinition,
-    track: <T extends Phaser.GameObjects.GameObject>(o: T) => T,
-  ): void {
+  private buildAmbience(level: LevelDefinition, world: LevelWorld): void {
     const flights = Math.max(2, Math.round(level.width / 1800));
     for (let index = 0; index < flights; index += 1) {
       const startX = 400 + (level.width / flights) * index;
-      const bat = track(
+      const bat = world.track(
         this.scene.add
           .image(startX, 240 + index * 62, "bat")
           .setAlpha(0.82)
           .setDepth(-2),
       );
-      this.scene.tweens.add({
+      world.tween({
         targets: bat,
         x: startX + 520,
         y: `+=${index % 2 === 0 ? -70 : 54}`,
@@ -305,14 +327,14 @@ export class LevelBuilder {
 
     for (const [index, texture] of artKeys.npcs.entries()) {
       const x = 520 + (level.width / artKeys.npcs.length) * index;
-      const npc = track(
+      const npc = world.track(
         this.scene.add
           .image(x % level.width, level.streetY - 78, texture)
           .setScale(0.82)
           .setDepth(4),
       );
       npc.setFlipX(index % 3 === 0);
-      this.scene.tweens.add({
+      world.tween({
         targets: npc,
         y: npc.y - (index % 2 === 0 ? 2 : 3),
         duration: 1200 + index * 140,
@@ -323,25 +345,22 @@ export class LevelBuilder {
     }
   }
 
-  private buildGoal(
-    level: LevelDefinition,
-    track: <T extends Phaser.GameObjects.GameObject>(o: T) => T,
-  ): void {
-    const goal = track(
+  private buildGoal(level: LevelDefinition, world: LevelWorld): void {
+    const goal = world.track(
       this.scene.add
         .image(level.goal.x, level.goal.y, "goalBeacon")
         .setDepth(DEPTH.goal)
         .setDisplaySize(level.goal.radius * 2, level.goal.radius * 2),
     );
 
-    this.scene.tweens.add({
+    world.tween({
       targets: goal,
       angle: 360,
       duration: 9000,
       repeat: -1,
       ease: "Linear",
     });
-    this.scene.tweens.add({
+    world.tween({
       targets: goal,
       alpha: 0.55,
       duration: 900,
