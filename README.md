@@ -54,13 +54,25 @@ Each district is a discrete level with its own skyline, patrols, and a goal
 beacon at the far end. Swing the rooftops, drop to the street, clear the patrol
 robots, tech enforcers and survey drones, and touch the beacon to move on:
 
-1. Midtown After Dark
-2. Park-Side Pursuit
-3. Spire Ascent
-4. Harbor Crane Run
-5. Bridge-Line Finale
+1. Midtown After Dark — traversal warm-up, no patrols
+2. Park-Side Pursuit — the first patrol
+3. Switchyard Skywire — chasms too wide for roofs; catenary cables carry the
+   only web targets across them
+4. Drydock Hoists — freight hoists and a trolley over a void with no roof in
+   it. Ride the rig, or web the gantry overhead and skip the wait
+5. Glasshouse Terraces — the roof line only climbs, and the glass panels hold
+   for a beat, strobe, then drop
+6. Spire Ascent
+7. Harbor Crane Run
+8. Bridge-Line Finale
 
-Clearing the fifth district wins the run.
+The last district is a boss: The Weaver holds the bridge, and the beacon will
+not clear the run until it is down. Three phases gated on its health, each
+winding up faster than the last. The shape of a tell says which attack is
+coming, and every attack leaves a window where the boss cannot hurt you —
+that is the punish, so take it.
+
+Chaining takedowns without touching the ground pays a score multiplier.
 
 Enemies have to actually see you — range, a forward cone and a clear line —
 and every attack is telegraphed and followed by a recovery window, so fights
