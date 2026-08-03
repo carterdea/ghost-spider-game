@@ -17,12 +17,26 @@ const HINTS: ReadonlyArray<readonly [string, string]> = [
   ["J", "strike"],
   ["Q/K", "gadget"],
   ["Shift", "glide"],
+  ["M", "mute"],
   ["R", "restart"],
 ];
+
+/**
+ * The speaker glyph, as paths on a 16x16 grid: a cone, two sound waves, and the
+ * slash that crosses it out. Drawn rather than loaded, like everything else the
+ * game renders.
+ */
+const SPEAKER = {
+  cone: "M2.5 6h2.6l3.7-3v10l-3.7-3H2.5z",
+  waves: ["M10.4 5.8a3.2 3.2 0 0 1 0 4.4", "M12.3 3.9a6 6 0 0 1 0 8.2"],
+  slash: "M10.6 4.6 15.2 11.6",
+} as const;
 
 /** Every node the HUD ever writes to. Built once, then reused every frame. */
 export interface HudNodes {
   score: HTMLElement;
+  combo: HTMLElement;
+  mute: HTMLElement;
   bar: HTMLElement;
   barFill: HTMLElement;
   health: HTMLElement;
@@ -57,19 +71,58 @@ const adder =
     return node;
   };
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/** The muted/unmuted speaker. `Hud` toggles the `is-muted` class on the wrapper. */
+const buildMute = (doc: Document, parent: HTMLElement): HTMLElement => {
+  const wrapper = doc.createElement("span");
+  wrapper.className = "mute";
+  wrapper.setAttribute("role", "status");
+
+  const svg = doc.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("aria-hidden", "true");
+
+  for (const [className, d] of [
+    ["mute-cone", SPEAKER.cone],
+    ...SPEAKER.waves.map((wave) => ["mute-wave", wave] as const),
+    ["mute-slash", SPEAKER.slash],
+  ] as ReadonlyArray<readonly [string, string]>) {
+    const path = doc.createElementNS(SVG_NS, "path");
+    path.setAttribute("class", className);
+    path.setAttribute("d", d);
+    svg.append(path);
+  }
+
+  wrapper.append(svg);
+  parent.append(wrapper);
+  return wrapper;
+};
+
 const buildStatusCluster = (
   add: Add,
   parent: HTMLElement,
 ): Pick<
   HudNodes,
-  "score" | "bar" | "barFill" | "health" | "threats" | "gadgets"
+  | "score"
+  | "combo"
+  | "mute"
+  | "bar"
+  | "barFill"
+  | "health"
+  | "threats"
+  | "gadgets"
 > => {
   const cluster = add(parent, "section", "status-cluster");
   cluster.setAttribute("aria-label", "Player status");
 
   const heroRow = add(cluster, "div", "hero-row");
   add(heroRow, "span", "hero-name", HERO_NAME);
-  const score = add(heroRow, "span", "score");
+  const meta = add(heroRow, "span", "hero-meta");
+  const combo = add(meta, "span", "combo");
+  combo.hidden = true;
+  const score = add(meta, "span", "score");
+  const mute = buildMute(parent.ownerDocument, meta);
 
   const bar = add(cluster, "div", "bar");
   bar.setAttribute("role", "progressbar");
@@ -91,7 +144,7 @@ const buildStatusCluster = (
     }),
   );
 
-  return { score, bar, barFill, health, threats, gadgets };
+  return { score, combo, mute, bar, barFill, health, threats, gadgets };
 };
 
 const buildLevelCluster = (

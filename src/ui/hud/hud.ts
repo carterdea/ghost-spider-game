@@ -1,10 +1,9 @@
-import { LEVELS, type LevelDefinition } from "../../game/content/levels";
+import { LEVELS } from "../../game/content/levels";
 import type {
   GadgetKind,
   GameState,
   RunStatus,
 } from "../../game/simulation/state";
-import { livingEnemies } from "../../game/simulation/state";
 import { getLevelByIndex } from "../../game/simulation/systems/progression";
 import { buildHud, type HudNodes } from "./dom";
 
@@ -23,37 +22,11 @@ const BANNERS: Record<RunStatus, { title: string; hint: string } | null> = {
 /** `""` is the freshly built DOM, where no gadget chip is highlighted yet. */
 type SelectedGadget = GadgetKind | "";
 
-/** Every value the HUD paints, so an unchanged frame can skip the DOM entirely. */
-interface Snapshot {
-  score: string;
-  health: number;
-  maxHealth: number;
-  threats: string;
-  kicker: string;
-  levelName: string;
-  subtitle: string;
-  accent: string;
-  dots: string;
-  gadget: SelectedGadget;
-  message: string;
-  status: RunStatus;
-}
+/** A chain only reads as a chain once there are two links in it. */
+const MIN_SHOWN_CHAIN = 2;
 
-/** Mirrors the freshly built DOM, so the first render fills in every blank. */
-const BLANK: Snapshot = {
-  score: "",
-  health: -1,
-  maxHealth: -1,
-  threats: "",
-  kicker: "",
-  levelName: "",
-  subtitle: "",
-  accent: "",
-  dots: "",
-  gadget: "",
-  message: "",
-  status: "playing",
-};
+/** Where the chip stops getting hotter, matching the multiplier's own cap. */
+const MAX_HEAT = 7;
 
 const threatLabel = (alive: number): string => {
   if (alive <= 0) {
@@ -69,68 +42,106 @@ const dotClass = (visited: boolean, current: boolean): string =>
 const bannerStatus = (state: GameState): RunStatus =>
   state.player.health <= 0 ? "knockedOut" : state.progression.status;
 
-const takeSnapshot = (state: GameState, level: LevelDefinition): Snapshot => {
-  const { player, progression } = state;
-  return {
-    score: `${player.score} pts`,
-    health: player.health,
-    maxHealth: player.maxHealth,
-    threats: threatLabel(livingEnemies(state).length),
-    kicker: `Level ${progression.levelIndex + 1} / ${LEVELS.length}`,
-    levelName: level.name,
-    subtitle: level.subtitle,
-    accent: level.accent,
-    dots: `${progression.levelIndex}|${progression.visitedLevelIds.join(",")}`,
-    gadget: player.gadget,
-    message: player.message,
-    status: bannerStatus(state),
-  };
+/** Counted rather than filtered: this runs every frame and must not allocate. */
+const countLivingEnemies = (state: GameState): number => {
+  let alive = 0;
+  for (const enemy of state.enemies) {
+    if (enemy.health > 0) {
+      alive += 1;
+    }
+  }
+  return alive;
 };
 
 /**
  * Neon-noir status overlay. The DOM is built once; `render` runs every frame
  * and writes only the nodes whose values actually changed, so a steady frame
  * touches the DOM zero times.
+ *
+ * The comparison is against the raw values rather than a formatted snapshot, so
+ * a steady frame builds no strings and allocates nothing either. `undefined`
+ * means "never painted", which is what makes the first frame fill every blank.
  */
 export class Hud {
   private readonly root: HTMLElement;
   private readonly nodes: HudNodes;
-  private last: Snapshot = BLANK;
+
+  private score?: number;
+  private health?: number;
+  private maxHealth?: number;
+  private threats?: number;
+  private levelIndex?: number;
+  private visitedCount?: number;
+  private gadget: SelectedGadget = "";
+  private message?: string;
+  private status?: RunStatus;
+  private chain?: number;
+  private muted?: boolean;
 
   public constructor(root: HTMLElement) {
     this.root = root;
     this.nodes = buildHud(root);
   }
 
-  public render(state: GameState): void {
-    const level = getLevelByIndex(state.progression.levelIndex);
-    const next = takeSnapshot(state, level);
-    const last = this.last;
+  /**
+   * `chain` is the takedown streak the hero is on and `muted` the sound state;
+   * both live outside `GameState`, and both default to the quiet case so a
+   * caller that does not track them still renders a correct HUD.
+   */
+  public render(state: GameState, chain = 0, muted = false): void {
+    const { player, progression } = state;
     const nodes = this.nodes;
 
-    if (next.score !== last.score) nodes.score.textContent = next.score;
-    if (next.health !== last.health || next.maxHealth !== last.maxHealth) {
-      this.writeHealth(next.health, next.maxHealth);
+    if (player.score !== this.score) {
+      this.score = player.score;
+      nodes.score.textContent = `${player.score} pts`;
     }
-    if (next.threats !== last.threats) nodes.threats.textContent = next.threats;
-    if (next.kicker !== last.kicker) nodes.kicker.textContent = next.kicker;
-    if (next.levelName !== last.levelName) {
-      nodes.levelName.textContent = next.levelName;
+    if (player.health !== this.health || player.maxHealth !== this.maxHealth) {
+      this.health = player.health;
+      this.maxHealth = player.maxHealth;
+      this.writeHealth(player.health, player.maxHealth);
     }
-    if (next.subtitle !== last.subtitle) {
-      nodes.subtitle.textContent = next.subtitle;
-    }
-    if (next.accent !== last.accent) {
-      this.root.style.setProperty("--level-accent", next.accent);
-    }
-    if (next.dots !== last.dots) this.writeDots(state.progression);
-    if (next.gadget !== last.gadget) this.writeGadget(last.gadget, next.gadget);
-    if (next.message !== last.message) {
-      nodes.message.textContent = next.message;
-    }
-    if (next.status !== last.status) this.writeStatus(next.status);
 
-    this.last = next;
+    const threats = countLivingEnemies(state);
+    if (threats !== this.threats) {
+      this.threats = threats;
+      nodes.threats.textContent = threatLabel(threats);
+    }
+
+    // Name, subtitle, accent and kicker all turn over together on a transition.
+    if (progression.levelIndex !== this.levelIndex) {
+      this.levelIndex = progression.levelIndex;
+      this.writeLevel(progression.levelIndex);
+    }
+    // `visitedLevelIds` only ever grows, so its length is a faithful stand-in
+    // for its contents and costs no join.
+    if (progression.visitedLevelIds.length !== this.visitedCount) {
+      this.visitedCount = progression.visitedLevelIds.length;
+      this.writeDots(progression);
+    }
+
+    if (player.gadget !== this.gadget) {
+      this.writeGadget(this.gadget, player.gadget);
+      this.gadget = player.gadget;
+    }
+    if (player.message !== this.message) {
+      this.message = player.message;
+      nodes.message.textContent = player.message;
+    }
+    if (chain !== this.chain) {
+      this.chain = chain;
+      this.writeChain(chain);
+    }
+    if (muted !== this.muted) {
+      this.muted = muted;
+      this.writeMute(muted);
+    }
+
+    const status = bannerStatus(state);
+    if (status !== this.status) {
+      this.status = status;
+      this.writeStatus(status);
+    }
   }
 
   private writeHealth(health: number, maxHealth: number): void {
@@ -140,6 +151,14 @@ export class Hud {
     this.nodes.bar.setAttribute("aria-valuenow", String(health));
     this.nodes.bar.setAttribute("aria-valuemax", String(maxHealth));
     this.nodes.health.textContent = `Health ${health}/${maxHealth}`;
+  }
+
+  private writeLevel(levelIndex: number): void {
+    const level = getLevelByIndex(levelIndex);
+    this.nodes.kicker.textContent = `Level ${levelIndex + 1} / ${LEVELS.length}`;
+    this.nodes.levelName.textContent = level.name;
+    this.nodes.subtitle.textContent = level.subtitle;
+    this.root.style.setProperty("--level-accent", level.accent);
   }
 
   private writeDots(progression: GameState["progression"]): void {
@@ -159,6 +178,29 @@ export class Hud {
     if (active !== "") {
       this.nodes.gadgets.get(active)?.classList.add("is-active");
     }
+  }
+
+  private writeChain(chain: number): void {
+    const combo = this.nodes.combo;
+    if (chain < MIN_SHOWN_CHAIN) {
+      combo.hidden = true;
+      combo.textContent = "";
+      return;
+    }
+
+    combo.hidden = false;
+    combo.textContent = `${chain} chain`;
+    // The chip's heat is a CSS variable rather than a class per link, so the
+    // stylesheet decides how a long chain looks and this only counts.
+    combo.style.setProperty("--chain", String(Math.min(chain, MAX_HEAT)));
+  }
+
+  private writeMute(muted: boolean): void {
+    this.nodes.mute.classList.toggle("is-muted", muted);
+    this.nodes.mute.setAttribute(
+      "aria-label",
+      muted ? "Sound off. Press M to unmute." : "Sound on. Press M to mute.",
+    );
   }
 
   private writeStatus(status: RunStatus): void {

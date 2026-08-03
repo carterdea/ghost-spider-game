@@ -250,13 +250,10 @@ describe("progress dots", () => {
 
     const dots = Array.from(root.querySelectorAll(".level-dot"));
     expect(dots).toHaveLength(LEVELS.length);
-    expect(dots.map((dot) => dot.classList.contains("is-active"))).toEqual([
-      true,
-      true,
-      true,
-      false,
-      false,
-    ]);
+    // Everything up to and including the current district, and nothing past it.
+    expect(dots.map((dot) => dot.classList.contains("is-active"))).toEqual(
+      LEVELS.map((_, index) => index <= 2),
+    );
     expect(dots.filter((dot) => dot.classList.contains("is-current"))).toEqual([
       dots[2],
     ]);
@@ -291,6 +288,89 @@ describe("gadgets", () => {
       false,
       true,
     ]);
+  });
+});
+
+describe("combo chain", () => {
+  test("stays out of the way until there is a chain to show", () => {
+    hud.render(makeState({}), 0);
+    expect(query(root, ".combo").hidden).toBe(true);
+
+    hud.render(makeState({}), 1);
+    expect(query(root, ".combo").hidden).toBe(true);
+
+    hud.render(makeState({}), 2);
+    const combo = query(root, ".combo");
+    expect(combo.hidden).toBe(false);
+    expect(combo.textContent).toBe("2 chain");
+  });
+
+  test("runs hotter as the chain grows, and stops at the cap", () => {
+    const combo = query(root, ".combo");
+
+    hud.render(makeState({}), 3);
+    expect(combo.style.getPropertyValue("--chain")).toBe("3");
+
+    hud.render(makeState({}), 40);
+    expect(combo.style.getPropertyValue("--chain")).toBe("7");
+  });
+
+  test("clears itself when the chain breaks", () => {
+    hud.render(makeState({}), 4);
+    hud.render(makeState({}), 0);
+
+    const combo = query(root, ".combo");
+    expect(combo.hidden).toBe(true);
+    expect(combo.textContent).toBe("");
+  });
+
+  test("an unchanged chain writes nothing", () => {
+    const state = makeState({});
+    hud.render(state, 3);
+
+    const records = mutationsDuring(root, () => {
+      hud.render(state, 3);
+      hud.render(state, 3);
+    });
+
+    expect(records).toHaveLength(0);
+  });
+});
+
+describe("mute affordance", () => {
+  test("shows the sound state and says which it is", () => {
+    hud.render(makeState({}), 0, false);
+    const mute = query(root, ".mute");
+    expect(mute.classList.contains("is-muted")).toBe(false);
+    expect(mute.getAttribute("aria-label")).toContain("Sound on");
+
+    hud.render(makeState({}), 0, true);
+    expect(mute.classList.contains("is-muted")).toBe(true);
+    expect(mute.getAttribute("aria-label")).toContain("Sound off");
+
+    hud.render(makeState({}), 0, false);
+    expect(mute.classList.contains("is-muted")).toBe(false);
+  });
+
+  test("draws a speaker rather than shipping an icon", () => {
+    hud.render(makeState({}));
+
+    const svg = query(root, ".mute").querySelector("svg");
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(root.querySelectorAll(".mute path")).toHaveLength(4);
+  });
+
+  test("an unchanged sound state writes nothing", () => {
+    const state = makeState({});
+    hud.render(state, 0, true);
+
+    const records = mutationsDuring(root, () => {
+      hud.render(state, 0, true);
+      hud.render(state, 0, true);
+    });
+
+    expect(records).toHaveLength(0);
   });
 });
 

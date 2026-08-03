@@ -97,6 +97,8 @@ interface Options {
   floor?: boolean;
   /** Roof line a static slab presents its surface at, as `LevelBuilder` builds it. */
   roofTop?: number;
+  /** Right-hand edge of that slab. Unbounded when left out. */
+  roofRight?: number;
 }
 
 class Harness {
@@ -158,7 +160,11 @@ class Harness {
     if (options.floor && this.sprite.y + FEET >= GROUND_Y) {
       this.land(GROUND_Y);
     }
-    if (options.roofTop !== undefined && velocityY > 0) {
+    if (
+      options.roofTop !== undefined &&
+      velocityY > 0 &&
+      this.sprite.x <= (options.roofRight ?? Number.POSITIVE_INFINITY)
+    ) {
       this.separateRoof(options.roofTop);
     }
   }
@@ -202,6 +208,7 @@ describe("frame timing", () => {
         attached: false,
         released: false,
         jumped: false,
+        landingImpact: 0,
       });
       expect(harness.sprite.velocity).toEqual(before);
     }
@@ -303,6 +310,32 @@ describe("ground contact", () => {
     harness.run(12, {});
 
     expect(harness.sprite.y - restingY).toBeGreaterThan(20);
+  });
+
+  /** Drops the hero onto the harness floor and reports the landing's weight. */
+  const dropFrom = (height: number): number => {
+    const harness = new Harness({ x: 200, y: GROUND_Y - height });
+    for (let frame = 0; frame < 90; frame += 1) {
+      const impact = harness.frame({ floor: true }).landingImpact;
+      if (impact > 0) {
+        // Standing still afterwards is not a landing every frame.
+        for (let resting = 0; resting < 5; resting += 1) {
+          expect(harness.frame({ floor: true }).landingImpact).toBe(0);
+        }
+        return impact;
+      }
+    }
+    throw new Error("the hero never reached the floor");
+  };
+
+  test("reports the weight of a landing, once, and nothing while resting", () => {
+    expect(dropFrom(400)).toBeGreaterThan(300);
+  });
+
+  test("a gentle arrival weighs less than a long drop", () => {
+    const soft = dropFrom(60);
+    expect(soft).toBeGreaterThan(0);
+    expect(dropFrom(900)).toBeGreaterThan(soft);
   });
 
   test("absorbs a sideways shove reported only as touching", () => {
@@ -419,6 +452,81 @@ describe("web attach and release", () => {
 
     expect(harness.controller.releasedAnchor).toBeUndefined();
     expect(harness.controller.currentRope).toBeUndefined();
+  });
+});
+
+/**
+ * A pendulum bottoms out at `anchor.y + length`. Solved against the pavement,
+ * a rooftop catch happily picks an arc that dips hundreds of pixels *through*
+ * the roof, and the hero spends a second being dragged along it under a rope
+ * that never lifts. The catch has to clear the floor the hero is actually on.
+ */
+describe("launching off a roof", () => {
+  /** Level one's opening, to scale: a low roof and one anchor across the gap. */
+  const ROOF_TOP = 1080;
+  const ROOF_RIGHT = 560;
+  const SPAWN = { x: 340, y: ROOF_TOP - 60 };
+  const acrossTheGap: AnchorPoint[] = [{ x: 800, y: 768, source: "building" }];
+
+  /** Holds the web from spawn and reports every frame spent touching the roof. */
+  const draggedFrames = (frames: number): number => {
+    const harness = new Harness(SPAWN);
+    let dragged = 0;
+
+    for (let index = 0; index < frames; index += 1) {
+      const step = harness.frame({
+        actions: { web: true },
+        anchors: acrossTheGap,
+        roofTop: ROOF_TOP,
+        roofRight: ROOF_RIGHT,
+      });
+      if (step.rope && harness.sprite.body.blocked.down) {
+        dragged += 1;
+      }
+    }
+
+    return dragged;
+  };
+
+  test("a web caught at spawn lifts off instead of scraping the roof", () => {
+    // 45 frames is three quarters of a second: the whole of the old drag.
+    expect(draggedFrames(45)).toBe(0);
+  });
+
+  test("the launch clears the roof edge rather than stopping short of it", () => {
+    const harness = new Harness(SPAWN);
+    harness.run(45, {
+      actions: { web: true },
+      anchors: acrossTheGap,
+      roofTop: ROOF_TOP,
+      roofRight: ROOF_RIGHT,
+    });
+
+    expect(harness.sprite.x).toBeGreaterThan(ROOF_RIGHT);
+  });
+
+  test("a catch in open air takes no launch kick", () => {
+    const harness = new Harness({ x: 200, y: 200 });
+    // Far below the anchor row and far above any floor: an ordinary mid-air
+    // catch, which is the common case and must be left exactly as it was.
+    harness.run(20, { actions: { moveRight: true } });
+    const before = Math.hypot(
+      harness.sprite.velocity.x,
+      harness.sprite.velocity.y,
+    );
+
+    const caught = harness.frame({
+      actions: { web: true, moveRight: true },
+      anchors: [{ x: 700, y: 120, source: "building" }],
+    });
+    const after = Math.hypot(
+      harness.sprite.velocity.x,
+      harness.sprite.velocity.y,
+    );
+
+    expect(caught.rope).toBeDefined();
+    // Gravity over one frame is the only change a plain catch may make.
+    expect(Math.abs(after - before)).toBeLessThan(60);
   });
 });
 
