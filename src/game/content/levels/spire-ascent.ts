@@ -2,7 +2,9 @@ import { type LevelBlueprint, STREET_Y, WORLD_HEIGHT } from "./authoring";
 
 /**
  * Level 3 — vertical whiplash. Narrow spires alternate with low blocks, so the
- * route is a saw-tooth of 500px climbs and drops instead of a flat run.
+ * route is a saw-tooth of 500px climbs and drops instead of a flat run. The
+ * spawn sits at the far end of the opening block so the first spire's roof —
+ * not just its facade — is already inside web reach.
  */
 export const spireAscent = {
   id: "spire-ascent",
@@ -13,7 +15,7 @@ export const spireAscent = {
   width: 4400,
   height: WORLD_HEIGHT,
   streetY: STREET_Y,
-  spawnX: 230,
+  spawnX: 380,
   goalX: 4180,
   threatScale: 1.25,
   buildingRows: [

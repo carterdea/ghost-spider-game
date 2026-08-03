@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 import type Phaser from "phaser";
 import type { AnchorPoint } from "../../game/content/levels";
 import { type ActionState, createEmptyActions } from "../../game/input/actions";
-import { PlayerController, type PlayerStep } from "./PlayerController";
+import { ARCADE_STEP_HZ, PLATFORM_THICKNESS } from "../world/LevelBuilder";
+import {
+  MAX_TRANSPORT_SPEED,
+  PlayerController,
+  type PlayerStep,
+} from "./PlayerController";
 import { BODY_BOXES } from "./placement";
 
 const GROUND_Y = 1450;
@@ -90,11 +95,15 @@ interface Options {
   deltaMs?: number;
   /** Off by default so the hero can be dropped into open air. */
   floor?: boolean;
+  /** Roof line a static slab presents its surface at, as `LevelBuilder` builds it. */
+  roofTop?: number;
 }
 
 class Harness {
   public readonly sprite = new SpriteStub();
   public readonly controller: PlayerController;
+  /** Furthest the body travels in one Arcade step across the whole run. */
+  public maxStepTravel = 0;
 
   /** `spawn` is a standing position: the hero's feet land on `spawn.y`. */
   public constructor(spawn: { x: number; y: number }) {
@@ -114,7 +123,7 @@ class Harness {
       deltaMs,
     );
 
-    this.integrate(deltaMs / 1000, options.floor ?? false);
+    this.integrate(deltaMs / 1000, options);
     this.sprite.scene.time.now += deltaMs;
     return step;
   }
@@ -125,23 +134,55 @@ class Harness {
     }
   }
 
-  private integrate(seconds: number, floor: boolean): void {
+  private integrate(seconds: number, options: Options): void {
     const clamp = (value: number): number =>
       Math.max(
         -this.sprite.maxVelocity,
         Math.min(this.sprite.maxVelocity, value),
       );
 
-    this.sprite.x += clamp(this.sprite.velocity.x) * seconds;
-    this.sprite.y += clamp(this.sprite.velocity.y) * seconds;
+    const velocityX = clamp(this.sprite.velocity.x);
+    const velocityY = clamp(this.sprite.velocity.y);
+    // Arcade always advances by a fixed step, however long the frame was, so
+    // that — not the frame — is the gap between two collision checks.
+    this.maxStepTravel = Math.max(
+      this.maxStepTravel,
+      Math.hypot(velocityX, velocityY) / ARCADE_STEP_HZ,
+    );
+
+    this.sprite.x += velocityX * seconds;
+    this.sprite.y += velocityY * seconds;
 
     this.sprite.body.blocked = noContact();
     this.sprite.body.touching = noContact();
-    if (floor && this.sprite.y + FEET >= GROUND_Y) {
-      this.sprite.y = GROUND_Y - FEET;
-      this.sprite.body.blocked.down = true;
-      this.sprite.body.blocked.none = false;
+    if (options.floor && this.sprite.y + FEET >= GROUND_Y) {
+      this.land(GROUND_Y);
     }
+    if (options.roofTop !== undefined && velocityY > 0) {
+      this.separateRoof(options.roofTop);
+    }
+  }
+
+  /**
+   * A static roof slab, separated the way Arcade does it: the body is advanced
+   * a whole step first and only an overlap that is still there afterwards gets
+   * resolved. Nothing looks at the path between the two positions, which is why
+   * a slab has to be thicker than one step of travel.
+   */
+  private separateRoof(top: number): void {
+    const bottom = this.sprite.y + FEET;
+    const overlaps =
+      bottom > top &&
+      bottom - BODY_BOXES.hero.height < top + PLATFORM_THICKNESS;
+    if (overlaps) {
+      this.land(top);
+    }
+  }
+
+  private land(surface: number): void {
+    this.sprite.y = surface - FEET;
+    this.sprite.body.blocked.down = true;
+    this.sprite.body.blocked.none = false;
   }
 }
 
@@ -378,5 +419,69 @@ describe("web attach and release", () => {
 
     expect(harness.controller.releasedAnchor).toBeUndefined();
     expect(harness.controller.currentRope).toBeUndefined();
+  });
+});
+
+/**
+ * Arcade does no swept collision for sprites: it advances a body a whole step
+ * and only then looks for an overlap. A platform thinner than one step of
+ * travel can therefore be crossed without ever being touched. Roofs were 20px
+ * against a swing that moves ~21px per step, so the hero could pass through the
+ * skyline; `LevelBuilder` now builds every slab thicker than the speed cap.
+ */
+describe("platform thickness", () => {
+  /** A long anchor row high overhead, so a hard swing can run flat out. */
+  const skyline = (): AnchorPoint[] => {
+    const anchors: AnchorPoint[] = [];
+    for (let x = 400; x <= 6000; x += 200) {
+      anchors.push({ x, y: 560, source: "building" });
+    }
+    return anchors;
+  };
+
+  /**
+   * Dives, catches, then reels in: the fastest the hero ever moves. Returns the
+   * lowest point the sole of the collision box reached.
+   */
+  const swingHard = (harness: Harness, roofTop?: number): number => {
+    const anchors = skyline();
+    let lowest = Number.NEGATIVE_INFINITY;
+
+    for (let index = 0; index < 260; index += 1) {
+      harness.frame({
+        actions: { web: true, moveRight: true, reelIn: index > 30 },
+        anchors,
+        roofTop,
+      });
+      lowest = Math.max(lowest, harness.sprite.y + FEET);
+    }
+
+    return lowest;
+  };
+
+  test("a full-speed swing never out-runs a roof slab", () => {
+    const harness = new Harness({ x: 200, y: 400 });
+    swingHard(harness);
+
+    // The run has to be a real swing, or the budget below proves nothing.
+    expect(harness.maxStepTravel * ARCADE_STEP_HZ).toBeGreaterThan(1200);
+    expect(harness.maxStepTravel).toBeLessThan(PLATFORM_THICKNESS);
+  });
+
+  test("no attainable speed clears a slab in one step, not just this swing", () => {
+    // Arcade also clamps the body to `MAX_TRANSPORT_SPEED`, so this is the
+    // widest gap between two collision checks the game can ever produce.
+    expect(MAX_TRANSPORT_SPEED / ARCADE_STEP_HZ).toBeLessThan(
+      PLATFORM_THICKNESS,
+    );
+  });
+
+  test("a swing driven onto a roof stops on its surface, not below it", () => {
+    const roofTop = 1000;
+    const harness = new Harness({ x: 200, y: 400 });
+
+    // Exactly the surface: the arc reached the slab and was separated onto it
+    // rather than passing through to the far side.
+    expect(swingHard(harness, roofTop)).toBe(roofTop);
   });
 });

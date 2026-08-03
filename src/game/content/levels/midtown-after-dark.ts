@@ -1,8 +1,10 @@
 import { type LevelBlueprint, STREET_Y, WORLD_HEIGHT } from "./authoring";
 
 /**
- * Level 1 — the teaching level. Even roof heights, short 240px gaps, and a
- * single roof patroller so the first web-line always lands.
+ * Level 1 — the teaching level. Short 240px gaps and a single roof patroller so
+ * the first web-line always lands. The hero starts on a low block with the
+ * taller block opposite already inside web reach, so the run opens on a swing
+ * rather than a sprint to the first ledge.
  */
 export const midtownAfterDark = {
   id: "midtown-after-dark",
@@ -13,12 +15,12 @@ export const midtownAfterDark = {
   width: 3600,
   height: WORLD_HEIGHT,
   streetY: STREET_Y,
-  spawnX: 280,
+  spawnX: 340,
   goalX: 3330,
   threatScale: 1,
   buildingRows: [
-    { x: 0, width: 560, roofY: 960, kind: "block" },
-    { x: 800, width: 520, roofY: 840, kind: "block" },
+    { x: 0, width: 560, roofY: 1080, kind: "block" },
+    { x: 800, width: 520, roofY: 780, kind: "block" },
     { x: 1560, width: 460, roofY: 1020, kind: "lowrise" },
     { x: 2260, width: 560, roofY: 720, kind: "tower" },
     { x: 3060, width: 540, roofY: 900, kind: "block" },

@@ -41,7 +41,7 @@ const MAX_SIM_SECONDS = 1 / 20;
  * `Number.MAX_SAFE_INTEGER` disabled the engine's last line of defence, so one
  * poisoned frame could fling the hero out of the level.
  */
-const MAX_TRANSPORT_SPEED = 2400;
+export const MAX_TRANSPORT_SPEED = 2400;
 
 /**
  * Sim time and transport time for one frame.

@@ -2,7 +2,8 @@ import { type LevelBlueprint, STREET_Y, WORLD_HEIGHT } from "./authoring";
 
 /**
  * Level 2 — a lower, greener skyline. Gaps widen to 320px over the park and a
- * street gunner forces the hero down to pavement level mid-route.
+ * street gunner forces the hero down to pavement level mid-route. The hero
+ * starts on the low park-side roof, already in reach of the block opposite.
  */
 export const parkSidePursuit = {
   id: "park-side-pursuit",
@@ -13,12 +14,12 @@ export const parkSidePursuit = {
   width: 4000,
   height: WORLD_HEIGHT,
   streetY: STREET_Y,
-  spawnX: 80,
+  spawnX: 340,
   goalX: 3800,
   threatScale: 1.1,
   buildingRows: [
-    { x: 0, width: 520, roofY: 1000, kind: "lowrise" },
-    { x: 800, width: 440, roofY: 860, kind: "block" },
+    { x: 0, width: 520, roofY: 1100, kind: "lowrise" },
+    { x: 800, width: 440, roofY: 800, kind: "block" },
     { x: 1560, width: 480, roofY: 1060, kind: "lowrise" },
     { x: 2360, width: 520, roofY: 760, kind: "tower" },
     { x: 3200, width: 800, roofY: 980, kind: "block" },
@@ -28,8 +29,8 @@ export const parkSidePursuit = {
       id: "park-robot-roof",
       kind: "robot",
       lane: "roof",
-      patrolMinX: 320,
-      patrolMaxX: 500,
+      patrolMinX: 880,
+      patrolMaxX: 1140,
     },
     {
       id: "park-gunner-street",

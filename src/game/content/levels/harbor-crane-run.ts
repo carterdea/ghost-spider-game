@@ -2,7 +2,8 @@ import { type LevelBlueprint, STREET_Y, WORLD_HEIGHT } from "./authoring";
 
 /**
  * Level 4 — the long haul. Gaps stretch to 400px and every crossing swaps roof
- * height, so momentum has to be rebuilt on each landing. Six patrols.
+ * height, so momentum has to be rebuilt on each landing. Six patrols. The hero
+ * starts on the low dock roof, with the gantry opposite already in web reach.
  */
 export const harborCraneRun = {
   id: "harbor-crane-run",
@@ -13,12 +14,12 @@ export const harborCraneRun = {
   width: 4800,
   height: WORLD_HEIGHT,
   streetY: STREET_Y,
-  spawnX: 80,
+  spawnX: 420,
   goalX: 4590,
   threatScale: 1.4,
   buildingRows: [
-    { x: 0, width: 520, roofY: 920, kind: "block" },
-    { x: 880, width: 460, roofY: 1080, kind: "lowrise" },
+    { x: 0, width: 520, roofY: 1060, kind: "block" },
+    { x: 880, width: 460, roofY: 760, kind: "block" },
     { x: 1720, width: 560, roofY: 700, kind: "tower" },
     { x: 2660, width: 420, roofY: 1020, kind: "lowrise" },
     { x: 3480, width: 500, roofY: 640, kind: "tower" },
@@ -29,23 +30,23 @@ export const harborCraneRun = {
       id: "harbor-gunner-dock",
       kind: "gunner",
       lane: "roof",
-      patrolMinX: 320,
-      patrolMaxX: 500,
+      patrolMinX: 900,
+      patrolMaxX: 1080,
     },
     {
       id: "harbor-drone-inlet",
       kind: "drone",
       lane: "air",
       y: 780,
-      patrolMinX: 560,
-      patrolMaxX: 840,
+      patrolMinX: 640,
+      patrolMaxX: 860,
     },
     {
       id: "harbor-robot-low",
       kind: "robot",
       lane: "roof",
-      patrolMinX: 940,
-      patrolMaxX: 1280,
+      patrolMinX: 1140,
+      patrolMaxX: 1320,
     },
     {
       id: "harbor-gunner-crane",

@@ -1,4 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { BODY_BOXES } from "../../phaser/actors/placement";
+import {
+  chooseAttachment,
+  DEFAULT_ATTACHMENT_TUNING,
+} from "../simulation/physics/attachment";
+import { DEFAULT_SWING_TUNING } from "../simulation/physics/swing";
 import {
   type Rect,
   rectBottom,
@@ -39,6 +45,20 @@ const MIN_BUILDING_GAP = 140;
  * in a row.
  */
 const SPAWN_PATROL_CLEARANCE = 200;
+/**
+ * Every character frame is 192x192 with a centred origin (see `placement.ts`),
+ * so the hero's body centre — the point `PlayerController` throws a web from —
+ * sits this far above the standing position level data declares. Probing at the
+ * feet would hand the spawn 96px of clearance the running game never has.
+ */
+const HERO_CENTRE_LIFT =
+  BODY_BOXES.hero.offsetY + BODY_BOXES.hero.height - 192 / 2;
+/** The tuning `PlayerController` hands `chooseAttachment`, assembled the same way. */
+const CATCH_TUNING = {
+  ...DEFAULT_ATTACHMENT_TUNING,
+  minRopeLength: DEFAULT_SWING_TUNING.minRopeLength,
+  maxRopeLength: DEFAULT_SWING_TUNING.maxRopeLength,
+};
 const ALLOWED_BACKDROPS = new Set([
   "environment-midtown",
   "environment-park",
@@ -67,6 +87,12 @@ const sampleXs = (level: LevelDefinition): number[] => {
   }
   return samples;
 };
+
+/** Where a hero standing on the spawn actually throws a web from. */
+const spawnThrowPoint = (level: LevelDefinition): { x: number; y: number } => ({
+  x: level.playerSpawn.x,
+  y: level.playerSpawn.y - HERO_CENTRE_LIFT,
+});
 
 const describeLevel = (level: LevelDefinition): string =>
   `${level.id} (${LEVELS.indexOf(level) + 1}/${LEVELS.length})`;
@@ -141,6 +167,63 @@ describe.each(
       const heightAboveRoof = (roofY ?? 0) - point.y;
       expect(heightAboveRoof).toBeGreaterThan(0);
       expect(heightAboveRoof).toBeLessThanOrEqual(160);
+    }
+  });
+
+  /**
+   * The game is web-swinging, so the very first press of the web key has to
+   * catch. Four of five districts once opened with a forced run or fall because
+   * nothing was in reach of the spawn, and the route-wide probes above never
+   * looked at it. `chooseAttachment` is the real catch rule — stricter than
+   * `anchorsInReach`, which knows nothing about ground clearance.
+   */
+  test("a web catches from the spawn, on an arc that leads to the goal", () => {
+    const from = spawnThrowPoint(level);
+    const heading = Math.sign(level.goal.x - level.playerSpawn.x);
+    const attachment = chooseAttachment(
+      level.anchors,
+      from,
+      heading,
+      level.streetY,
+      CATCH_TUNING,
+    );
+
+    expect({
+      spawn: level.playerSpawn,
+      caught: attachment !== undefined,
+    }).toEqual({ spawn: level.playerSpawn, caught: true });
+    if (!attachment) {
+      return;
+    }
+
+    // Ahead of the hero, high enough for a real pendulum rather than a stubby
+    // hop, and bottoming out clear of the pavement.
+    expect((attachment.anchor.x - from.x) * heading).toBeGreaterThan(
+      CATCH_TUNING.forwardBias,
+    );
+    expect(from.y - attachment.anchor.y).toBeGreaterThanOrEqual(
+      CATCH_TUNING.minSwingHeight,
+    );
+    expect(attachment.anchor.y + attachment.targetLength).toBeLessThanOrEqual(
+      level.streetY - CATCH_TUNING.groundClearance,
+    );
+  });
+
+  test("the spawn catch does not depend on which way the hero faces", () => {
+    const from = spawnThrowPoint(level);
+
+    for (const facing of [1, -1]) {
+      const attachment = chooseAttachment(
+        level.anchors,
+        from,
+        facing,
+        level.streetY,
+        CATCH_TUNING,
+      );
+      expect({ facing, caught: attachment !== undefined }).toEqual({
+        facing,
+        caught: true,
+      });
     }
   });
 

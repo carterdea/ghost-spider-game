@@ -18,15 +18,23 @@ const DEPTH = {
   goal: -1,
 } as const;
 
-/** The street is a solid floor: fall off the roofs and you land on pavement. */
-const STREET_FLOOR_THICKNESS = 64;
+/**
+ * Arcade steps at a fixed 60Hz — `main.ts` leaves Phaser's default — and does no
+ * swept collision for sprites: it advances a body a whole step and only then
+ * looks for an overlap. So the furthest anything can travel between two
+ * collision checks is its speed cap divided by this.
+ */
+export const ARCADE_STEP_HZ = 60;
 
 /**
- * Roof slabs hang below the roof line rather than straddling it, so the surface
- * an actor stands on is exactly `bounds.y` — the line the level data declares
- * and the roof props are drawn against.
+ * Depth of every collidable slab: the street floor and the roofs alike. It has
+ * to stay thicker than one step of travel, or a body can end a step clear on the
+ * far side of a platform it started clear in front of. The player is the fastest
+ * thing in the world at `MAX_TRANSPORT_SPEED` (2400px/s), which is 40px per
+ * step; roofs used to be 20px, thinner than the hero's own swing covers.
+ * `PlayerController.test.ts` holds the two apart.
  */
-const ROOF_THICKNESS = 20;
+export const PLATFORM_THICKNESS = 64;
 
 const isPositive = (value: number): boolean =>
   Number.isFinite(value) && value > 0;
@@ -204,15 +212,16 @@ export class LevelBuilder {
     }
   }
 
+  /** The street is a solid floor: fall off the roofs and you land on pavement. */
   private buildStreetFloor(level: LevelDefinition, world: LevelWorld): void {
     const floor = world.platforms.create(
       level.width / 2,
-      level.streetY + STREET_FLOOR_THICKNESS / 2,
+      level.streetY + PLATFORM_THICKNESS / 2,
       "roof",
     ) as Phaser.Physics.Arcade.Sprite;
     floor.setVisible(false);
     floor.displayWidth = level.width;
-    floor.displayHeight = STREET_FLOOR_THICKNESS;
+    floor.displayHeight = PLATFORM_THICKNESS;
     floor.refreshBody();
   }
 
@@ -292,14 +301,17 @@ export class LevelBuilder {
       );
     }
 
+    // The slab hangs below the roof line rather than straddling it, so the
+    // surface an actor stands on is exactly `bounds.y` — the line the level data
+    // declares and the roof props are drawn against.
     const roof = world.platforms.create(
       center.x,
-      bounds.y + ROOF_THICKNESS / 2,
+      bounds.y + PLATFORM_THICKNESS / 2,
       "roof",
     ) as Phaser.Physics.Arcade.Sprite;
     roof.setVisible(false);
     roof.displayWidth = bounds.width;
-    roof.displayHeight = ROOF_THICKNESS;
+    roof.displayHeight = PLATFORM_THICKNESS;
     roof.refreshBody();
   }
 
