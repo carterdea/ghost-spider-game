@@ -1,9 +1,12 @@
 import { type LevelBlueprint, STREET_Y, WORLD_HEIGHT } from "./authoring";
 
 /**
- * Level 2 — a lower, greener skyline. Gaps widen to 320px over the park and a
- * street gunner forces the hero down to pavement level mid-route. The hero
- * starts on the low park-side roof, already in reach of the block opposite.
+ * Level 2 — a lower, greener skyline, and the first district with anyone in it.
+ *
+ * Gaps widen to 320px over the park, and one roof patroller stands squarely on
+ * the route: the whole level is the lesson that a patrol can be swung over,
+ * dropped on, or webbed from range. One is deliberate — the run does not start
+ * asking the hero to fight and travel at once.
  */
 export const parkSidePursuit = {
   id: "park-side-pursuit",
@@ -31,28 +34,6 @@ export const parkSidePursuit = {
       lane: "roof",
       patrolMinX: 880,
       patrolMaxX: 1140,
-    },
-    {
-      id: "park-gunner-street",
-      kind: "gunner",
-      lane: "street",
-      patrolMinX: 1300,
-      patrolMaxX: 1720,
-    },
-    {
-      id: "park-drone-gap",
-      kind: "drone",
-      lane: "air",
-      y: 700,
-      patrolMinX: 2060,
-      patrolMaxX: 2340,
-    },
-    {
-      id: "park-robot-tower",
-      kind: "robot",
-      lane: "roof",
-      patrolMinX: 2420,
-      patrolMaxX: 2820,
     },
   ],
 } as const satisfies LevelBlueprint;

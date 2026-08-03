@@ -1,9 +1,13 @@
 import { type LevelBlueprint, STREET_Y, WORLD_HEIGHT } from "./authoring";
 
 /**
- * Level 4 — the long haul. Gaps stretch to 400px and every crossing swaps roof
+ * Level 7 — the long haul. Gaps stretch to 400px and every crossing swaps roof
  * height, so momentum has to be rebuilt on each landing. Six patrols. The hero
  * starts on the low dock roof, with the gantry opposite already in web reach.
+ *
+ * One cargo hoist works the deepest inlet, three districts after Drydock taught
+ * them: the 320px climb out of the low block is the one place on the route
+ * where a rebuilt swing costs more than a ride.
  */
 export const harborCraneRun = {
   id: "harbor-crane-run",
@@ -24,6 +28,15 @@ export const harborCraneRun = {
     { x: 2660, width: 420, roofY: 1020, kind: "lowrise" },
     { x: 3480, width: 500, roofY: 640, kind: "tower" },
     { x: 4380, width: 420, roofY: 900, kind: "block" },
+  ],
+  platformRows: [
+    {
+      x: 2350,
+      y: 1160,
+      width: 200,
+      kind: "lift",
+      motion: { dx: 0, dy: -380, travelMs: 2600, holdMs: 1000 },
+    },
   ],
   enemyRows: [
     {

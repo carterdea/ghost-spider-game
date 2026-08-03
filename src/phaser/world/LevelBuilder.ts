@@ -1,12 +1,31 @@
 import type Phaser from "phaser";
 import { artKeys } from "../../game/assets/manifest";
-import type { Building, LevelDefinition } from "../../game/content/levels";
+import type {
+  Building,
+  Cable,
+  LevelDefinition,
+  Platform,
+  PlatformCycle,
+  PlatformMotion,
+} from "../../game/content/levels";
+import { cablePoints, cableSegments, roofYAt } from "../../game/content/levels";
 import {
   rectBottom,
   rectCenter,
   rectRight,
+  type Vec2,
 } from "../../game/simulation/physics/vector";
 import { LevelWorld } from "./LevelWorld";
+import {
+  carryRiders,
+  cyclePeriod,
+  isLedgeSolid,
+  ledgeAlphaAt,
+  ledgePhaseAt,
+  motionPeriod,
+  platformOffsetAt,
+  type Rider,
+} from "./movers";
 
 const DEPTH = {
   sky: -12,
@@ -16,7 +35,12 @@ const DEPTH = {
   street: -6,
   streetProp: -4,
   goal: -1,
+  cable: 1,
+  platform: 6,
 } as const;
+
+/** Deck tint while a glass panel is failing: the same red as the district accent. */
+const LEDGE_WARN_TINT = 0xff5f6d;
 
 /**
  * Arcade steps at a fixed 60Hz — `main.ts` leaves Phaser's default — and does no
@@ -68,6 +92,19 @@ const assertBuildable = (level: LevelDefinition): void => {
     }
   });
 
+  level.platforms.forEach((platform, index) => {
+    const { width, height } = platform.bounds;
+    if (!isPositive(width) || !isPositive(height)) {
+      problems.push(`platform ${index} is ${width}x${height}`);
+    }
+    if (platform.motion && !isPositive(platform.motion.travelMs)) {
+      problems.push(`platform ${index} never finishes its run`);
+    }
+    if (platform.cycle && !isPositive(cyclePeriod(platform.cycle))) {
+      problems.push(`platform ${index} has an empty cycle`);
+    }
+  });
+
   if (problems.length > 0) {
     throw new Error(`Cannot build level "${level.id}": ${problems.join("; ")}`);
   }
@@ -92,6 +129,12 @@ export class LevelBuilder {
     this.buildStreetFloor(level, world);
     for (const building of level.buildings) {
       this.buildBuilding(building, level, world);
+    }
+    for (const cable of level.cables) {
+      this.buildCable(cable, level, world);
+    }
+    for (const platform of level.platforms) {
+      this.buildPlatform(platform, world);
     }
     this.buildAmbience(level, world);
     this.buildGoal(level, world);
@@ -315,6 +358,166 @@ export class LevelBuilder {
     roof.refreshBody();
   }
 
+  /**
+   * A strung line and the two masts holding it up. The curve drawn here is the
+   * same one `cablePointAt` samples anchors from, at four times the resolution,
+   * so every catchable clamp sits on wire the player can see.
+   */
+  private buildCable(
+    cable: Cable,
+    level: LevelDefinition,
+    world: LevelWorld,
+  ): void {
+    const clamps = cableSegments(cable);
+    const line = world.track(this.scene.add.graphics().setDepth(DEPTH.cable));
+
+    for (const tip of [cable.from, cable.to]) {
+      const base = roofYAt(level.buildings, tip.x) ?? level.streetY;
+      line.fillStyle(0x161f33, 1);
+      line.fillRect(tip.x - 6, tip.y, 12, base - tip.y);
+      line.fillStyle(0x5c6c94, 1);
+      line.fillRect(tip.x - 14, tip.y - 6, 28, 8);
+    }
+
+    const curve = cablePoints(cable, clamps * 4);
+    line.lineStyle(6, 0x0b1120, 0.85);
+    strokeThrough(line, curve);
+    line.lineStyle(2, 0xa8bde3, 0.9);
+    strokeThrough(line, curve);
+
+    // A bead on every clamp: this is where a web can actually bite.
+    line.fillStyle(0xffe066, 0.92);
+    for (const point of cablePoints(cable, clamps)) {
+      line.fillCircle(point.x, point.y, 5);
+    }
+  }
+
+  private buildPlatform(platform: Platform, world: LevelWorld): void {
+    const { bounds } = platform;
+    const home = rectCenter(bounds);
+
+    if (platform.motion) {
+      this.buildRail(platform.motion, home, world);
+    }
+
+    const deck = world.track(
+      this.scene.add
+        .tileSprite(
+          home.x,
+          home.y,
+          bounds.width,
+          bounds.height,
+          platform.kind === "ledge" ? "glassLedge" : "platformDeck",
+        )
+        .setDepth(DEPTH.platform),
+    );
+
+    const body = world.platforms.create(
+      home.x,
+      bounds.y + PLATFORM_THICKNESS / 2,
+      "roof",
+    ) as Phaser.Physics.Arcade.Sprite;
+    body.setVisible(false);
+    body.displayWidth = bounds.width;
+    body.displayHeight = PLATFORM_THICKNESS;
+    body.refreshBody();
+
+    if (platform.motion) {
+      this.driveMotion(platform, platform.motion, deck, body, world);
+    }
+    if (platform.cycle) {
+      this.driveCycle(platform.cycle, deck, body, world);
+    }
+  }
+
+  /**
+   * The rail a mover runs on. Drawn end to end and capped at both stops, so the
+   * whole route — and where the deck will come to rest — is legible before the
+   * hero commits to the jump.
+   */
+  private buildRail(
+    motion: PlatformMotion,
+    home: Vec2,
+    world: LevelWorld,
+  ): void {
+    const rail = world.track(
+      this.scene.add.graphics().setDepth(DEPTH.platform - 0.5),
+    );
+    const end = { x: home.x + motion.dx, y: home.y + motion.dy };
+
+    rail.lineStyle(6, 0x0b1120, 0.75);
+    rail.lineBetween(home.x, home.y, end.x, end.y);
+    rail.lineStyle(2, 0x8397bd, 0.8);
+    rail.lineBetween(home.x, home.y, end.x, end.y);
+
+    rail.fillStyle(0xf7c948, 0.85);
+    for (const stop of [home, end]) {
+      rail.fillCircle(stop.x, stop.y, 6);
+    }
+  }
+
+  private driveMotion(
+    platform: Platform,
+    motion: PlatformMotion,
+    deck: Phaser.GameObjects.TileSprite,
+    body: Phaser.Physics.Arcade.Sprite,
+    world: LevelWorld,
+  ): void {
+    const home = rectCenter(platform.bounds);
+    const period = motionPeriod(motion);
+    const driver = { t: 0 };
+    const half = platform.bounds.width / 2;
+    let previousX = home.x;
+
+    world.tween({
+      targets: driver,
+      t: 1,
+      duration: period,
+      repeat: -1,
+      ease: "Linear",
+      onUpdate: () => {
+        const offset = platformOffsetAt(motion, driver.t * period);
+        const x = home.x + offset.x;
+        const surfaceY = platform.bounds.y + offset.y;
+
+        deck.setPosition(x, home.y + offset.y);
+        body.setPosition(x, surfaceY + PLATFORM_THICKNESS / 2);
+        body.refreshBody();
+
+        carryRiders(
+          arcadeRiders(this.scene),
+          { left: x - half, right: x + half, top: surfaceY },
+          x - previousX,
+        );
+        previousX = x;
+      },
+    });
+  }
+
+  private driveCycle(
+    cycle: PlatformCycle,
+    deck: Phaser.GameObjects.TileSprite,
+    body: Phaser.Physics.Arcade.Sprite,
+    world: LevelWorld,
+  ): void {
+    const period = cyclePeriod(cycle);
+    const driver = { t: 0 };
+
+    world.tween({
+      targets: driver,
+      t: 1,
+      duration: period,
+      repeat: -1,
+      ease: "Linear",
+      onUpdate: () => {
+        const phase = ledgePhaseAt(cycle, driver.t * period);
+        deck.setAlpha(ledgeAlphaAt(phase));
+        deck.setTint(phase.state === "warn" ? LEDGE_WARN_TINT : 0xffffff);
+        setBodyEnabled(body, isLedgeSolid(phase.state));
+      },
+    });
+  }
+
   private buildAmbience(level: LevelDefinition, world: LevelWorld): void {
     const flights = Math.max(2, Math.round(level.width / 1800));
     for (let index = 0; index < flights; index += 1) {
@@ -382,3 +585,58 @@ export class LevelBuilder {
     });
   }
 }
+
+/** One open polyline through `points`, so a sagging cable draws as one stroke. */
+const strokeThrough = (
+  graphics: Phaser.GameObjects.Graphics,
+  points: readonly Vec2[],
+): void => {
+  graphics.beginPath();
+  graphics.moveTo(points[0].x, points[0].y);
+  for (const point of points.slice(1)) {
+    graphics.lineTo(point.x, point.y);
+  }
+  graphics.strokePath();
+};
+
+/**
+ * Takes a platform body out of collision without destroying it. A disabled
+ * static body is skipped by every collider already registered against the
+ * group, which is how a glass panel stops being a floor and starts being one
+ * again without the scene having to know it happened.
+ */
+const setBodyEnabled = (
+  sprite: Phaser.Physics.Arcade.Sprite,
+  enabled: boolean,
+): void => {
+  const body = sprite.body;
+  if (body) {
+    body.enable = enabled;
+  }
+};
+
+/**
+ * Every dynamic body in the world, viewed as something a deck could carry.
+ *
+ * Arcade bodies read their position back from their game object each frame, so
+ * a carry has to move the object rather than the body, or the next `preUpdate`
+ * would undo it.
+ */
+const arcadeRiders = function* (scene: Phaser.Scene): Generator<Rider> {
+  for (const body of scene.physics.world.bodies.getArray()) {
+    const rider = body.gameObject as Phaser.GameObjects.Sprite | undefined;
+    if (!body.enable || !rider) {
+      continue;
+    }
+    yield {
+      bounds: {
+        left: body.position.x,
+        right: body.position.x + body.width,
+        bottom: body.position.y + body.height,
+      },
+      moveBy: (dx: number) => {
+        rider.x += dx;
+      },
+    };
+  }
+};

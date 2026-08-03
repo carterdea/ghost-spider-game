@@ -1,12 +1,17 @@
 import { rectLeft, rectRight, rectTop } from "../../simulation/physics/vector";
 import type { EnemyKind } from "../../simulation/state";
-import { generateBuildingAnchors } from "./anchors";
+import { generateBuildingAnchors, generateCableAnchors } from "./anchors";
 import type {
   AnchorPoint,
   Building,
   BuildingKind,
+  Cable,
   EnemySpawn,
   LevelDefinition,
+  Platform,
+  PlatformCycle,
+  PlatformKind,
+  PlatformMotion,
 } from "./types";
 
 /** Shared vertical framing: every level uses the same sky height and street line. */
@@ -32,12 +37,33 @@ const BASE_STATS: Record<
   drone: { health: 28, damage: 8, speed: 120 },
 };
 
+/** Every platform deck is this deep, so the art and the body agree everywhere. */
+export const PLATFORM_DECK_HEIGHT = 26;
+
 /** A building authored as a footprint plus a roof height; it always meets the street. */
 export interface BuildingRow {
   x: number;
   width: number;
   roofY: number;
   kind: BuildingKind;
+}
+
+/** A line strung between two mast tips, authored as the two tips. */
+export interface CableRow {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+}
+
+/** A platform authored as a surface: `y` is what an actor stands on. */
+export interface PlatformRow {
+  x: number;
+  y: number;
+  width: number;
+  kind: PlatformKind;
+  motion?: PlatformMotion;
+  cycle?: PlatformCycle;
 }
 
 interface EnemyRowBase {
@@ -67,6 +93,8 @@ export interface LevelBlueprint {
   threatScale: number;
   buildingRows: readonly BuildingRow[];
   enemyRows: readonly EnemyRow[];
+  cableRows?: readonly CableRow[];
+  platformRows?: readonly PlatformRow[];
   authoredAnchors?: readonly { x: number; y: number }[];
 }
 
@@ -78,6 +106,23 @@ const toBuilding = (row: BuildingRow, streetY: number): Building => ({
     height: streetY - row.roofY,
   },
   kind: row.kind,
+});
+
+const toCable = (row: CableRow): Cable => ({
+  from: { x: row.fromX, y: row.fromY },
+  to: { x: row.toX, y: row.toY },
+});
+
+const toPlatform = (row: PlatformRow): Platform => ({
+  bounds: {
+    x: row.x,
+    y: row.y,
+    width: row.width,
+    height: PLATFORM_DECK_HEIGHT,
+  },
+  kind: row.kind,
+  ...(row.motion ? { motion: row.motion } : {}),
+  ...(row.cycle ? { cycle: row.cycle } : {}),
 });
 
 /** Roof height at `x`, or null when nothing stands there. Lowest roof line wins. */
@@ -141,6 +186,8 @@ export const compileLevel = (blueprint: LevelBlueprint): LevelDefinition => {
   const buildings = blueprint.buildingRows.map((row) =>
     toBuilding(row, blueprint.streetY),
   );
+  const cables = (blueprint.cableRows ?? []).map(toCable);
+  const platforms = (blueprint.platformRows ?? []).map(toPlatform);
   const authored: AnchorPoint[] = (blueprint.authoredAnchors ?? []).map(
     (point) => ({ x: point.x, y: point.y, source: "authored" }),
   );
@@ -164,10 +211,13 @@ export const compileLevel = (blueprint: LevelBlueprint): LevelDefinition => {
       radius: GOAL_RADIUS,
     },
     buildings,
+    cables,
+    platforms,
     anchors: [
       ...generateBuildingAnchors(buildings, blueprint.streetY),
+      ...generateCableAnchors(cables),
       ...authored,
-    ],
+    ].sort((a, b) => a.x - b.x || a.y - b.y),
     enemies: blueprint.enemyRows.map((row) =>
       toEnemySpawn(row, buildings, blueprint.streetY, blueprint.threatScale),
     ),

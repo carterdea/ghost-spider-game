@@ -1,10 +1,14 @@
 import { type LevelBlueprint, STREET_Y, WORLD_HEIGHT } from "./authoring";
 
 /**
- * Level 1 — the teaching level. Short 240px gaps and a single roof patroller so
- * the first web-line always lands. The hero starts on a low block with the
- * taller block opposite already inside web reach, so the run opens on a swing
- * rather than a sprint to the first ledge.
+ * Level 1 — the teaching level, and the only district with nobody in it.
+ *
+ * Short 240px gaps and an empty skyline: the first minute of the game is about
+ * finding out that the web catches, that a swing carries further than a jump,
+ * and that a missed line only costs height. The hero starts on a low block with
+ * the taller block opposite already inside web reach, so the run opens on a
+ * swing rather than a sprint to the first ledge. Park-Side introduces the first
+ * patrol once that much is learned.
  */
 export const midtownAfterDark = {
   id: "midtown-after-dark",
@@ -25,28 +29,5 @@ export const midtownAfterDark = {
     { x: 2260, width: 560, roofY: 720, kind: "tower" },
     { x: 3060, width: 540, roofY: 900, kind: "block" },
   ],
-  enemyRows: [
-    {
-      id: "midtown-robot-roof",
-      kind: "robot",
-      lane: "roof",
-      patrolMinX: 860,
-      patrolMaxX: 1260,
-    },
-    {
-      id: "midtown-gunner-street",
-      kind: "gunner",
-      lane: "street",
-      patrolMinX: 1600,
-      patrolMaxX: 1980,
-    },
-    {
-      id: "midtown-drone-gap",
-      kind: "drone",
-      lane: "air",
-      y: 640,
-      patrolMinX: 2040,
-      patrolMaxX: 2240,
-    },
-  ],
+  enemyRows: [],
 } as const satisfies LevelBlueprint;

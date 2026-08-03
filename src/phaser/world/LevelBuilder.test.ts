@@ -34,7 +34,10 @@ describe("level lifecycle", () => {
 
       expect(scene.liveObjects().length).toBeGreaterThan(0);
       expect(scene.liveTweens().length).toBeGreaterThan(0);
-      expect(scene.liveBodies().length).toBe(level.buildings.length + 1);
+      // Every roof, every platform deck, and the street floor.
+      expect(scene.liveBodies().length).toBe(
+        level.buildings.length + level.platforms.length + 1,
+      );
 
       world.destroy();
       expectBaseline(scene);
@@ -129,6 +132,95 @@ describe("roof geometry", () => {
 
     const street = surfaces.find((surface) => surface.width === level.width);
     expect(street?.top).toBe(level.streetY);
+  });
+
+  /**
+   * A platform declares the line an actor stands on, exactly as a roof does.
+   * The body hangs below that line rather than straddling it, so a hoist deck
+   * and the art drawn on it agree.
+   */
+  test("platform bodies present their surface at the declared deck line", () => {
+    const scene = new SceneDouble();
+    const level = LEVELS.find((candidate) => candidate.platforms.length > 0);
+    if (!level) {
+      throw new Error("No level ships a platform.");
+    }
+    buildOn(scene, level);
+
+    const surfaces = scene.liveBodies().map((body) => ({
+      top: body.y - body.displayHeight / 2,
+      width: body.displayWidth,
+    }));
+
+    for (const platform of level.platforms) {
+      expect(
+        surfaces.some(
+          (surface) =>
+            surface.width === platform.bounds.width &&
+            surface.top === platform.bounds.y,
+        ),
+      ).toBe(true);
+    }
+  });
+});
+
+describe("cables and platforms", () => {
+  const levelWith = (has: (level: LevelDefinition) => boolean) => {
+    const level = LEVELS.find(has);
+    if (!level) {
+      throw new Error("No level matches.");
+    }
+    return level;
+  };
+
+  test("a cable draws its own line and both masts, and takes them away", () => {
+    const scene = new SceneDouble();
+    const level = levelWith((candidate) => candidate.cables.length > 0);
+
+    const world = buildOn(scene, level);
+    const graphics = scene
+      .liveObjects()
+      .filter((object) => object.kind === "graphics");
+    // One stroked line per cable, plus one rail per mover.
+    const movers = level.platforms.filter(
+      (platform) => platform.motion !== undefined,
+    ).length;
+    expect(graphics).toHaveLength(level.cables.length + movers);
+
+    world.destroy();
+    expect(
+      scene.objects.filter(
+        (object) => object.kind === "graphics" && !object.destroyed,
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("each mover and each phasing ledge is driven by one owned tween", () => {
+    const scene = new SceneDouble();
+    const level = levelWith((candidate) =>
+      candidate.platforms.some((platform) => platform.cycle !== undefined),
+    );
+    const driven = level.platforms.filter(
+      (platform) =>
+        platform.motion !== undefined || platform.cycle !== undefined,
+    ).length;
+
+    const before = scene.tweenLog.length;
+    const world = buildOn(scene, level);
+    // Every driver tween runs on a plain schedule object, never on a display
+    // object — a tween whose target is destroyed first would still be live.
+    const drivers = scene.tweenLog
+      .slice(before)
+      .filter(
+        (tween) =>
+          typeof tween.targets === "object" &&
+          tween.targets !== null &&
+          "t" in (tween.targets as Record<string, unknown>),
+      );
+    expect(drivers).toHaveLength(driven);
+
+    world.destroy();
+    expect(drivers.every((tween) => tween.removed)).toBe(true);
   });
 });
 

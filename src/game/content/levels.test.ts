@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BODY_BOXES } from "../../phaser/actors/placement";
+import { motionPeriod, platformOffsetAt } from "../../phaser/world/movers";
 import {
   chooseAttachment,
   DEFAULT_ATTACHMENT_TUNING,
@@ -16,10 +17,14 @@ import {
   type AnchorPoint,
   anchorsInReach,
   type Building,
+  cablePointAt,
+  cableSegments,
   generateBuildingAnchors,
+  generateCableAnchors,
   LEVELS,
   type LevelDefinition,
   MIN_ANCHOR_CLEARANCE,
+  type Platform,
   ROOF_ANCHOR_SPACING,
   roofYAt,
   SWING_REACH,
@@ -97,6 +102,42 @@ const spawnThrowPoint = (level: LevelDefinition): { x: number; y: number } => ({
 const describeLevel = (level: LevelDefinition): string =>
   `${level.id} (${LEVELS.indexOf(level) + 1}/${LEVELS.length})`;
 
+/**
+ * Rest a mover must hold at each end of its run. Boarding is a decision the
+ * player makes on approach, so the deck has to still be there when they land.
+ */
+const MIN_MOVER_HOLD_MS = 800;
+/** How long a failing ledge flashes while it is still solid. */
+const MIN_LEDGE_WARNING_MS = 600;
+/** Milliseconds between samples when walking a mover through its whole run. */
+const MOTION_SAMPLE_MS = 40;
+
+/** The deck rectangle at a point in the platform's run. */
+const platformRectAt = (platform: Platform, elapsedMs: number): Rect => {
+  if (!platform.motion) {
+    return platform.bounds;
+  }
+  const offset = platformOffsetAt(platform.motion, elapsedMs);
+  return {
+    ...platform.bounds,
+    x: platform.bounds.x + offset.x,
+    y: platform.bounds.y + offset.y,
+  };
+};
+
+/** Every distinct pose a platform holds, start to finish. */
+const platformPoses = (platform: Platform): Rect[] => {
+  if (!platform.motion) {
+    return [platform.bounds];
+  }
+  const period = motionPeriod(platform.motion);
+  const poses: Rect[] = [];
+  for (let elapsed = 0; elapsed <= period; elapsed += MOTION_SAMPLE_MS) {
+    poses.push(platformRectAt(platform, elapsed));
+  }
+  return poses;
+};
+
 describe("level table", () => {
   test("is non-empty and every level has a unique, non-empty id", () => {
     expect(LEVELS.length).toBeGreaterThan(0);
@@ -130,6 +171,50 @@ describe("level table", () => {
     for (let index = 1; index < LEVELS.length; index += 1) {
       expect(counts[index]).toBeGreaterThan(counts[index - 1]);
       expect(threat[index]).toBeGreaterThan(threat[index - 1]);
+    }
+  });
+
+  test("the machinery districts sit mid-run, ahead of the late three", () => {
+    const ids = LEVELS.map((level) => level.id);
+    expect(ids).toEqual([
+      "midtown-after-dark",
+      "park-side-pursuit",
+      "switchyard-skywire",
+      "drydock-hoists",
+      "glasshouse-terraces",
+      "spire-ascent",
+      "harbor-crane-run",
+      "bridge-line-finale",
+    ]);
+  });
+
+  /**
+   * A mechanic is only worth building if the run keeps asking for it. Cables,
+   * movers and failing ledges each have to appear before the districts that
+   * escalate the combat on top of them.
+   */
+  test("every new mechanic is introduced before the late districts", () => {
+    const firstWith = (has: (level: LevelDefinition) => boolean): number =>
+      LEVELS.findIndex(has);
+    const spire = LEVELS.findIndex((level) => level.id === "spire-ascent");
+
+    const cables = firstWith((level) => level.cables.length > 0);
+    const movers = firstWith((level) =>
+      level.platforms.some((platform) => platform.motion !== undefined),
+    );
+    const ledges = firstWith((level) =>
+      level.platforms.some((platform) => platform.cycle !== undefined),
+    );
+
+    for (const [name, index] of [
+      ["cables", cables],
+      ["movers", movers],
+      ["ledges", ledges],
+    ] as const) {
+      expect({ name, taught: index >= 0 && index < spire }).toEqual({
+        name,
+        taught: true,
+      });
     }
   });
 
@@ -368,6 +453,116 @@ describe.each(
     }
   });
 
+  /**
+   * The invariant the whole anchor design rests on: a web only ever catches
+   * something the renderer drew. Cables earn their anchors by being real
+   * strung geometry; platforms move or vanish, so they never get any.
+   */
+  test("anchors come only from buildings and cables, nothing else", () => {
+    const derived = [
+      ...generateBuildingAnchors(level.buildings, level.streetY),
+      ...generateCableAnchors(level.cables),
+    ];
+    expect(level.anchors).toHaveLength(derived.length);
+    for (const anchor of level.anchors) {
+      expect(anchor.source === "building" || anchor.source === "cable").toBe(
+        true,
+      );
+    }
+  });
+
+  test("every cable anchor sits on the cable's own drawn curve", () => {
+    for (const cable of level.cables) {
+      const clamps = cableSegments(cable);
+      for (let index = 0; index <= clamps; index += 1) {
+        const point = cablePointAt(cable, index / clamps);
+        expect(
+          level.anchors.some(
+            (anchor) =>
+              Math.abs(anchor.x - point.x) < 1e-6 &&
+              Math.abs(anchor.y - point.y) < 1e-6,
+          ),
+        ).toBe(true);
+      }
+    }
+  });
+
+  /** A cable hangs off masts, and a mast has to stand on something. */
+  test("every cable ends on a mast standing clear above a real roof", () => {
+    for (const cable of level.cables) {
+      for (const tip of [cable.from, cable.to]) {
+        const roofY = roofYAt(level.buildings, tip.x);
+        expect({ tip, grounded: roofY !== null }).toEqual({
+          tip,
+          grounded: true,
+        });
+        expect(tip.y).toBeLessThan(roofY ?? 0);
+        expect(tip.y).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  test("platforms stay in the level and clear of every building they pass", () => {
+    for (const platform of level.platforms) {
+      for (const pose of platformPoses(platform)) {
+        expect(rectLeft(pose)).toBeGreaterThanOrEqual(0);
+        expect(rectRight(pose)).toBeLessThanOrEqual(level.width);
+        expect(rectTop(pose)).toBeGreaterThan(0);
+        expect(rectBottom(pose)).toBeLessThan(level.streetY);
+
+        for (const building of level.buildings) {
+          expect({
+            kind: platform.kind,
+            pose,
+            clear: !overlaps(pose, building.bounds),
+          }).toEqual({ kind: platform.kind, pose, clear: true });
+        }
+      }
+    }
+  });
+
+  test("platforms never run through one another", () => {
+    for (const [index, platform] of level.platforms.entries()) {
+      for (const other of level.platforms.slice(index + 1)) {
+        for (const pose of platformPoses(platform)) {
+          for (const otherPose of platformPoses(other)) {
+            expect(overlaps(pose, otherPose)).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  test("movers rest at both ends, so boarding is never frame-perfect", () => {
+    for (const platform of level.platforms) {
+      if (!platform.motion) {
+        continue;
+      }
+      const { motion } = platform;
+      expect(motion.holdMs).toBeGreaterThanOrEqual(MIN_MOVER_HOLD_MS);
+      expect(motion.travelMs).toBeGreaterThan(0);
+      expect(Math.hypot(motion.dx, motion.dy)).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * A ledge that dropped without notice would be a trap rather than a puzzle.
+   * It has to flash first, spend more of its cycle solid than gone, and always
+   * come back.
+   */
+  test("failing ledges telegraph, and always come back", () => {
+    for (const platform of level.platforms) {
+      if (!platform.cycle) {
+        continue;
+      }
+      const { cycle } = platform;
+      expect(cycle.warnMs).toBeGreaterThanOrEqual(MIN_LEDGE_WARNING_MS);
+      expect(cycle.goneMs).toBeGreaterThan(0);
+      expect(cycle.solidMs).toBeGreaterThan(cycle.goneMs);
+      expect(cycle.offsetMs).toBeGreaterThanOrEqual(0);
+    }
+  });
+
   test("air patrols fly clear of every building they pass over", () => {
     for (const enemy of level.enemies.filter(
       (candidate) => candidate.lane === "air",
@@ -439,5 +634,41 @@ describe("generateBuildingAnchors", () => {
 
   test("returns nothing for an empty skyline", () => {
     expect(generateBuildingAnchors([], streetY)).toEqual([]);
+  });
+});
+
+describe("generateCableAnchors", () => {
+  const cable = { from: { x: 0, y: 400 }, to: { x: 900, y: 400 } };
+  const anchors = generateCableAnchors([cable]);
+
+  test("clamps both ends and never leaves a gap wider than the spacing", () => {
+    expect(anchors[0]).toEqual({ x: 0, y: 400, source: "cable" });
+    expect(anchors[anchors.length - 1].x).toBe(900);
+
+    for (let index = 1; index < anchors.length; index += 1) {
+      expect(anchors[index].x - anchors[index - 1].x).toBeLessThanOrEqual(170);
+    }
+  });
+
+  /** The sag is the whole point: a taut straight line would read as a bug. */
+  test("dips at mid-span and returns to the mast tips at the ends", () => {
+    expect(cablePointAt(cable, 0)).toEqual({ x: 0, y: 400 });
+    expect(cablePointAt(cable, 1)).toEqual({ x: 900, y: 400 });
+    expect(cablePointAt(cable, 0.5).y).toBeGreaterThan(400);
+  });
+
+  test("a sloped cable still ends exactly on both tips", () => {
+    const sloped = { from: { x: 100, y: 300 }, to: { x: 700, y: 620 } };
+    const points = generateCableAnchors([sloped]);
+    expect(points[0]).toEqual({ x: 100, y: 300, source: "cable" });
+    expect(points[points.length - 1]).toEqual({
+      x: 700,
+      y: 620,
+      source: "cable",
+    });
+  });
+
+  test("returns nothing when nothing is strung", () => {
+    expect(generateCableAnchors([])).toEqual([]);
   });
 });

@@ -291,6 +291,43 @@ const drawParkBench: Draw = (graphics) => {
   graphics.generateTexture("parkBench", 104, 60);
 };
 
+/**
+ * A freight deck: steel plate with a hazard-striped lip. Tiled along the width
+ * of a hoist or trolley, so the stripes read as motion when it travels.
+ */
+const drawPlatformDeck: Draw = (graphics) => {
+  graphics.fillStyle(0x1b2437);
+  graphics.fillRect(0, 0, 64, 26);
+  graphics.fillStyle(0x3b4a6d);
+  graphics.fillRect(0, 0, 64, 7);
+  graphics.fillStyle(0xf7c948, 0.92);
+  for (let x = -8; x < 64; x += 16) {
+    graphics.fillTriangle(x, 7, x + 8, 7, x, 0);
+  }
+  graphics.fillStyle(0x0d1424);
+  graphics.fillRect(0, 20, 64, 6);
+  graphics.lineStyle(2, 0x50608a, 0.7);
+  for (let x = 8; x < 64; x += 16) {
+    graphics.lineBetween(x, 9, x, 19);
+  }
+  graphics.generateTexture("platformDeck", 64, 26);
+};
+
+/** A conservatory panel: pale glass in a lead frame, already crazed. */
+const drawGlassLedge: Draw = (graphics) => {
+  graphics.fillStyle(0x9fd8e8, 0.36);
+  graphics.fillRect(0, 0, 64, 26);
+  graphics.fillStyle(0xeafbff, 0.5);
+  graphics.fillRect(0, 0, 64, 5);
+  graphics.lineStyle(2, 0x3f5a6b, 0.9);
+  graphics.strokeRect(1, 1, 62, 24);
+  graphics.lineStyle(1, 0xf4feff, 0.62);
+  graphics.lineBetween(10, 4, 26, 22);
+  graphics.lineBetween(26, 22, 44, 6);
+  graphics.lineBetween(44, 6, 58, 21);
+  graphics.generateTexture("glassLedge", 64, 26);
+};
+
 const drawBat: Draw = (graphics) => {
   graphics.fillStyle(0x070911, 1);
   graphics.fillEllipse(22, 16, 12, 9);
@@ -325,6 +362,8 @@ const DRAWINGS = {
   waterTower: drawWaterTower,
   parkTree: drawParkTree,
   parkBench: drawParkBench,
+  platformDeck: drawPlatformDeck,
+  glassLedge: drawGlassLedge,
   bat: drawBat,
 } satisfies Record<string, Draw>;
 

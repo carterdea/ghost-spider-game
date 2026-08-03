@@ -4,8 +4,9 @@ import {
   rectLeft,
   rectRight,
   rectTop,
+  type Vec2,
 } from "../../simulation/physics/vector";
-import type { AnchorPoint, Building } from "./types";
+import type { AnchorPoint, Building, Cable } from "./types";
 
 /**
  * Reach and clearance come from the attachment solver the running game uses,
@@ -92,6 +93,59 @@ export const generateBuildingAnchors = (
   }
 
   return anchors.sort((a, b) => a.x - b.x || a.y - b.y);
+};
+
+/** Horizontal spacing between the clamps a strung cable hangs its anchors from. */
+export const CABLE_ANCHOR_SPACING = 170;
+
+/** How far a cable dips at mid-span, as a fraction of its own length. */
+export const CABLE_SAG_RATIO = 0.08;
+
+export const cableSpan = (cable: Cable): number =>
+  Math.hypot(cable.to.x - cable.from.x, cable.to.y - cable.from.y);
+
+/**
+ * A point on the strung line at `t` in 0..1. The renderer draws this same
+ * curve at a finer step, which is what keeps a cable anchor on the cable the
+ * player can see rather than in the air beside it.
+ */
+export const cablePointAt = (cable: Cable, t: number): Vec2 => {
+  const sag = cableSpan(cable) * CABLE_SAG_RATIO;
+  return {
+    x: cable.from.x + (cable.to.x - cable.from.x) * t,
+    y: cable.from.y + (cable.to.y - cable.from.y) * t + sag * 4 * t * (1 - t),
+  };
+};
+
+/** Clamps along a cable, both ends included. */
+export const cableSegments = (cable: Cable): number =>
+  Math.max(1, Math.ceil(cableSpan(cable) / CABLE_ANCHOR_SPACING));
+
+export const cablePoints = (cable: Cable, segments: number): Vec2[] =>
+  Array.from({ length: segments + 1 }, (_, index) =>
+    cablePointAt(cable, index / segments),
+  );
+
+/** Web targets sampled off every strung line, at its clamp points. */
+export const generateCableAnchors = (
+  cables: readonly Cable[],
+): AnchorPoint[] => {
+  const seen = new Set<string>();
+  const anchors: AnchorPoint[] = [];
+
+  for (const cable of cables) {
+    for (const point of cablePoints(cable, cableSegments(cable))) {
+      const anchor: AnchorPoint = { x: point.x, y: point.y, source: "cable" };
+      const key = anchorKey(anchor);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      anchors.push(anchor);
+    }
+  }
+
+  return anchors;
 };
 
 /** Anchors the hero at `from` could actually catch, nearest first. */
