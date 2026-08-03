@@ -10,8 +10,12 @@ import {
   type AiIntent,
   type AiMemory,
   type AiPerception,
+  BOSS_TUNING,
+  type BossAttack,
+  type BossEvent,
   createAiMemory,
   type EnemyAiState,
+  stepBossBrain,
   stepEnemyBrain,
 } from "../../game/simulation/ai";
 import {
@@ -19,12 +23,24 @@ import {
   type Rect,
   type Vec2,
 } from "../../game/simulation/physics/vector";
-import type {
-  EnemyKind,
-  EnemyState,
-  GameState,
+import {
+  type BossSpawn,
+  createBossState,
+  type EnemyKind,
+  type EnemyState,
+  type GameState,
 } from "../../game/simulation/state";
+import {
+  applyBossIntent,
+  type BossRuntime,
+  bossContactDamage,
+  createBossRuntime,
+  createBossSprite,
+  drawBoss,
+  perceiveBoss,
+} from "./bossActor";
 import { applyBodyBox, BODY_BOXES, standOn } from "./placement";
+import { telegraphTint } from "./telegraph";
 
 export interface EnemyView {
   state: EnemyState;
@@ -39,14 +55,20 @@ export interface EnemyView {
   snaredUntil: number;
   /** Y the drone bobs around; air enemies ignore gravity. */
   hoverY: number;
+  /** Set only on the finale boss, which runs a different brain entirely. */
+  boss?: BossRuntime;
 }
 
 const SNARE_DURATION = 1800;
+/** A netted boss goes limp far more briefly; the brain then shrugs nets off. */
+const BOSS_SNARE_DURATION = 420;
 const BULLET_LIFETIME = 2600;
 /** A frame this long or longer is a stall; the AI must not teleport through it. */
 const MAX_STEP = 0.05;
 /** Bullets leave from here rather than the sprite centre. */
 const MUZZLE_OFFSET = 26;
+/** The boss's hull is wide, so its shots start well clear of it. */
+const BOSS_MUZZLE_OFFSET = 96;
 
 /** Owns every enemy sprite and their bullets for the level currently loaded. */
 export class EnemyDirector {
@@ -58,11 +80,20 @@ export class EnemyDirector {
   private blockers: readonly Rect[] = [];
   private lastTime = 0;
   private readonly onShot?: () => void;
+  private readonly onBossEvent?: (event: BossEvent) => void;
 
-  /** `onShot` fires once per bullet, for the presentation layer's sound. */
-  public constructor(scene: Phaser.Scene, onShot?: () => void) {
+  /**
+   * `onShot` fires once per bullet and `onBossEvent` once per boss beat, both
+   * for the presentation layer's sound and camera.
+   */
+  public constructor(
+    scene: Phaser.Scene,
+    onShot?: () => void,
+    onBossEvent?: (event: BossEvent) => void,
+  ) {
     this.scene = scene;
     this.onShot = onShot;
+    this.onBossEvent = onBossEvent;
   }
 
   public get bullets(): Phaser.Physics.Arcade.Group {
@@ -136,6 +167,40 @@ export class EnemyDirector {
     };
   }
 
+  /**
+   * Drops the finale boss into the arena. Called after `spawn()`, which clears
+   * everything: level data authors patrols only, so the boss is the scene's to
+   * place. Its state joins `state.enemies`, so the existing combat overlaps,
+   * scoring and threat count all treat it like any other enemy.
+   */
+  public spawnBoss(spawn: BossSpawn, state: GameState): EnemyView {
+    const enemyState = createBossState(spawn);
+    state.enemies = [
+      ...state.enemies.filter((entry) => entry.id !== spawn.id),
+      enemyState,
+    ];
+
+    const sprite = createBossSprite(this.scene, spawn);
+    const view: EnemyView = {
+      state: enemyState,
+      sprite,
+      lane: "air",
+      direction: -1,
+      brain: createAiMemory(-1),
+      aiState: "patrol",
+      snaredUntil: 0,
+      hoverY: sprite.y,
+      boss: createBossRuntime(spawn),
+    };
+    this.views.push(view);
+    return view;
+  }
+
+  /** The boss, while it is alive. */
+  public get boss(): EnemyView | undefined {
+    return this.views.find((view) => view.boss && view.sprite.active);
+  }
+
   public update(time: number, player: Phaser.Physics.Arcade.Sprite): void {
     const dt = clamp((time - this.lastTime) / 1000, 0, MAX_STEP);
     this.lastTime = time;
@@ -148,18 +213,91 @@ export class EnemyDirector {
       if (!view.sprite.active) {
         continue;
       }
+      if (view.boss) {
+        this.updateBoss(view, view.boss, player, dt, time, overlay);
+        continue;
+      }
+      this.updatePatrol(view, player, dt, time, overlay);
+    }
+  }
 
-      const step = stepEnemyBrain(
-        view.state.kind,
-        view.brain,
-        this.perceive(view, player, time),
-        AI_TUNING[view.state.kind],
-        dt,
-      );
-      view.brain = step.memory;
-      view.aiState = step.intent.state;
-      this.applyIntent(view, step.intent, time);
-      this.drawTelegraph(overlay, view, step.intent, player);
+  private updatePatrol(
+    view: EnemyView,
+    player: Phaser.Physics.Arcade.Sprite,
+    dt: number,
+    time: number,
+    overlay: Phaser.GameObjects.Graphics,
+  ): void {
+    const kind = patrolKind(view);
+    if (!kind) {
+      return;
+    }
+
+    const step = stepEnemyBrain(
+      kind,
+      view.brain,
+      this.perceive(view, player, time),
+      AI_TUNING[kind],
+      dt,
+    );
+    view.brain = step.memory;
+    view.aiState = step.intent.state;
+    this.applyIntent(view, step.intent, time);
+    this.drawTelegraph(overlay, view, step.intent, player);
+  }
+
+  private updateBoss(
+    view: EnemyView,
+    boss: BossRuntime,
+    player: Phaser.Physics.Arcade.Sprite,
+    dt: number,
+    time: number,
+    overlay: Phaser.GameObjects.Graphics,
+  ): void {
+    const step = stepBossBrain(
+      boss.memory,
+      perceiveBoss(
+        view.sprite,
+        boss,
+        view.state,
+        player,
+        this.blockers,
+        time < view.snaredUntil,
+      ),
+      BOSS_TUNING,
+      dt,
+    );
+    boss.memory = step.memory;
+    boss.intent = step.intent;
+
+    view.direction = step.intent.facing;
+    applyBossIntent(view.sprite, step.intent);
+    // Combat reads `state.damage` at the moment of the hit, so the open window
+    // becomes safe to dive into without any change to the caller.
+    view.state.damage = bossContactDamage(boss);
+
+    if (step.intent.attack) {
+      this.launchBossAttack(step.intent.attack);
+    }
+    if (step.intent.event) {
+      this.onBossEvent?.(step.intent.event);
+    }
+
+    drawBoss(overlay, view.sprite, boss, view.state, player);
+  }
+
+  /** A slam is carried by the body; only the shooting attacks make bullets. */
+  private launchBossAttack(attack: BossAttack): void {
+    if (attack.kind === "slam") {
+      return;
+    }
+    const nova = attack.kind === "nova";
+    for (const shot of attack.shots) {
+      this.fire(shot.origin, shot.velocity, {
+        scale: nova ? 1.6 : 2,
+        tint: nova ? colors.wingLavender : colors.danger,
+        muzzle: BOSS_MUZZLE_OFFSET,
+      });
     }
   }
 
@@ -251,16 +389,18 @@ export class EnemyDirector {
     overlay.strokeCircle(x, y, Phaser.Math.Linear(78, 22, amount));
   }
 
-  private fire(origin: Vec2, velocity: Vec2): void {
+  private fire(origin: Vec2, velocity: Vec2, style: BulletStyle = {}): void {
     const heading = Math.atan2(velocity.y, velocity.x);
+    const muzzle = style.muzzle ?? MUZZLE_OFFSET;
     const bullet = this.bullets.create(
-      origin.x + Math.cos(heading) * MUZZLE_OFFSET,
-      origin.y + Math.sin(heading) * MUZZLE_OFFSET,
+      origin.x + Math.cos(heading) * muzzle,
+      origin.y + Math.sin(heading) * muzzle,
       "bullet",
     ) as Phaser.Physics.Arcade.Sprite;
 
     bullet.setVelocity(velocity.x, velocity.y);
-    bullet.setTint(colors.danger);
+    bullet.setScale(style.scale ?? 1);
+    bullet.setTint(style.tint ?? colors.danger);
     bullet.setDepth(4);
     bullet.setData("expiresAt", this.scene.time.now + BULLET_LIFETIME);
     this.onShot?.();
@@ -288,12 +428,16 @@ export class EnemyDirector {
   }
 
   public snare(view: EnemyView): void {
-    view.snaredUntil = this.scene.time.now + SNARE_DURATION;
+    view.snaredUntil =
+      this.scene.time.now + (view.boss ? BOSS_SNARE_DURATION : SNARE_DURATION);
     view.sprite.setVelocity(0, 0);
     view.sprite.setTint(colors.web);
   }
 
   public defeat(view: EnemyView): void {
+    if (view.boss) {
+      this.onBossEvent?.("defeated");
+    }
     view.sprite.destroy();
   }
 
@@ -334,13 +478,16 @@ export class EnemyDirector {
   }
 }
 
-/** White at rest, hot pink at the moment of the strike. */
-const telegraphTint = (amount: number): number => {
-  const mix = clamp(amount, 0, 1);
-  const green = Math.round(255 - 178 * mix);
-  const blue = Math.round(255 - 146 * mix);
-  return (255 << 16) | (green << 8) | blue;
-};
+/** Bullets differ by who fired them, so a boss volley never reads as chaff. */
+interface BulletStyle {
+  scale?: number;
+  tint?: number;
+  muzzle?: number;
+}
+
+/** The authored kind, or `null` for the boss — which runs its own brain. */
+const patrolKind = (view: EnemyView): EnemyKind | null =>
+  view.state.kind === "boss" ? null : view.state.kind;
 
 const textureFor = (kind: EnemyKind): string => {
   if (kind === "gunner") {

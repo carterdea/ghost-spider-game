@@ -1,6 +1,12 @@
 import type { EnemySpawn, LevelDefinition } from "../content/levels";
+import type { Rect, Vec2 } from "./physics/vector";
 
+/** The kinds a level file may author into its patrol lanes. */
 export type EnemyKind = "robot" | "gunner" | "drone";
+/** The finale boss. Spawned by the scene, never authored as a patrol. */
+export type BossKind = "boss";
+/** Anything that can exist as an enemy at runtime. */
+export type ActorKind = EnemyKind | BossKind;
 export type GadgetKind = "web-net" | "web-shield" | "web-wings";
 
 /** Where a run currently stands. Drives the HUD banner and input handling. */
@@ -18,12 +24,29 @@ export interface PlayerState {
 
 export interface EnemyState {
   id: string;
-  kind: EnemyKind;
+  kind: ActorKind;
   health: number;
   damage: number;
   speed: number;
   patrolMinX: number;
   patrolMaxX: number;
+}
+
+/**
+ * Everything the finale boss needs. Deliberately not part of `LevelDefinition`:
+ * the scene spawns it after the level is built, so level authoring stays a
+ * patrol-lane format.
+ */
+export interface BossSpawn {
+  id: string;
+  position: Vec2;
+  /** The volume the fight happens in. The boss never leaves it. */
+  arena: Rect;
+  health: number;
+  /** Contact damage. Its projectiles use the scene's own bullet damage. */
+  damage: number;
+  /** Base movement speed in px/s; phases scale it. */
+  speed: number;
 }
 
 export interface GameState {
@@ -45,6 +68,17 @@ export const createEnemyState = (spawn: EnemySpawn): EnemyState => ({
   speed: spawn.speed,
   patrolMinX: spawn.patrolMinX,
   patrolMaxX: spawn.patrolMaxX,
+});
+
+/** The boss carries the same state shape as a patrol, so combat treats it alike. */
+export const createBossState = (spawn: BossSpawn): EnemyState => ({
+  id: spawn.id,
+  kind: "boss",
+  health: spawn.health,
+  damage: spawn.damage,
+  speed: spawn.speed,
+  patrolMinX: spawn.arena.x,
+  patrolMaxX: spawn.arena.x + spawn.arena.width,
 });
 
 export const createInitialGameState = (level: LevelDefinition): GameState => ({
