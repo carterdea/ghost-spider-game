@@ -213,6 +213,22 @@ export class FakeStaticGroup {
   }
 }
 
+/** The camera as the fx layer uses it: it records kicks instead of shaking. */
+export class FakeCamera {
+  public readonly shakes: { duration: number; amount: number }[] = [];
+  public shakeResets = 0;
+
+  public readonly shakeEffect = {
+    reset: (): void => {
+      this.shakeResets += 1;
+    },
+  };
+
+  public shake(duration: number, amount: number): void {
+    this.shakes.push({ duration, amount });
+  }
+}
+
 export class SceneDouble {
   public readonly objects: FakeGameObject[] = [];
   public readonly tweenLog: FakeTween[] = [];
@@ -282,8 +298,12 @@ export class SceneDouble {
     },
   };
 
+  public readonly cameras = { main: new FakeCamera() };
+
   public readonly physics = {
+    /** `isPaused` is the hit-stop's handle on the simulation. */
     world: {
+      isPaused: false,
       setBounds: (
         x: number,
         y: number,

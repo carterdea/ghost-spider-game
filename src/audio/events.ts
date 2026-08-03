@@ -6,8 +6,10 @@
 /** Every moment in the game that makes a noise. */
 export type SoundEvent =
   | "webAttach"
+  | "webLaunch"
   | "webRelease"
   | "swing"
+  | "comboUp"
   | "jump"
   | "land"
   | "footstep"
@@ -25,7 +27,14 @@ export type SoundEvent =
   | "playerHurt"
   | "levelAdvance"
   | "levelCleared"
-  | "knockedOut";
+  | "knockedOut"
+  | "bossWake"
+  | "bossPhaseShift"
+  | "bossVolley"
+  | "bossSlam"
+  | "bossNova"
+  | "bossStagger"
+  | "bossDefeated";
 
 /** One oscillator or noise band inside a voice. Times are in seconds. */
 export interface Layer {
@@ -142,8 +151,10 @@ export const RECIPES: Record<SoundEvent, Recipe> = {
     ],
   },
   // Boots on wet concrete: a body thump under a short slap of noise.
+  // Bends down rather than up: the harder the landing, the deeper the thud.
   land: {
     minGapMs: 140,
+    pitchBend: -0.35,
     layers: [
       {
         source: "sine",
@@ -160,6 +171,54 @@ export const RECIPES: Record<SoundEvent, Recipe> = {
         attack: 0.002,
         release: 0.12,
         q: 0.8,
+      },
+    ],
+  },
+  // The shove-off when a web is caught from a rooftop: the same thwip as
+  // webAttach with a low thump under it, so a launch reads heavier than a
+  // mid-air catch.
+  webLaunch: {
+    minGapMs: 120,
+    layers: [
+      {
+        source: "noise",
+        freq: 2200,
+        glide: 700,
+        gain: 0.3,
+        attack: 0.002,
+        release: 0.14,
+        q: 2,
+      },
+      {
+        source: "triangle",
+        freq: 150,
+        glide: 74,
+        gain: 0.26,
+        attack: 0.004,
+        release: 0.2,
+      },
+    ],
+  },
+  // One rung per link in a takedown chain: intensity walks it up an octave.
+  comboUp: {
+    minGapMs: 70,
+    pitchBend: 1,
+    layers: [
+      {
+        source: "triangle",
+        freq: 660,
+        glide: 990,
+        gain: 0.15,
+        attack: 0.004,
+        release: 0.11,
+      },
+      {
+        source: "sine",
+        freq: 1320,
+        gain: 0.07,
+        attack: 0.004,
+        release: 0.08,
+        delay: 0.03,
       },
     ],
   },
@@ -510,6 +569,202 @@ export const RECIPES: Record<SoundEvent, Recipe> = {
         attack: 0.01,
         release: 0.9,
         q: 0.8,
+      },
+    ],
+  },
+
+  // The Weaver. Everything here is pitched below the patrol sounds and given a
+  // long tail, so the boss reads as bigger than the enemies it replaces rather
+  // than merely louder.
+  bossWake: {
+    minGapMs: 2000,
+    layers: [
+      {
+        source: "sawtooth",
+        freq: 46,
+        glide: 92,
+        gain: 0.3,
+        attack: 0.42,
+        hold: 0.3,
+        release: 0.9,
+        cutoff: 420,
+        q: 3,
+      },
+      {
+        source: "noise",
+        freq: 300,
+        glide: 1500,
+        gain: 0.13,
+        attack: 0.5,
+        release: 0.55,
+        q: 0.7,
+      },
+    ],
+  },
+  // The legibility beat: the player must not miss that the rules just changed.
+  bossPhaseShift: {
+    minGapMs: 900,
+    layers: [
+      {
+        source: "square",
+        freq: 132,
+        glide: 264,
+        gain: 0.26,
+        attack: 0.006,
+        hold: 0.16,
+        release: 0.62,
+        cutoff: 1500,
+        q: 5,
+      },
+      {
+        source: "sawtooth",
+        freq: 66,
+        gain: 0.22,
+        attack: 0.01,
+        hold: 0.2,
+        release: 0.7,
+        cutoff: 700,
+      },
+      {
+        source: "noise",
+        freq: 2400,
+        glide: 600,
+        gain: 0.16,
+        attack: 0.004,
+        release: 0.5,
+        q: 1.2,
+      },
+    ],
+  },
+  // Three to five shots leave at once, so one report has to cover the fan.
+  bossVolley: {
+    minGapMs: 120,
+    layers: [
+      {
+        source: "square",
+        freq: 420,
+        glide: 150,
+        gain: 0.17,
+        attack: 0.002,
+        release: 0.16,
+        cutoff: 2400,
+        q: 2,
+      },
+      {
+        source: "noise",
+        freq: 1500,
+        glide: 500,
+        gain: 0.12,
+        attack: 0.001,
+        release: 0.13,
+        q: 1.4,
+      },
+    ],
+  },
+  // A body moving fast: low, blunt, and over quickly.
+  bossSlam: {
+    minGapMs: 300,
+    layers: [
+      {
+        source: "sine",
+        freq: 150,
+        glide: 42,
+        gain: 0.34,
+        attack: 0.003,
+        release: 0.38,
+      },
+      {
+        source: "noise",
+        freq: 700,
+        glide: 160,
+        gain: 0.2,
+        attack: 0.002,
+        release: 0.3,
+        q: 0.6,
+      },
+    ],
+  },
+  // Radial and even, so it rings outward rather than hitting a point.
+  bossNova: {
+    minGapMs: 400,
+    layers: [
+      {
+        source: "triangle",
+        freq: 196,
+        glide: 784,
+        gain: 0.22,
+        attack: 0.008,
+        release: 0.72,
+        cutoff: 2600,
+      },
+      {
+        source: "sine",
+        freq: 392,
+        glide: 1568,
+        gain: 0.12,
+        attack: 0.01,
+        release: 0.6,
+        delay: 0.04,
+      },
+    ],
+  },
+  // A wind-up cut short: pitch collapses instead of resolving.
+  bossStagger: {
+    minGapMs: 400,
+    layers: [
+      {
+        source: "sawtooth",
+        freq: 300,
+        glide: 70,
+        gain: 0.2,
+        attack: 0.004,
+        release: 0.42,
+        cutoff: 1100,
+        q: 4,
+      },
+      {
+        source: "noise",
+        freq: 900,
+        glide: 240,
+        gain: 0.14,
+        attack: 0.002,
+        release: 0.34,
+        q: 1,
+      },
+    ],
+  },
+  // The run's payoff. Longest tail of anything in the game.
+  bossDefeated: {
+    minGapMs: 1500,
+    layers: [
+      {
+        source: "sawtooth",
+        freq: 220,
+        glide: 55,
+        gain: 0.3,
+        attack: 0.006,
+        hold: 0.18,
+        release: 1.4,
+        cutoff: 900,
+        q: 2,
+      },
+      {
+        source: "triangle",
+        freq: 440,
+        glide: 110,
+        gain: 0.18,
+        attack: 0.01,
+        release: 1.2,
+        delay: 0.08,
+      },
+      {
+        source: "noise",
+        freq: 1800,
+        glide: 200,
+        gain: 0.16,
+        attack: 0.01,
+        release: 1.1,
+        q: 0.7,
       },
     ],
   },

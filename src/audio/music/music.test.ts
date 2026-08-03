@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { LEVELS } from "../../game/content/levels";
 import { MAX_MUSIC_VOICES, MUSIC_LEVEL } from "../engine";
 import { type AudioOptions, createAudio, type GameAudio } from "../index";
 import {
@@ -257,8 +258,10 @@ describe("the composition", () => {
 
     const peaks = DISTRICT_TIERS.map(demand);
     expect(Math.max(...peaks)).toBeLessThan(MAX_MUSIC_VOICES);
-    // Each district really is busier than the one before it.
-    expect(peaks).toEqual([...peaks].sort((a, b) => a - b));
+    // The finale is the worst case the ceiling has to cover. It only ties the
+    // district before it, because the peak instant is the loop point and the
+    // hats are far too short to still be ringing there.
+    expect(peaks.at(-1)).toBe(Math.max(...peaks));
   });
 
   test("is not silent: every stem has notes with real gain", () => {
@@ -273,26 +276,83 @@ describe("the composition", () => {
     }
   });
 
-  test("adds exactly one stem per district and never takes one away", () => {
-    expect(DISTRICT_TIERS).toHaveLength(5);
-    const known = new Set(SONG.parts.map((part) => part.layer));
-    // The first district opens with the bed; the other four each add one stem.
-    expect(DISTRICT_TIERS[0]).toEqual(["pad", "bass"]);
+  /**
+   * Without this, adding a district silently clamps it onto the finale's
+   * arrangement — the run keeps playing, so nothing looks broken, and the last
+   * levels quietly share one tier.
+   */
+  test("scores every district in the run, and only those", () => {
+    expect(DISTRICT_TIERS).toHaveLength(LEVELS.length);
+  });
 
-    let previous: readonly MusicLayer[] = DISTRICT_TIERS[0];
-    for (const tier of DISTRICT_TIERS.slice(1)) {
-      expect(tier.length).toBe(previous.length + 1);
-      expect(previous.every((layer) => tier.includes(layer))).toBe(true);
+  test("plays a distinct, playable arrangement in every district", () => {
+    const known = new Set(SONG.parts.map((part) => part.layer));
+    const seen = new Set<string>();
+
+    for (const tier of DISTRICT_TIERS) {
       expect(tier.every((layer) => known.has(layer))).toBe(true);
-      previous = tier;
+      expect(new Set(tier).size).toBe(tier.length);
+      // The bed never drops out; it is what the other stems sit on.
+      expect(tier).toContain("pad");
+
+      // No two districts play the same arrangement, or one of them is wasted.
+      const key = [...tier].sort().join("+");
+      expect(seen.has(key)).toBe(false);
+      seen.add(key);
     }
-    // By the finale every stem the song has is playing.
-    expect(previous.length).toBe(SONG.parts.length);
+  });
+
+  /**
+   * Eight districts and six stems cannot be a strict +1 each time, and should
+   * not be: the run is scored as two waves with one deliberate pull-back, so
+   * the finale has somewhere to arrive from. This pins that shape.
+   */
+  test("builds in two waves around a single pull-back", () => {
+    const sizes = DISTRICT_TIERS.map((tier) => tier.length);
+    const pullBacks = sizes.flatMap((size, index) =>
+      index > 0 && size < sizes[index - 1] ? [index] : [],
+    );
+    expect(pullBacks).toHaveLength(1);
+    const [pullBack] = pullBacks;
+
+    // Both waves climb without pausing: no district repeats the last one's size.
+    for (const wave of [sizes.slice(0, pullBack), sizes.slice(pullBack)]) {
+      for (const [index, size] of wave.entries()) {
+        if (index > 0) {
+          expect(size).toBeGreaterThan(wave[index - 1]);
+        }
+      }
+    }
+
+    // The run opens at its sparsest and the second wave outgrows the first.
+    expect(sizes[0]).toBe(Math.min(...sizes));
+    expect(sizes.at(-1)).toBeGreaterThan(Math.max(...sizes.slice(0, pullBack)));
+
+    // And it climbs past the first peak on a colour the first wave never used,
+    // so the back half sounds like a rise rather than a rerun.
+    const firstWave = new Set(DISTRICT_TIERS.slice(0, pullBack).flat());
+    const held = DISTRICT_TIERS.slice(pullBack)
+      .flat()
+      .filter((layer) => !firstWave.has(layer));
+    expect(held.length).toBeGreaterThan(0);
+  });
+
+  test("saves every stem playing at once for the finale", () => {
+    const finale = DISTRICT_TIERS.at(-1) ?? [];
+    expect([...finale].sort()).toEqual(
+      SONG.parts.map((part) => part.layer).sort(),
+    );
+    // Strictly richer than anywhere else, so the arrival is unmistakable.
+    for (const tier of DISTRICT_TIERS.slice(0, -1)) {
+      expect(tier.every((layer) => finale.includes(layer))).toBe(true);
+      expect(tier.length).toBeLessThan(finale.length);
+    }
   });
 
   test("clamps districts outside the run", () => {
     expect(tierForDistrict(-3)).toEqual(DISTRICT_TIERS[0]);
-    expect(tierForDistrict(99)).toEqual(DISTRICT_TIERS[4]);
+    expect(tierForDistrict(99)).toEqual(DISTRICT_TIERS.at(-1) ?? []);
+    expect(tierForDistrict(LEVELS.length)).toEqual(DISTRICT_TIERS.at(-1) ?? []);
   });
 });
 

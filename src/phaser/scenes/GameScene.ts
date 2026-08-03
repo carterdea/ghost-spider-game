@@ -12,12 +12,11 @@ import {
   type GadgetKind,
   type GameState,
 } from "../../game/simulation/state";
-import {
-  damageEnemy,
-  damagePlayer,
-} from "../../game/simulation/systems/combat";
+import { damagePlayer } from "../../game/simulation/systems/combat";
 import {
   getLevelByIndex,
+  isFinalLevelIndex,
+  isGoalReached,
   syncLevelProgress,
 } from "../../game/simulation/systems/progression";
 import { Hud } from "../../ui/hud/hud";
@@ -33,6 +32,9 @@ import { WebRenderer } from "../fx/WebRenderer";
 import { LevelBuilder } from "../world/LevelBuilder";
 import type { LevelWorld } from "../world/LevelWorld";
 import { createPropTextures } from "../world/textures";
+import { bossSound, bossSpawnFor } from "./bossBinding";
+import { RunFeedback } from "./feedback";
+import { spawnWebBurst } from "./webBurst";
 
 const GADGETS: GadgetKind[] = ["web-net", "web-shield", "web-wings"];
 const ATTACK_COOLDOWN = 280;
@@ -63,9 +65,9 @@ export class GameScene extends Phaser.Scene {
   private webs?: WebRenderer;
   private projectiles?: Phaser.Physics.Arcade.Group;
   private world?: LevelWorld;
+  private feedback?: RunFeedback;
 
   private audio?: GameAudio;
-  private previousMode: PlayerMode = "grounded";
   /** Last frame's position, so a fast swing cannot tunnel through the goal. */
   private lastPlayerPosition: Vec2 = { x: 0, y: 0 };
 
@@ -86,7 +88,6 @@ export class GameScene extends Phaser.Scene {
 
   public create(): void {
     this.state = createInitialGameState(LEVELS[0]);
-    this.previousMode = "grounded";
     this.setUpAudio();
     this.audio?.music.setDistrict(this.state.progression.levelIndex);
 
@@ -97,6 +98,7 @@ export class GameScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.enemies?.destroy();
       this.webs?.destroy();
+      this.feedback?.destroy();
       this.audio?.setWind(0);
       // Phaser has already taken the level's groups, tweens and timers. Let
       // the handle go rather than leaving the next boot to tear down corpses.
@@ -108,7 +110,11 @@ export class GameScene extends Phaser.Scene {
 
     this.projectiles = this.physics.add.group({ allowGravity: false });
     this.builder = new LevelBuilder(this);
-    this.enemies = new EnemyDirector(this, () => this.audio?.play("enemyShot"));
+    this.enemies = new EnemyDirector(
+      this,
+      () => this.audio?.play("enemyShot"),
+      (event) => this.audio?.play(bossSound(event)),
+    );
     this.webs = new WebRenderer(this);
 
     const player = this.physics.add.sprite(0, 0, artKeys.hero.idle[0]);
@@ -118,6 +124,7 @@ export class GameScene extends Phaser.Scene {
     player.play("player-idle");
     this.player = player;
     this.controller = new PlayerController(player);
+    this.feedback = new RunFeedback(this, player, this.audio);
 
     this.cameras.main.startFollow(player, true, 0.09, 0.09);
     this.cameras.main.setDeadzone(180, 130);
@@ -134,7 +141,16 @@ export class GameScene extends Phaser.Scene {
     // while R is still held would otherwise read as a fresh press next frame
     // and restart again on every frame the key stays down.
     this.previousActions = readActions(this.keys);
-    this.hud.render(this.state);
+    this.renderHud();
+  }
+
+  /** Chain and mute live outside `GameState`, so both call sites go through here. */
+  private renderHud(): void {
+    this.hud?.render(
+      this.state,
+      this.feedback?.combo.count ?? 0,
+      this.audio?.isMuted() ?? false,
+    );
   }
 
   /**
@@ -175,14 +191,18 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // The world runs slow for a beat after a blow lands. Everything that moves
+    // reads the same delta, so the freeze cannot pull the game out of step.
+    const simDelta = this.feedback?.step(delta) ?? delta;
+
     if (this.state.progression.status === "playing") {
-      this.updateRun(actions, time, delta);
+      this.updateRun(actions, time, simDelta);
     } else {
       this.player?.setVelocity(0, 0);
     }
 
     this.webs?.update();
-    this.hud?.render(this.state);
+    this.renderHud();
     this.previousActions = actions;
   }
 
@@ -203,9 +223,11 @@ export class GameScene extends Phaser.Scene {
     this.state.player.swinging = step.mode === "swinging";
     this.renderWeb(player, step.rope?.anchor, step.released);
     this.animatePlayer(player, actions, step.mode);
+    this.feedback?.lean(step.mode, player.body?.velocity.x ?? 0, delta);
+    this.feedback?.land(step.landingImpact);
     this.playMotionSounds(
       step,
-      controller.speed,
+      controller,
       1 - clamp(player.y / level.height, 0, 1),
     );
 
@@ -240,31 +262,32 @@ export class GameScene extends Phaser.Scene {
   /**
    * One physics step as sound: transitions fire one-shots, sustained speed and
    * altitude feed the wind bed. `lift` is 0 at street level, 1 at the skyline.
+   *
+   * Landing is deliberately absent. It is reported by `landingImpact`, which
+   * carries the weight of the arrival and also fires when a swing clips a roof
+   * — a landing the grounded/airborne transition never sees.
    */
   private playMotionSounds(
     step: PlayerStep,
-    speed: number,
+    controller: PlayerController,
     lift: number,
   ): void {
-    const landed = step.mode === "grounded" && this.previousMode !== "grounded";
-    this.previousMode = step.mode;
-
     const audio = this.audio;
     if (!audio) {
       return;
     }
 
+    const speed = controller.speed;
     if (step.attached) {
-      audio.play("webAttach");
+      // A catch that has to shove off a rooftop is heavier than one made in
+      // open air, and it gets the heavier sound.
+      audio.play(controller.isLaunching ? "webLaunch" : "webAttach");
     }
     if (step.released) {
       audio.play("webRelease");
     }
     if (step.jumped) {
       audio.play("jump");
-    }
-    if (landed) {
-      audio.play("land");
     }
     if (step.mode === "swinging") {
       // Fired every frame; the recipe's own throttle paces it.
@@ -275,12 +298,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private checkProgress(player: Phaser.Physics.Arcade.Sprite): void {
-    const transition = syncLevelProgress(
-      this.state,
-      { x: player.x, y: player.y },
-      this.lastPlayerPosition,
-    );
-    this.lastPlayerPosition = { x: player.x, y: player.y };
+    const position = { x: player.x, y: player.y };
+    const previous = this.lastPlayerPosition;
+    this.lastPlayerPosition = position;
+
+    if (this.bossHoldsTheGoal(position, previous)) {
+      return;
+    }
+
+    const transition = syncLevelProgress(this.state, position, previous);
 
     if (transition.kind === "advanced") {
       this.audio?.play("levelAdvance");
@@ -303,6 +329,26 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * The finale beacon stays cold while the Weaver is up. `enemies.boss` only
+   * exists on the final level and goes undefined the moment it is defeated, so
+   * this is the whole rule. Checked before the goal is synced rather than after,
+   * because clearing the run is the one transition that cannot be taken back.
+   */
+  private bossHoldsTheGoal(position: Vec2, previous: Vec2): boolean {
+    if (!this.enemies?.boss) {
+      return false;
+    }
+
+    const level = getLevelByIndex(this.state.progression.levelIndex);
+    if (!isGoalReached(level, position, previous)) {
+      return false;
+    }
+
+    this.state.player.message = "The Weaver holds the bridge. Bring it down.";
+    return true;
+  }
+
   private loadLevel(level: LevelDefinition): void {
     this.teardownLevel();
     this.resetTransientState();
@@ -322,7 +368,12 @@ export class GameScene extends Phaser.Scene {
     this.lastPlayerPosition = { x: player.x, y: player.y };
     world.collider(this.physics.add.collider(player, world.platforms));
 
+    // Between the two: `spawn` clears everything first, and `registerCombat`
+    // walks `enemies.all`, which the boss has to be in by then.
     enemies.spawn(level, this.state, world.platforms);
+    if (isFinalLevelIndex(this.state.progression.levelIndex)) {
+      enemies.spawnBoss(bossSpawnFor(level), this.state);
+    }
     this.registerCombat(player, enemies, world);
 
     this.cameras.main.setBounds(0, 0, level.width, level.height);
@@ -343,6 +394,7 @@ export class GameScene extends Phaser.Scene {
     this.shieldView?.destroy();
     this.shieldView = undefined;
     this.webs?.reset();
+    this.feedback?.reset();
     this.world?.destroy();
     this.world = undefined;
   }
@@ -361,6 +413,7 @@ export class GameScene extends Phaser.Scene {
           return;
         }
         damagePlayer(this.state, 12, "Hit by a skyline shot.");
+        this.feedback?.hurt();
         // Silent at zero health: `knockOut` has its own, louder sound.
         if (this.state.player.health > 0) {
           this.audio?.play("playerHurt");
@@ -382,17 +435,22 @@ export class GameScene extends Phaser.Scene {
               return;
             }
             const power = projectile.getData("power") as "glob" | "net";
+            // Read before it is destroyed: the sparks fly from where the web
+            // struck, not from the enemy's centre.
+            const struckAt = { x: projectile.x, y: projectile.y };
             projectile.destroy();
             if (power === "net") {
               enemies.snare(enemy);
               this.audio?.play("enemySnared");
             }
-            const defeated = damageEnemy(
+            const defeated = this.requireFeedback().damage(
               this.state,
               enemy.state,
               power === "net" ? 12 : 16,
+              "shot",
+              enemy.sprite,
+              struckAt,
             );
-            this.audio?.play(defeated ? "enemyDefeated" : "enemyHit");
             if (defeated) {
               enemies.defeat(enemy);
             }
@@ -410,6 +468,7 @@ export class GameScene extends Phaser.Scene {
           }
           this.hitCooldownUntil = this.time.now + HIT_COOLDOWN;
           damagePlayer(this.state, enemy.state.damage, contactMessage(enemy));
+          this.feedback?.hurt();
           if (this.state.player.health > 0) {
             this.audio?.play("playerHurt");
           }
@@ -444,7 +503,7 @@ export class GameScene extends Phaser.Scene {
   private animatePlayer(
     player: Phaser.Physics.Arcade.Sprite,
     actions: ActionState,
-    mode: "grounded" | "airborne" | "swinging",
+    mode: PlayerMode,
   ): void {
     const velocityX = player.body?.velocity.x ?? 0;
     if (Math.abs(velocityX) > 40) {
@@ -522,15 +581,15 @@ export class GameScene extends Phaser.Scene {
 
       this.audio?.play("melee");
       enemy.sprite.setVelocityX(facing * 240);
-      enemy.sprite.setTint(0xffffff);
-      this.requireWorld().delay(90, () => {
-        if (enemy.sprite.active) {
-          enemy.sprite.clearTint();
-        }
-      });
 
-      const defeated = damageEnemy(this.state, enemy.state, 20);
-      this.audio?.play(defeated ? "enemyDefeated" : "enemyHit");
+      const defeated = this.requireFeedback().damage(
+        this.state,
+        enemy.state,
+        20,
+        "melee",
+        enemy.sprite,
+        { x: enemy.sprite.x, y: enemy.sprite.y },
+      );
       if (defeated) {
         this.enemies?.defeat(enemy);
       }
@@ -629,29 +688,7 @@ export class GameScene extends Phaser.Scene {
     radius: number,
     duration: number,
   ): void {
-    const world = this.requireWorld();
-    const burst = world.track(this.add.graphics().setDepth(9));
-    burst.lineStyle(2, 0xeef8ff, 0.82);
-    burst.strokeCircle(x, y, radius);
-    burst.strokeCircle(x, y, radius * 0.55);
-    for (let spoke = 0; spoke < 10; spoke += 1) {
-      const angle = (Math.PI * 2 * spoke) / 10;
-      burst.lineBetween(
-        x,
-        y,
-        x + Math.cos(angle) * radius,
-        y + Math.sin(angle) * radius,
-      );
-    }
-
-    const tween: Phaser.Tweens.Tween = world.tween({
-      targets: burst,
-      alpha: 0,
-      scale: 1.18,
-      duration,
-      ease: "Sine.out",
-      onComplete: () => world.discard(burst, tween),
-    });
+    spawnWebBurst(this, this.requireWorld(), x, y, radius, duration);
   }
 
   private knockOut(player: Phaser.Physics.Arcade.Sprite): void {
@@ -661,6 +698,9 @@ export class GameScene extends Phaser.Scene {
     this.audio?.music.cue("knockedOut");
     this.audio?.setWind(0);
     this.webs?.clearLine();
+    // Before the pose: the blow that finished the hero left a white flash on
+    // them, and retiring it a frame later would wipe the knocked-out tint.
+    this.feedback?.reset();
     player.setVelocity(0, 0);
     player.anims.stop();
     player.setTexture(artKeys.hero.glide);
@@ -700,6 +740,13 @@ export class GameScene extends Phaser.Scene {
       throw new Error("Player controller has not been created.");
     }
     return this.controller;
+  }
+
+  private requireFeedback(): RunFeedback {
+    if (!this.feedback) {
+      throw new Error("Run feedback has not been created.");
+    }
+    return this.feedback;
   }
 }
 
