@@ -15,8 +15,7 @@ const DEFINITIONS: readonly AnimationDefinition[] = [
   { key: "player-swing", frames: artKeys.hero.swingCycle, frameRate: 8 },
   { key: "robot-walk", frames: artKeys.robot, frameRate: 5 },
   { key: "gunner-walk", frames: artKeys.enforcer, frameRate: 4 },
-  // The drone frames are a yaw sweep, not a loop: run them out and back.
-  { key: "drone-fly", frames: artKeys.drone, frameRate: 6, yoyo: true },
+  { key: "drone-fly", frames: artKeys.drone, frameRate: 6 },
 ];
 
 /**

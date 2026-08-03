@@ -30,6 +30,15 @@ def parse_band(value: str) -> tuple[float, float]:
     return low, high
 
 
+def parse_offsets(value: str) -> tuple[int, ...]:
+    try:
+        return tuple(int(part) for part in value.split(","))
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            f"Expected comma-separated integers, received {value!r}."
+        ) from error
+
+
 def key_chroma_green(source: Image.Image, softness: int) -> Image.Image:
     """Replace a flat green backdrop with alpha and remove green spill."""
     red, green, blue = source.split()[:3]
@@ -81,6 +90,7 @@ def normalize_frame(
     scale: float,
     band: tuple[float, float] | None = None,
     hang_from_top: int | None = None,
+    offset_y: int = 0,
 ) -> Image.Image:
     width = max(1, round(component.width * scale))
     height = max(1, round(component.height * scale))
@@ -93,11 +103,12 @@ def normalize_frame(
     resized = component.resize((width, height), Image.Resampling.LANCZOS)
     shift = round(anchor_offset(component, band) * scale)
     left = (frame_size - width) // 2 - shift
-    top = hang_from_top if hang_from_top is not None else frame_size - height
-    if top + height > frame_size:
+    baseline = hang_from_top if hang_from_top is not None else frame_size - height
+    top = baseline + offset_y
+    if top < 0 or top + height > frame_size:
         raise ValueError(
-            f"A {height}px pose hung {hang_from_top}px from the top overflows a "
-            f"{frame_size}px frame; lower --scale or --hang-from-top."
+            f"A {height}px pose placed at y={top} overflows a {frame_size}px frame; "
+            f"lower --scale, --hang-from-top or --offset-y."
         )
     frame = Image.new("RGBA", (frame_size, frame_size))
     frame.paste(resized, (left, top), resized)
@@ -145,6 +156,16 @@ def main() -> None:
             "where the raised fist is the anchor and the feet are not."
         ),
     )
+    parser.add_argument(
+        "--offset-y",
+        type=parse_offsets,
+        default=(0,),
+        help=(
+            "Per-frame vertical nudge in output pixels, negative for up, cycled across "
+            "the seeds, e.g. 0,-3,-5,-3. Registration otherwise pins every pose to the "
+            "same line, which erases deliberate vertical motion such as a hover bob."
+        ),
+    )
     args = parser.parse_args()
 
     source = Image.open(args.input).convert("RGBA")
@@ -160,6 +181,7 @@ def main() -> None:
             args.scale,
             args.anchor_band,
             args.hang_from_top,
+            args.offset_y[offset % len(args.offset_y)],
         )
         frame.save(args.out_dir / f"{args.start_index + offset:02}.png")
 

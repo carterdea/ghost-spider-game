@@ -37,10 +37,10 @@ export const art = {
       path: "/assets/environments/wet-asphalt.webp",
     },
   ],
-  hero: framePaths("hero", 20),
+  hero: framePaths("hero", 24),
   robot: framePaths("robot", 6),
   enforcer: framePaths("enforcer", 6),
-  drone: framePaths("drone", 6),
+  drone: framePaths("drone", 10),
   npcs: framePaths("npcs", 6),
 } as const;
 
@@ -53,10 +53,11 @@ const cycle = (
   frames.slice(first - 1, first - 1 + count).map(({ key }) => key);
 
 // Hero frames 01-06 are the original two-pose sets, kept so the art stays
-// recoverable. Frames 07+ are the hand-directed multi-pose cycles.
+// recoverable. Frames 07+ are the hand-directed multi-pose cycles. Frames 13-16
+// are a superseded idle whose poses drifted in yaw; 21-24 replace them.
 export const artKeys = {
   hero: {
-    idle: cycle(art.hero, 13, 4),
+    idle: cycle(art.hero, 21, 4),
     run: cycle(art.hero, 7, 6),
     glide: art.hero[4].key,
     swing: art.hero[5].key,
@@ -64,7 +65,9 @@ export const artKeys = {
   },
   robot: cycle(art.robot, 3, 4),
   enforcer: cycle(art.enforcer, 3, 4),
-  drone: cycle(art.drone, 3, 4),
+  // Drone frames 03-06 were a yaw sweep, not a hover; 07-10 hold station and
+  // loop cleanly, so the animation no longer needs to yoyo.
+  drone: cycle(art.drone, 7, 4),
   npcs: art.npcs.map(({ key }) => key),
   street: art.environments[3].key,
 } as const;
