@@ -1,36 +1,37 @@
 import Phaser from "phaser";
-import { type ActionState, createEmptyActions } from "./actions";
+import type { ActionKeys, GameAction } from "./actions";
 
-type KeyMap = Record<keyof ActionState, Phaser.Input.Keyboard.Key>;
+const KEY_CODES: Record<GameAction, readonly number[]> = {
+  moveLeft: [Phaser.Input.Keyboard.KeyCodes.A],
+  moveRight: [Phaser.Input.Keyboard.KeyCodes.D],
+  reelIn: [Phaser.Input.Keyboard.KeyCodes.W],
+  reelOut: [Phaser.Input.Keyboard.KeyCodes.S],
+  jump: [Phaser.Input.Keyboard.KeyCodes.SPACE],
+  web: [Phaser.Input.Keyboard.KeyCodes.E],
+  attack: [Phaser.Input.Keyboard.KeyCodes.J],
+  gadget: [Phaser.Input.Keyboard.KeyCodes.K],
+  cycleGadget: [Phaser.Input.Keyboard.KeyCodes.Q],
+  glide: [Phaser.Input.Keyboard.KeyCodes.SHIFT],
+  // Space doubles as the start prompt: it is the key a thumb is already on, and
+  // the frame that lifts the title swallows the press so it is not also a jump.
+  start: [
+    Phaser.Input.Keyboard.KeyCodes.SPACE,
+    Phaser.Input.Keyboard.KeyCodes.ENTER,
+  ],
+  pause: [Phaser.Input.Keyboard.KeyCodes.ESC, Phaser.Input.Keyboard.KeyCodes.P],
+  reset: [Phaser.Input.Keyboard.KeyCodes.R],
+};
 
-export const createKeyboardBindings = (scene: Phaser.Scene): KeyMap => {
+export const createKeyboardBindings = (scene: Phaser.Scene): ActionKeys => {
   const keyboard = scene.input.keyboard;
 
   if (!keyboard) {
     throw new Error("Keyboard input is required for Ghost Spider Swing.");
   }
 
-  return {
-    moveLeft: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-    moveRight: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    reelIn: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-    reelOut: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-    jump: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
-    web: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
-    attack: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),
-    gadget: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K),
-    cycleGadget: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
-    glide: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
-    reset: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R),
-  };
-};
-
-export const readActions = (keys: KeyMap): ActionState => {
-  const actions = createEmptyActions();
-
-  for (const action of Object.keys(keys) as Array<keyof ActionState>) {
-    actions[action] = keys[action].isDown;
+  const bound = {} as Record<GameAction, readonly Phaser.Input.Keyboard.Key[]>;
+  for (const action of Object.keys(KEY_CODES) as GameAction[]) {
+    bound[action] = KEY_CODES[action].map((code) => keyboard.addKey(code));
   }
-
-  return actions;
+  return bound;
 };

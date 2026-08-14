@@ -7,6 +7,7 @@ import {
   isFinalLevelIndex,
   isGoalReached,
   syncLevelProgress,
+  tickRunClock,
 } from "./progression";
 
 const goalPosition = (index: number) => ({
@@ -153,6 +154,24 @@ describe("syncLevelProgress", () => {
     expect(state.progression.levelIndex).toBe(1);
   });
 
+  test("counts every district cleared, the last one included", () => {
+    const state = createInitialGameState(LEVELS[0]);
+
+    expect(state.progression.districtsCleared).toBe(0);
+    syncLevelProgress(state, goalPosition(0));
+    expect(state.progression.districtsCleared).toBe(1);
+
+    for (let index = 1; index < LEVELS.length; index += 1) {
+      syncLevelProgress(state, goalPosition(index));
+    }
+
+    expect(state.progression.status).toBe("cleared");
+    expect(state.progression.districtsCleared).toBe(LEVELS.length);
+    // A cleared run touching the goal again must not keep counting.
+    syncLevelProgress(state, goalPosition(LEVELS.length - 1));
+    expect(state.progression.districtsCleared).toBe(LEVELS.length);
+  });
+
   test("does not advance past the final level", () => {
     const state = createInitialGameState(LEVELS[0]);
     state.progression.levelIndex = LEVELS.length - 1;
@@ -160,5 +179,42 @@ describe("syncLevelProgress", () => {
     syncLevelProgress(state, goalPosition(LEVELS.length - 1));
 
     expect(state.progression.levelIndex).toBe(LEVELS.length - 1);
+  });
+});
+
+describe("the run clock", () => {
+  test("banks only the time the hero is actually playing", () => {
+    const state = createInitialGameState(LEVELS[0], "title");
+
+    // The title screen is not the player's time to lose.
+    tickRunClock(state, 500);
+    expect(state.progression.elapsedMs).toBe(0);
+
+    state.progression.status = "playing";
+    tickRunClock(state, 16);
+    tickRunClock(state, 16);
+    expect(state.progression.elapsedMs).toBe(32);
+
+    state.progression.status = "paused";
+    tickRunClock(state, 5000);
+    expect(state.progression.elapsedMs).toBe(32);
+
+    state.progression.status = "playing";
+    tickRunClock(state, 8);
+    expect(state.progression.elapsedMs).toBe(40);
+
+    state.progression.status = "cleared";
+    tickRunClock(state, 1000);
+    expect(state.progression.elapsedMs).toBe(40);
+  });
+
+  test("a poisoned frame cannot run the clock backwards", () => {
+    const state = createInitialGameState(LEVELS[0]);
+
+    tickRunClock(state, 100);
+    tickRunClock(state, -400);
+    tickRunClock(state, Number.NaN);
+
+    expect(state.progression.elapsedMs).toBe(100);
   });
 });

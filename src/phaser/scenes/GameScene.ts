@@ -2,21 +2,31 @@ import Phaser from "phaser";
 import { createAudio, type GameAudio } from "../../audio";
 import { artKeys, preloadArt } from "../../game/assets/manifest";
 import { LEVELS, type LevelDefinition } from "../../game/content/levels";
-import { type ActionState, createEmptyActions } from "../../game/input/actions";
-import { createKeyboardBindings, readActions } from "../../game/input/bindings";
+import {
+  type ActionState,
+  createEmptyActions,
+  readActions,
+} from "../../game/input/actions";
+import { createKeyboardBindings } from "../../game/input/bindings";
 import type { Vec2 } from "../../game/simulation/physics/vector";
 import { clamp } from "../../game/simulation/physics/vector";
 import {
   createInitialGameState,
   enterLevel,
   type GameState,
+  startRun,
+  togglePause,
 } from "../../game/simulation/state";
-import { damagePlayer } from "../../game/simulation/systems/combat";
+import {
+  contactKnockback,
+  damagePlayer,
+} from "../../game/simulation/systems/combat";
 import {
   getLevelByIndex,
   isFinalLevelIndex,
   isGoalReached,
   syncLevelProgress,
+  tickRunClock,
 } from "../../game/simulation/systems/progression";
 import { Hud } from "../../ui/hud/hud";
 import { createCharacterAnimations } from "../actors/animations";
@@ -34,6 +44,7 @@ import type { LevelWorld } from "../world/LevelWorld";
 import { createPropTextures } from "../world/textures";
 import { bossSound, bossSpawnFor } from "./bossBinding";
 import { RunFeedback } from "./feedback";
+import { syncRunMusic } from "./runMusic";
 
 const ATTACK_COOLDOWN = 280;
 const HIT_COOLDOWN = 700;
@@ -50,7 +61,7 @@ const SWING_SOUND_RANGE = 1250;
 const WIND_SPEED_RANGE = 1000;
 
 export class GameScene extends Phaser.Scene {
-  private state: GameState = createInitialGameState(LEVELS[0]);
+  private state: GameState = createInitialGameState(LEVELS[0], "title");
   private hud?: Hud;
   private keys?: ReturnType<typeof createKeyboardBindings>;
   private previousActions: ActionState = createEmptyActions();
@@ -84,9 +95,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   public create(): void {
-    this.state = createInitialGameState(LEVELS[0]);
+    // A run opens on the title, not mid-swing: the world is built and the level
+    // is loaded behind the panel, so the first press drops straight into play.
+    this.state = createInitialGameState(LEVELS[0], "title");
     this.setUpAudio();
-    this.audio?.music.setDistrict(this.state.progression.levelIndex);
+    this.syncMusic();
 
     // Registered before anything it owns exists: Phaser's own groups tear
     // themselves down on this event in creation order, and a group destroyed
@@ -199,19 +212,67 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // The world runs slow for a beat after a blow lands. Everything that moves
-    // reads the same delta, so the freeze cannot pull the game out of step.
-    const simDelta = this.feedback?.step(delta) ?? delta;
+    // Space is both the start prompt and the jump, so the press that lifts the
+    // title is spent here rather than launching the hero on their first frame.
+    if (this.wasPressed(actions, "start") && this.beginRun()) {
+      this.previousActions = actions;
+      this.renderHud();
+      return;
+    }
+    if (this.wasPressed(actions, "pause")) {
+      this.setPaused();
+    }
 
-    if (this.state.progression.status === "playing") {
+    const playing = this.state.progression.status === "playing";
+    const held = this.state.progression.status === "paused";
+    tickRunClock(this.state, delta);
+
+    // The world runs slow for a beat after a blow lands, and stops dead while
+    // the run is held. Both are the same physics flag, so both go through the
+    // one call that owns it — see `RunFeedback.step`.
+    const simDelta = this.feedback?.step(delta, held) ?? delta;
+
+    if (playing) {
       this.updateRun(actions, time, simDelta);
+      this.webs?.update();
     } else {
       this.player?.setVelocity(0, 0);
     }
 
-    this.webs?.update();
     this.renderHud();
     this.previousActions = actions;
+  }
+
+  /**
+   * The start prompt. The level is already built, so this only lifts the panel
+   * and hands the score its district. Returns whether it started anything.
+   */
+  private beginRun(): boolean {
+    if (!startRun(this.state)) {
+      return false;
+    }
+    this.syncMusic();
+    return true;
+  }
+
+  /** Escape or P. A title or a finished run has no world to hold. */
+  private setPaused(): void {
+    const before = this.state.progression.status;
+    if (togglePause(this.state) !== before) {
+      this.syncMusic();
+    }
+  }
+
+  /** The score follows the run's status. The table lives in `runMusic`. */
+  private syncMusic(): void {
+    const audio = this.audio;
+    if (audio) {
+      syncRunMusic(
+        audio,
+        this.state.progression.status,
+        this.state.progression.levelIndex,
+      );
+    }
   }
 
   private updateRun(actions: ActionState, time: number, delta: number): void {
@@ -480,6 +541,18 @@ export class GameScene extends Phaser.Scene {
           }
           this.hitCooldownUntil = this.time.now + HIT_COOLDOWN;
           damagePlayer(this.state, enemy.state.damage, contactMessage(enemy));
+          // Thrown clear, not merely made invulnerable. Without this the hero
+          // stays inside the enemy and takes the same hit on every tick of the
+          // cooldown, with no input that escapes it. It goes through the
+          // controller because the sim owns velocity — and it can only fire on
+          // a frame the physics world ran, so a pause or a hit-stop can never
+          // bank one and spend it on the frame the world comes back.
+          this.controller?.shove(
+            contactKnockback(
+              { x: player.x, y: player.y },
+              { x: enemy.sprite.x, y: enemy.sprite.y },
+            ),
+          );
           this.feedback?.hurt();
           if (this.state.player.health > 0) {
             this.audio?.play("playerHurt");

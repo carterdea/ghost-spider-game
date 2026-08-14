@@ -380,6 +380,61 @@ body {
   display: none;
 }
 
+/* Dims the city behind a held world: the title, a pause, the end of a run. */
+.curtain {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 40%, transparent, rgba(4, 6, 14, 0.82) 78%),
+    rgba(6, 8, 18, 0.55);
+  animation: curtain-in 260ms ease;
+}
+
+.curtain[hidden] {
+  display: none;
+}
+
+/* The title hides the skyline almost entirely, so the name carries the frame. */
+.curtain.is-title {
+  background:
+    radial-gradient(120% 90% at 50% 42%, rgba(124, 92, 255, 0.14), transparent),
+    rgba(6, 8, 18, 0.88);
+}
+
+.curtain.is-paused {
+  backdrop-filter: blur(3px) saturate(0.75);
+}
+
+@keyframes curtain-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A held run pulls its in-play furniture back: nothing competes with the panel. */
+[data-run="title"] .hud-top,
+[data-run="title"] .hint-chip,
+[data-run="title"] .message {
+  opacity: 0;
+  visibility: hidden;
+}
+
+[data-run="paused"] .hud-top,
+[data-run="paused"] .hint-chip,
+[data-run="paused"] .message,
+[data-run="cleared"] .hint-chip,
+[data-run="knockedOut"] .hint-chip {
+  opacity: 0.28;
+}
+
+.hud-top,
+.hint-chip,
+.message {
+  transition:
+    opacity 220ms ease,
+    visibility 220ms ease;
+}
+
 .run-banner {
   position: absolute;
   top: 50%;
@@ -405,6 +460,18 @@ body {
   display: none;
 }
 
+.run-banner-kicker {
+  color: var(--level-accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.run-banner-kicker:empty {
+  display: none;
+}
+
 .run-banner-title {
   font-size: 26px;
   font-weight: 800;
@@ -415,6 +482,103 @@ body {
 .run-banner-hint {
   color: #cfd4ff;
   font-size: 13px;
+}
+
+/* The title screen is the one place the game says its own name. */
+.run-banner.is-title {
+  max-width: min(620px, calc(100vw - 32px));
+  padding: 30px 34px 26px;
+}
+
+.run-banner.is-title .run-banner-title {
+  background: linear-gradient(96deg, var(--teal), var(--pink) 62%, var(--gold));
+  background-clip: text;
+  color: transparent;
+  font-size: clamp(30px, 6vw, 46px);
+  letter-spacing: 0.08em;
+  line-height: 1.05;
+  text-shadow: 0 0 40px rgba(255, 121, 198, 0.25);
+}
+
+.run-banner.is-paused {
+  border-color: color-mix(in srgb, var(--violet) 60%, transparent);
+}
+
+/* Read back what the run amounted to, four numbers wide. */
+.run-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.run-summary[hidden] {
+  display: none;
+}
+
+.run-stat {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+}
+
+.run-stat-label {
+  color: #9aa3c7;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.run-stat-value {
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.run-controls {
+  display: grid;
+  gap: 5px 34px;
+  /* Hugging columns rather than stretched ones: a key and its verb read as a
+     pair, and a full-width row would strand them at opposite edges. */
+  grid-template-columns: repeat(2, max-content);
+  justify-content: center;
+  width: 100%;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+}
+
+.run-controls[hidden] {
+  display: none;
+}
+
+.run-control {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.run-control-key {
+  min-width: 52px;
+  border: 1px solid rgba(246, 207, 114, 0.35);
+  border-radius: 5px;
+  padding: 1px 6px;
+  background: rgba(246, 207, 114, 0.08);
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.run-control-action {
+  color: #cfd4ff;
 }
 
 .run-banner.is-cleared .run-banner-title {
@@ -449,8 +613,15 @@ body {
   }
 
   .run-banner,
-  .combo {
+  .combo,
+  .curtain {
     animation: none;
+  }
+
+  .hud-top,
+  .hint-chip,
+  .message {
+    transition: none;
   }
 }
 
@@ -476,5 +647,13 @@ body {
   .message {
     top: calc(50% + min(31vw, 150px));
     bottom: auto;
+  }
+
+  .run-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .run-controls {
+    grid-template-columns: 1fr;
   }
 }

@@ -4,20 +4,9 @@ import {
   ARSENAL,
   GADGET_ORDER,
 } from "../../game/simulation/systems/weapons/arsenal";
-
-const HERO_NAME = "Ghost Pirouette";
-
-const HINTS: ReadonlyArray<readonly [string, string]> = [
-  ["A/D", "move"],
-  ["W/S", "reel web"],
-  ["Space", "jump"],
-  ["E", "hold to swing"],
-  ["J", "strike"],
-  ["Q/K", "cycle / fire"],
-  ["Shift", "glide"],
-  ["M", "mute"],
-  ["R", "restart"],
-];
+import { type BannerNodes, buildBanner } from "./banner";
+import { HERO_NAME, HINTS } from "./controls";
+import { type Add, adder, SVG_NS } from "./elements";
 
 /**
  * The speaker glyph, as paths on a 16x16 grid: a cone, two sound waves, and the
@@ -55,31 +44,9 @@ export interface HudNodes {
   dots: readonly HTMLElement[];
   gadgets: ReadonlyMap<GadgetKind, GadgetChip>;
   message: HTMLElement;
-  banner: HTMLElement;
-  bannerTitle: HTMLElement;
-  bannerHint: HTMLElement;
+  /** Title, pause and the end of a run: every screen the world is held on. */
+  banner: BannerNodes;
 }
-
-type Add = <K extends keyof HTMLElementTagNameMap>(
-  parent: HTMLElement,
-  tag: K,
-  className: string,
-  text?: string,
-) => HTMLElementTagNameMap[K];
-
-const adder =
-  (doc: Document): Add =>
-  (parent, tag, className, text) => {
-    const node = doc.createElement(tag);
-    node.className = className;
-    if (text !== undefined) {
-      node.textContent = text;
-    }
-    parent.append(node);
-    return node;
-  };
-
-const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** The muted/unmuted speaker. `Hud` toggles the `is-muted` class on the wrapper. */
 const buildMute = (doc: Document, parent: HTMLElement): HTMLElement => {
@@ -209,11 +176,5 @@ export const buildHud = (root: HTMLElement): HudNodes => {
   const message = add(root, "div", "message");
   message.setAttribute("aria-live", "polite");
 
-  const banner = add(root, "div", "run-banner");
-  banner.setAttribute("role", "status");
-  banner.hidden = true;
-  const bannerTitle = add(banner, "strong", "run-banner-title");
-  const bannerHint = add(banner, "span", "run-banner-hint");
-
-  return { ...status, ...level, message, banner, bannerTitle, bannerHint };
+  return { ...status, ...level, message, banner: buildBanner(add, root) };
 };

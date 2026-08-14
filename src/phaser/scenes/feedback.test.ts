@@ -250,6 +250,68 @@ describe("hit-stop", () => {
     expect(feedback.step(FRAME_MS)).toBe(FRAME_MS);
   });
 
+  test("a pause holds the world, and letting it go gives it straight back", () => {
+    const { feedback, scene } = harness();
+
+    feedback.step(FRAME_MS, true);
+    expect(scene.physics.world.isPaused).toBe(true);
+
+    feedback.step(FRAME_MS, false);
+    expect(scene.physics.world.isPaused).toBe(false);
+  });
+
+  test("a pause lifted over a live freeze leaves the freeze holding", () => {
+    const { feedback, scene } = harness();
+
+    feedback.damage(state(), enemy(10), 20, "melee", asHero(new HeroStub()), {
+      x: 0,
+      y: 0,
+    });
+    feedback.step(FRAME_MS, true);
+    expect(scene.physics.world.isPaused).toBe(true);
+
+    // Resumed while the blow is still landing: the hit-stop is not over, so
+    // the world must stay held rather than lurch back into motion.
+    feedback.step(FRAME_MS, false);
+    expect(scene.physics.world.isPaused).toBe(true);
+
+    scene.now = 500;
+    feedback.step(FRAME_MS, false);
+    expect(scene.physics.world.isPaused).toBe(false);
+  });
+
+  test("a freeze that expires under a pause cannot release the world", () => {
+    const { feedback, scene } = harness();
+
+    feedback.damage(state(), enemy(10), 20, "melee", asHero(new HeroStub()), {
+      x: 0,
+      y: 0,
+    });
+    feedback.step(FRAME_MS, true);
+
+    // The pause outlasts the hit-stop: neither is latched, so the run's own
+    // status is the only thing left holding the world.
+    scene.now = 500;
+    feedback.step(FRAME_MS, true);
+    expect(scene.physics.world.isPaused).toBe(true);
+
+    feedback.step(FRAME_MS, false);
+    expect(scene.physics.world.isPaused).toBe(false);
+  });
+
+  test("a teardown mid-pause is put right by the next frame", () => {
+    const { feedback, scene } = harness();
+
+    feedback.step(FRAME_MS, true);
+    feedback.reset();
+    expect(scene.physics.world.isPaused).toBe(false);
+
+    // The pause is the run's, not the effect layer's: the next frame derives
+    // the world from it again rather than leaving it running underneath.
+    feedback.step(FRAME_MS, true);
+    expect(scene.physics.world.isPaused).toBe(true);
+  });
+
   test("a teardown mid-freeze releases the world", () => {
     const { feedback, scene } = harness();
 

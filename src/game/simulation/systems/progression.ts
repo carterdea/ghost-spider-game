@@ -82,6 +82,8 @@ export const syncLevelProgress = (
     return { kind: "none" };
   }
 
+  state.progression.districtsCleared += 1;
+
   if (isFinalLevelIndex(state.progression.levelIndex)) {
     state.progression.status = "cleared";
     state.player.message = `${level.name} cleared. The skyline is yours.`;
@@ -93,4 +95,17 @@ export const syncLevelProgress = (
   markVisited(state, nextLevel.id);
   state.player.message = `${nextLevel.name}: ${nextLevel.subtitle}`;
   return { kind: "advanced", level: nextLevel };
+};
+
+/**
+ * Banks the frame against the run clock. Real milliseconds rather than the
+ * simulation's, so a hit-stop does not slow the timer down, and only while the
+ * hero is actually playing — the title, a pause and a finished run are all time
+ * the run should not be charged for.
+ */
+export const tickRunClock = (state: GameState, deltaMs: number): void => {
+  if (state.progression.status !== "playing" || !(deltaMs > 0)) {
+    return;
+  }
+  state.progression.elapsedMs += deltaMs;
 };

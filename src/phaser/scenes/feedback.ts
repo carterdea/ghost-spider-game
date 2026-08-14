@@ -104,11 +104,18 @@ export class RunFeedback {
    * every frame, so a freeze can only ever last as long as `Impact` says, and
    * pausing — rather than scaling `world.timeScale` — is what keeps Arcade from
    * banking the skipped time and spending it all on the frame the freeze lifts.
+   *
+   * `held` is the run being paused. It shares `world.isPaused` with the
+   * hit-stop, and this line is the only place either of them writes it: the
+   * world runs when neither wants it stopped, recomputed from both every frame.
+   * Nothing latches, so lifting a pause over a live freeze leaves the freeze
+   * holding the world, and a freeze that expires under a pause changes nothing
+   * — the two can never strand each other.
    */
-  public step(deltaMs: number): number {
+  public step(deltaMs: number, held = false): number {
     const simDelta = this.impact.step(deltaMs);
-    this.world.isPaused = this.impact.frozen;
-    this.particles.update(simDelta);
+    this.world.isPaused = held || this.impact.frozen;
+    this.particles.update(held ? 0 : simDelta);
     return simDelta;
   }
 
@@ -170,6 +177,9 @@ export class RunFeedback {
   /**
    * Drops every live effect. Called when a level is torn down and when the run
    * ends, so nothing that was mid-flash writes over the pose that follows it.
+   *
+   * The world is released because the freeze this owned is gone. A pause is not
+   * this object's to hold, and the next `step` re-derives the world from it.
    */
   public reset(): void {
     this.impact.reset();

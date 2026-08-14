@@ -13,9 +13,13 @@ export class FakeGameObject {
   public x = 0;
   public y = 0;
   public depth = 0;
+  public alpha = 1;
+  public rotation = 0;
   public displayWidth = 0;
   public displayHeight = 0;
   public destroyCount = 0;
+  public scrollFactorX = 1;
+  public scrollFactorY = 1;
 
   public constructor(
     public readonly kind: string,
@@ -39,7 +43,23 @@ export class FakeGameObject {
     return this;
   }
 
-  public setAlpha(): this {
+  public setAlpha(alpha = 1): this {
+    this.alpha = alpha;
+    return this;
+  }
+
+  public setRotation(rotation = 0): this {
+    this.rotation = rotation;
+    return this;
+  }
+
+  public setScrollFactor(x = 1, y = x): this {
+    this.scrollFactorX = x;
+    this.scrollFactorY = y;
+    return this;
+  }
+
+  public setBlendMode(): this {
     return this;
   }
 
@@ -48,6 +68,10 @@ export class FakeGameObject {
   }
 
   public setFlipX(): this {
+    return this;
+  }
+
+  public setFlipY(): this {
     return this;
   }
 
@@ -73,6 +97,32 @@ export class FakeGameObject {
 
   public destroy(): void {
     this.destroyCount += 1;
+  }
+}
+
+/** A tiled object, which is scrolled by its texture offset rather than moved. */
+export class FakeTileSprite extends FakeGameObject {
+  public tilePositionX = 0;
+  public tilePositionY = 0;
+  public tileScaleX = 1;
+  public tileScaleY = 1;
+  public width = 0;
+  public height = 0;
+
+  public constructor() {
+    super("tileSprite");
+  }
+
+  public setTileScale(x = 1, y = x): this {
+    this.tileScaleX = x;
+    this.tileScaleY = y;
+    return this;
+  }
+
+  public setSize(width: number, height: number): this {
+    this.width = width;
+    this.height = height;
+    return this;
   }
 }
 
@@ -213,10 +263,34 @@ export class FakeStaticGroup {
   }
 }
 
+/** The slice of the world a camera is showing, as the weather reads it. */
+export class FakeWorldView {
+  public x = 0;
+  public y = 0;
+  public width = 1280;
+  public height = 720;
+
+  public get centerX(): number {
+    return this.x + this.width / 2;
+  }
+
+  public get centerY(): number {
+    return this.y + this.height / 2;
+  }
+}
+
 /** The camera as the fx layer uses it: it records kicks instead of shaking. */
 export class FakeCamera {
   public readonly shakes: { duration: number; amount: number }[] = [];
   public shakeResets = 0;
+  public readonly worldView = new FakeWorldView();
+
+  /** Puts the view's centre where a test wants it. */
+  public centerOn(x: number, y: number): this {
+    this.worldView.x = x - this.worldView.width / 2;
+    this.worldView.y = y - this.worldView.height / 2;
+    return this;
+  }
 
   public readonly shakeEffect = {
     reset: (): void => {
@@ -226,6 +300,60 @@ export class FakeCamera {
 
   public shake(duration: number, amount: number): void {
     this.shakes.push({ duration, amount });
+  }
+}
+
+type SceneHandler = (...args: never[]) => void;
+
+/**
+ * The scene's own event bus, recorded. Systems that drive themselves off the
+ * scene's update rather than being stepped by it have to give their listener
+ * back when they are destroyed, and `count` is how a test proves they did.
+ */
+export class FakeEvents {
+  private readonly listeners = new Map<
+    string,
+    { handler: SceneHandler; once: boolean }[]
+  >();
+
+  public on(event: string, handler: SceneHandler): this {
+    return this.add(event, handler, false);
+  }
+
+  public once(event: string, handler: SceneHandler): this {
+    return this.add(event, handler, true);
+  }
+
+  public off(event: string, handler: SceneHandler): this {
+    const bound = this.listeners.get(event);
+    if (bound) {
+      this.listeners.set(
+        event,
+        bound.filter((entry) => entry.handler !== handler),
+      );
+    }
+    return this;
+  }
+
+  public emit(event: string, ...args: never[]): this {
+    for (const entry of [...(this.listeners.get(event) ?? [])]) {
+      if (entry.once) {
+        this.off(event, entry.handler);
+      }
+      entry.handler(...args);
+    }
+    return this;
+  }
+
+  public count(event: string): number {
+    return this.listeners.get(event)?.length ?? 0;
+  }
+
+  private add(event: string, handler: SceneHandler, once: boolean): this {
+    const bound = this.listeners.get(event) ?? [];
+    bound.push({ handler, once });
+    this.listeners.set(event, bound);
+    return this;
   }
 }
 
@@ -251,8 +379,15 @@ export class SceneDouble {
       this.record(new FakeGameObject("rectangle")).setPosition(x, y),
     image: (x: number, y: number, texture: string): FakeGameObject =>
       this.record(new FakeGameObject("image", texture)).setPosition(x, y),
-    tileSprite: (x: number, y: number): FakeGameObject =>
-      this.record(new FakeGameObject("tileSprite")).setPosition(x, y),
+    tileSprite: (
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+    ): FakeTileSprite =>
+      this.record(new FakeTileSprite())
+        .setSize(width, height)
+        .setPosition(x, y),
     graphics: (): FakeGraphics => this.record(new FakeGraphics(this)),
   };
 
@@ -299,6 +434,8 @@ export class SceneDouble {
   };
 
   public readonly cameras = { main: new FakeCamera() };
+
+  public readonly events = new FakeEvents();
 
   public readonly physics = {
     /** `isPaused` is the hit-stop's handle on the simulation. */

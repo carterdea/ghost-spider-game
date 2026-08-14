@@ -1,30 +1,20 @@
 import { LEVELS } from "../../game/content/levels";
-import type {
-  GadgetKind,
-  GameState,
-  RunStatus,
+import {
+  type GadgetKind,
+  type GameState,
+  type RunStatus,
+  runSummary,
 } from "../../game/simulation/state";
 import { getLevelByIndex } from "../../game/simulation/systems/progression";
 import {
   ARSENAL,
   GADGET_ORDER,
 } from "../../game/simulation/systems/weapons/arsenal";
+import { writeBanner } from "./banner";
 import { buildHud, type HudNodes } from "./dom";
 
 /** Charges carried, by weapon. The rack writes it; the HUD only reads it. */
 export type GadgetCharges = Readonly<Record<GadgetKind, number>>;
-
-const BANNERS: Record<RunStatus, { title: string; hint: string } | null> = {
-  playing: null,
-  cleared: {
-    title: "Skyline Secured",
-    hint: "Every district is clear. Press R to run it again.",
-  },
-  knockedOut: {
-    title: "Knocked Out",
-    hint: "The city needs you. Press R to restart.",
-  },
-};
 
 /** `""` is the freshly built DOM, where no gadget chip is highlighted yet. */
 type SelectedGadget = GadgetKind | "";
@@ -164,7 +154,7 @@ export class Hud {
     const status = bannerStatus(state);
     if (status !== this.status) {
       this.status = status;
-      this.writeStatus(status);
+      this.writeStatus(state, status);
     }
   }
 
@@ -254,12 +244,14 @@ export class Hud {
     );
   }
 
-  private writeStatus(status: RunStatus): void {
-    const banner = BANNERS[status];
-    this.nodes.banner.className =
-      banner === null ? "run-banner" : `run-banner is-${status}`;
-    this.nodes.banner.hidden = banner === null;
-    this.nodes.bannerTitle.textContent = banner?.title ?? "";
-    this.nodes.bannerHint.textContent = banner?.hint ?? "";
+  /**
+   * The banner owns its own copy; the HUD only says which status it is and
+   * hands over the numbers a finished run reads back. The status also lands on
+   * the root, so the stylesheet can pull the in-play clusters back out of the
+   * way without the HUD having to touch each of them.
+   */
+  private writeStatus(state: GameState, status: RunStatus): void {
+    this.root.dataset.run = status;
+    writeBanner(this.nodes.banner, status, runSummary(state));
   }
 }

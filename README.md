@@ -46,7 +46,12 @@ bun test
 - `J`: web-glob strike, or a close-range kick near enemies
 - `Q`: cycle weapon · `K`: fire it
 - `Shift`: slow the fall with web-wings
-- `M`: mute · `R`: restart
+- `Space` / `Enter`: start the run from the title
+- `Esc` / `P`: pause · `M`: mute · `R`: restart
+
+A run opens on a title screen listing all of the above, and every control is
+repeated on the pause panel. Clearing the skyline or being knocked out ends the
+run on a summary: final score, districts cleared, best chain and time taken.
 
 ## Game Loop
 
