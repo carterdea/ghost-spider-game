@@ -217,6 +217,19 @@ export class PlayerController {
     this.sprite.clearTint();
   }
 
+  /**
+   * Something outside the sim moved the hero. The sim owns velocity, so a
+   * `setVelocity` on the sprite is overwritten by the next `commit`; this is the
+   * way in.
+   *
+   * It replaces the hero's motion rather than adding to it, so a knockback lands
+   * the same weight whether they were falling into the blow or running from it.
+   * The rope is left alone: a shove taken mid-swing is the arc's to absorb.
+   */
+  public shove(velocity: Vec2): void {
+    this.velocity = { x: velocity.x, y: velocity.y };
+  }
+
   public update(
     actions: ActionState,
     jumpPressed: boolean,

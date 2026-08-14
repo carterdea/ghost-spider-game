@@ -3,7 +3,9 @@ import { LEVELS } from "../../content/levels";
 import { createInitialGameState, type GameState } from "../state";
 import {
   breakCombo,
+  CONTACT_KNOCKBACK,
   comboMultiplier,
+  contactKnockback,
   createCombo,
   damageEnemy,
   damagePlayer,
@@ -100,6 +102,31 @@ describe("combo chains", () => {
     expect(combo.best).toBe(2);
   });
 
+  test("the run keeps the longest chain it managed, chains apart included", () => {
+    const state = stateWith(["robot", "robot", "robot", "robot"]);
+    const combo = createCombo();
+
+    damageEnemy(state, state.enemies[0], 60, combo);
+    damageEnemy(state, state.enemies[1], 60, combo);
+    damageEnemy(state, state.enemies[2], 60, combo);
+    expect(state.progression.bestChain).toBe(3);
+
+    breakCombo(combo);
+    damageEnemy(state, state.enemies[3], 60, combo);
+
+    // The chain running is 1; the run's best is still the three it landed.
+    expect(combo.count).toBe(1);
+    expect(state.progression.bestChain).toBe(3);
+  });
+
+  test("a takedown scored without a chain still counts as one link", () => {
+    const state = stateWith(["robot"]);
+
+    damageEnemy(state, state.enemies[0], 60);
+
+    expect(state.progression.bestChain).toBe(1);
+  });
+
   test("a stagger neither extends nor breaks the chain", () => {
     const state = stateWith(["robot", "gunner"]);
     const combo = createCombo();
@@ -120,5 +147,38 @@ describe("combo chains", () => {
 
     damageEnemy(state, state.enemies[1], 60, combo);
     expect(state.player.message).toBe("Drone clipped. 2 chain!");
+  });
+});
+
+describe("contact knockback", () => {
+  test("throws the hero away from what touched them", () => {
+    const fromLeft = contactKnockback({ x: 200, y: 100 }, { x: 160, y: 100 });
+    expect(fromLeft.x).toBe(CONTACT_KNOCKBACK.speed);
+
+    const fromRight = contactKnockback({ x: 200, y: 100 }, { x: 240, y: 100 });
+    expect(fromRight.x).toBe(-CONTACT_KNOCKBACK.speed);
+  });
+
+  test("always lifts, so the hero leaves the surface they were pinned on", () => {
+    for (const source of [
+      { x: 160, y: 100 },
+      { x: 240, y: 40 },
+    ]) {
+      expect(contactKnockback({ x: 200, y: 100 }, source).y).toBeLessThan(0);
+    }
+  });
+
+  test("lifts straight up when there is no side to be thrown towards", () => {
+    const overhead = contactKnockback({ x: 200, y: 100 }, { x: 200, y: 40 });
+    expect(overhead.x).toBe(0);
+    expect(overhead.y).toBe(CONTACT_KNOCKBACK.lift);
+  });
+
+  test("carries the hero clear of the reach that hit them", () => {
+    // The escape only works if one throw outruns the invulnerability window:
+    // 700ms of travel has to exceed a melee enemy's strike range, or the next
+    // tick lands on a hero who never left.
+    const travel = (CONTACT_KNOCKBACK.speed * 700) / 1000;
+    expect(travel).toBeGreaterThan(96);
   });
 });

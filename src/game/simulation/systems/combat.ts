@@ -1,3 +1,4 @@
+import type { Vec2 } from "../physics/vector";
 import type { ActorKind, EnemyState, GameState } from "../state";
 
 /**
@@ -90,6 +91,9 @@ export const damageEnemy = (
   }
 
   const chain = combo ? extendCombo(combo) : 1;
+  // Published to the run so the end-of-run panel has it: the chain itself is
+  // gone by then, broken by the landing that followed it.
+  state.progression.bestChain = Math.max(state.progression.bestChain, chain);
   state.player.score += Math.round(
     TAKEDOWN_SCORE[enemy.kind] * comboMultiplier(chain),
   );
@@ -98,4 +102,36 @@ export const damageEnemy = (
       ? `${TAKEDOWN_MESSAGE[enemy.kind]} ${chain} chain!`
       : TAKEDOWN_MESSAGE[enemy.kind];
   return true;
+};
+
+/**
+ * How hard a contact hit throws the hero clear of whatever hit them.
+ *
+ * Being touched has to end the contact, not merely start a timer. With only an
+ * invulnerability window between hits, a single melee enemy standing on the
+ * hero deals its damage on every tick of that window and there is no input that
+ * escapes it: one 11-damage robot measured 8 hits in 5 seconds, out-killing a
+ * district holding seven enemies. Throwing the hero out of reach turns a hit
+ * into something to recover from, which is the same read every telegraphed
+ * attack in the game already asks for.
+ */
+export const CONTACT_KNOCKBACK = {
+  /** Push away from the enemy, in px/s. */
+  speed: 380,
+  /** Upward component, so the hero is lifted off rather than scraped along. */
+  lift: -260,
+} as const;
+
+/**
+ * The velocity that throws `hero` away from `source`. Directly overhead or
+ * exactly co-located falls back to a straight lift, since there is no side to
+ * be thrown towards.
+ */
+export const contactKnockback = (hero: Vec2, source: Vec2): Vec2 => {
+  const away = hero.x - source.x;
+  const heading = away === 0 ? 0 : Math.sign(away);
+  return {
+    x: heading * CONTACT_KNOCKBACK.speed,
+    y: CONTACT_KNOCKBACK.lift,
+  };
 };
