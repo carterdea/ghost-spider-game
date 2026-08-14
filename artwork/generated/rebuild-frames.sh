@@ -59,3 +59,48 @@ extract --input artwork/generated/drone-hover-v2-chroma.png \
   --out-dir public/assets/characters/drone/frames --start-index 7 \
   --chroma-green --scale 0.373 --offset-y 0,-2,-3,-2 \
   --seed 271,362 --seed 814,362 --seed 1357,362 --seed 1900,362
+
+# --- Weapon and web props ------------------------------------------------
+# Props are extracted per column rather than per seed: a flood fill keeps only
+# the one connected shape it lands on, which silently drops the loose droplets
+# and detached strands that make a splat read as splatter. Every prop registers
+# on its frame centre because the runtime origin is the sprite centre, and
+# --fit states the on-frame size directly, since props have no shared character
+# height to calibrate a scale against.
+
+# Web bomb in flight: spins freely, so it is radially balanced and evenly lit.
+extract --input artwork/generated/web-bomb-flight-chroma.png \
+  --out-dir public/assets/weapons/web-bomb \
+  --chroma-green --columns 1 --fit 170 --centre
+
+# Web bomb arming pulse. The three frames are one drawing tiled three times with
+# only its emissives rescaled, so the silhouette cannot flicker between frames.
+uv run --with pillow python3 artwork/generated/pulse_emissive.py \
+  --input artwork/generated/web-bomb-armed-chroma.png \
+  --output artwork/generated/web-bomb-armed-pulse-chroma.png \
+  --tile --gains 0.62,1.0,1.5
+
+extract --input artwork/generated/web-bomb-armed-pulse-chroma.png \
+  --out-dir public/assets/weapons/web-bomb-armed \
+  --chroma-green --columns 3 --fit 184 --centre
+
+# Burst residue mesh. Drawn at 512 because it renders 400px wide in game.
+extract --input artwork/generated/web-mesh-chroma.png \
+  --out-dir public/assets/weapons/web-mesh \
+  --chroma-green --columns 1 --frame-size 512 --fit 500 --centre
+
+# Heavy web slug and tether dart, both drawn facing +X in a 2:1 frame. The dart
+# is painted bright silver-lilac rather than the dark metal it started as: at
+# its 26px runtime width a charcoal dart vanishes into the navy night sky.
+extract --input artwork/generated/impact-web-chroma.png \
+  --out-dir public/assets/weapons/impact-web \
+  --chroma-green --columns 1 --frame-size 192 --frame-height 96 --fit 186 --centre
+
+extract --input artwork/generated/web-line-dart-chroma.png \
+  --out-dir public/assets/weapons/web-line-dart \
+  --chroma-green --columns 1 --frame-size 192 --frame-height 96 --fit 186 --centre
+
+# Three impact decals, deliberately different shapes so repeats do not stamp.
+extract --input artwork/generated/web-splats-chroma.png \
+  --out-dir public/assets/weapons/web-splat \
+  --chroma-green --columns 3 --fit 184 --centre

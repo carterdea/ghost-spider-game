@@ -53,7 +53,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--columns", type=int, required=True)
+    parser.add_argument("--columns", type=int, default=None)
+    parser.add_argument(
+        "--tile",
+        action="store_true",
+        help=(
+            "Treat the input as a single frame and repeat it once per gain. A pulse "
+            "built this way cannot flicker in silhouette, because every frame is the "
+            "same drawing with only its emissives rescaled."
+        ),
+    )
     parser.add_argument(
         "--gains",
         type=parse_gains,
@@ -62,13 +71,18 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if len(args.gains) != args.columns:
-        raise SystemExit(
-            f"Expected {args.columns} gains, received {len(args.gains)}."
-        )
+    columns = args.columns if args.columns is not None else len(args.gains)
+    if len(args.gains) != columns:
+        raise SystemExit(f"Expected {columns} gains, received {len(args.gains)}.")
 
     source = Image.open(args.input).convert("RGB")
-    width = source.width // args.columns
+    if args.tile:
+        frame = source
+        source = Image.new("RGB", (frame.width * columns, frame.height))
+        for index in range(columns):
+            source.paste(frame, (frame.width * index, 0))
+
+    width = source.width // columns
     strip = Image.new("RGB", source.size)
     for index, gain in enumerate(args.gains):
         box = (width * index, 0, width * (index + 1), source.height)
