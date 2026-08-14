@@ -110,6 +110,78 @@ describe("level lifecycle", () => {
   });
 });
 
+describe("backdrop depth", () => {
+  test("the painted city lags the camera and the geometry does not", () => {
+    const scene = new SceneDouble();
+    const level = LEVELS[0];
+    buildOn(scene, level);
+
+    const panorama = scene.objects.filter(
+      (object) => object.texture === level.backdropKey,
+    );
+    expect(panorama.length).toBeGreaterThan(0);
+    for (const panel of panorama) {
+      expect(panel.scrollFactorX).toBeLessThan(1);
+      expect(panel.scrollFactorX).toBeGreaterThan(0);
+      // Vertically it stays put: a backdrop that lagged the climb would lift
+      // off the street line it is drawn to stand on.
+      expect(panel.scrollFactorY).toBe(1);
+    }
+
+    const cloud = scene.objects.find(
+      (object) => object.kind === "tileSprite" && object.depth < -9,
+    );
+    expect(cloud?.scrollFactorX).toBeLessThan(panorama[0].scrollFactorX);
+  });
+
+  test("the panorama covers the whole run at the rate it moves", () => {
+    const scene = new SceneDouble();
+    const level = LEVELS.reduce((widest, candidate) =>
+      candidate.width > widest.width ? candidate : widest,
+    );
+    buildOn(scene, level);
+
+    const panels = scene.objects.filter(
+      (object) => object.texture === level.backdropKey,
+    );
+    const rate = panels[0].scrollFactorX;
+    const painted = Math.max(
+      ...panels.map((panel) => panel.x + panel.displayWidth / 2),
+    );
+
+    // Furthest the camera can push this layer, plus the viewport it has to
+    // fill once it gets there.
+    expect(painted).toBeGreaterThanOrEqual(rate * level.width + 1280);
+  });
+});
+
+describe("weather", () => {
+  test("the level owns its rain and stops it on the way out", () => {
+    const scene = new SceneDouble();
+    const world = buildOn(scene, LEVELS[0]);
+
+    expect(scene.events.count("update")).toBe(1);
+
+    world.destroy();
+
+    expect(scene.events.count("update")).toBe(0);
+    expect(scene.events.count("shutdown")).toBe(0);
+    expect(scene.liveObjects()).toHaveLength(0);
+  });
+
+  test("loading district after district leaves one curtain running", () => {
+    const scene = new SceneDouble();
+    const builder = new LevelBuilder(asScene(scene));
+
+    for (const level of LEVELS) {
+      const world = builder.build(level);
+      expect(scene.events.count("update")).toBe(1);
+      world.destroy();
+      expect(scene.events.count("update")).toBe(0);
+    }
+  });
+});
+
 describe("roof geometry", () => {
   test("roof bodies present their surface at the declared roof line", () => {
     const scene = new SceneDouble();
@@ -181,11 +253,12 @@ describe("cables and platforms", () => {
     const graphics = scene
       .liveObjects()
       .filter((object) => object.kind === "graphics");
-    // One stroked line per cable, plus one rail per mover.
+    // One stroked line per cable, plus one rail per mover, plus the single
+    // sheet the rain strikes its rooftop splashes into.
     const movers = level.platforms.filter(
       (platform) => platform.motion !== undefined,
     ).length;
-    expect(graphics).toHaveLength(level.cables.length + movers);
+    expect(graphics).toHaveLength(level.cables.length + movers + 1);
 
     world.destroy();
     expect(

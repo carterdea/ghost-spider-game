@@ -1,5 +1,10 @@
 import type Phaser from "phaser";
 
+/** Anything with its own teardown that should end when the level does. */
+export interface Owned {
+  destroy(): void;
+}
+
 /**
  * Every resource created for the level currently loaded — objects, tweens,
  * timers, colliders and the platform bodies — held together so a transition can
@@ -17,6 +22,7 @@ export class LevelWorld {
   private readonly tweens = new Set<Phaser.Tweens.Tween>();
   private readonly timers = new Set<Phaser.Time.TimerEvent>();
   private readonly colliders = new Set<Phaser.Physics.Arcade.Collider>();
+  private readonly owned = new Set<Owned>();
   private destroyed = false;
 
   public constructor(scene: Phaser.Scene) {
@@ -51,6 +57,15 @@ export class LevelWorld {
     this.colliders.add(collider);
   }
 
+  /**
+   * A system that owns objects of its own — the weather, say — and knows how to
+   * retire them. Held here so a level still has exactly one teardown.
+   */
+  public own<T extends Owned>(system: T): T {
+    this.owned.add(system);
+    return system;
+  }
+
   /** Retires an effect that finished on its own, before the level ended. */
   public discard(
     object: Phaser.GameObjects.GameObject,
@@ -79,11 +94,15 @@ export class LevelWorld {
     for (const object of this.objects) {
       object.destroy();
     }
+    for (const system of this.owned) {
+      system.destroy();
+    }
 
     this.timers.clear();
     this.tweens.clear();
     this.colliders.clear();
     this.objects.clear();
+    this.owned.clear();
 
     this.platforms.clear(true, true);
     this.platforms.destroy();

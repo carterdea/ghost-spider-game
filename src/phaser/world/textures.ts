@@ -339,6 +339,106 @@ const drawBat: Draw = (graphics) => {
   graphics.generateTexture("bat", 46, 28);
 };
 
+/**
+ * A tiny deterministic generator. Texture layouts that want to look scattered —
+ * rain, haze, a skyline of windows — still have to come out the same on every
+ * boot, or a level would look different each time it is loaded.
+ */
+const seeded = (seed: number): (() => number) => {
+  let state = seed >>> 0 || 1;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+};
+
+/**
+ * One sheet of rain, as a tile that repeats forever in both axes.
+ *
+ * The streaks are drawn dead vertical: the curtain gets its lean from rotating
+ * the sheet at runtime, so one texture covers every wind angle. A streak that
+ * runs off the bottom is continued at the top, which is what keeps the seam
+ * invisible while the sheet scrolls.
+ */
+const RAIN_TILE = 256;
+
+const rainTile = (
+  key: string,
+  count: number,
+  minLength: number,
+  maxLength: number,
+  thickness: number,
+  alpha: number,
+): Draw => {
+  return (graphics) => {
+    const random = seeded(key.length * 9176 + count);
+    for (let drop = 0; drop < count; drop += 1) {
+      const x = Math.round(random() * RAIN_TILE);
+      const y = random() * RAIN_TILE;
+      const length = minLength + random() * (maxLength - minLength);
+      graphics.lineStyle(thickness, 0xd7e8ff, alpha * (0.6 + random() * 0.4));
+      graphics.lineBetween(x, y, x, Math.min(y + length, RAIN_TILE));
+      if (y + length > RAIN_TILE) {
+        graphics.lineBetween(x, 0, x, y + length - RAIN_TILE);
+      }
+    }
+    graphics.generateTexture(key, RAIN_TILE, RAIN_TILE);
+  };
+};
+
+/**
+ * Low rain-cloud, for the dead sky above the painted skyline. Fifty soft
+ * ellipses at a few percent alpha each, which stack into something with no
+ * edges.
+ *
+ * It thins out toward the bottom of the tile and is drawn one tile deep, so the
+ * band it fills ends in nothing rather than in a straight line across the sky.
+ * Repeating is horizontal only, which is what that trade buys.
+ */
+const drawRainHaze: Draw = (graphics) => {
+  const random = seeded(20614);
+  for (let puff = 0; puff < 50; puff += 1) {
+    const x = random() * 512;
+    const y = random() * 256;
+    const width = 120 + random() * 220;
+    const falloff = (1 - y / 256) ** 1.4;
+    graphics.fillStyle(puff % 3 === 0 ? 0x3a4670 : 0x2c3860, 0.11 * falloff);
+    graphics.fillEllipse(x, y, width, 40 + random() * 60);
+  }
+  graphics.generateTexture("rainHaze", 512, 256);
+};
+
+/**
+ * A one-way fade, white so it can be tinted to whatever it has to dissolve
+ * into. Used upside down over the top edge of the painted panorama, where the
+ * art stops dead against open sky.
+ */
+const drawSkyFade: Draw = (graphics) => {
+  const bands = 64;
+  for (let band = 0; band < bands; band += 1) {
+    const t = band / (bands - 1);
+    graphics.fillStyle(0xffffff, (1 - t) * (1 - t));
+    graphics.fillRect(0, band * 4, 32, 4);
+  }
+  graphics.generateTexture("skyFade", 32, bands * 4);
+};
+
+/**
+ * The wet air over the skyline: white, so a district can tint it with its own
+ * accent, and graded so it is brightest along the horizon and gone by the top.
+ * Added rather than painted over the panorama, which is why it can sit in front
+ * of the art without hiding any of it.
+ */
+const drawHorizonGlow: Draw = (graphics) => {
+  const bands = 32;
+  for (let band = 0; band < bands; band += 1) {
+    const t = band / (bands - 1);
+    graphics.fillStyle(0xffffff, 0.012 + t * t * 0.075);
+    graphics.fillRect(0, band * 8, 64, 8);
+  }
+  graphics.generateTexture("horizonGlow", 64, bands * 8);
+};
+
 const DRAWINGS = {
   webGlob: drawWebGlob,
   webNet: drawWebNet,
@@ -365,6 +465,12 @@ const DRAWINGS = {
   platformDeck: drawPlatformDeck,
   glassLedge: drawGlassLedge,
   bat: drawBat,
+  rainFar: rainTile("rainFar", 34, 8, 18, 1, 0.3),
+  rainMid: rainTile("rainMid", 20, 22, 46, 1.3, 0.34),
+  rainNear: rainTile("rainNear", 9, 60, 120, 2.2, 0.3),
+  rainHaze: drawRainHaze,
+  skyFade: drawSkyFade,
+  horizonGlow: drawHorizonGlow,
 } satisfies Record<string, Draw>;
 
 export const PROP_TEXTURES = Object.keys(DRAWINGS) as readonly PropTextureKey[];

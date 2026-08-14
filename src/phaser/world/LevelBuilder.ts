@@ -15,6 +15,8 @@ import {
   rectRight,
   type Vec2,
 } from "../../game/simulation/physics/vector";
+import { RainCurtain, type RainSurface } from "../fx/RainCurtain";
+import { weatherFor } from "../fx/weather";
 import { LevelWorld } from "./LevelWorld";
 import {
   carryRiders,
@@ -30,6 +32,8 @@ import {
 const DEPTH = {
   sky: -12,
   backdrop: -10,
+  cloud: -9.7,
+  horizon: -9.4,
   facade: -8,
   roofDecor: -7,
   street: -6,
@@ -41,6 +45,31 @@ const DEPTH = {
 
 /** Deck tint while a glass panel is failing: the same red as the district accent. */
 const LEDGE_WARN_TINT = 0xff5f6d;
+
+/**
+ * How much of the camera's travel each backdrop layer takes on. The buildings
+ * the hero lands on are the only things at 1: everything painted behind them now
+ * lags, which is the whole of the depth cue. Nothing in front of the action
+ * moves faster than the action — a foreground layer would fight the gameplay for
+ * the eye.
+ */
+const PARALLAX = {
+  cloud: 0.22,
+  panorama: 0.55,
+  horizon: 0.8,
+} as const;
+
+/**
+ * The widest and tallest the camera ever shows: 1280x720 eased out to the
+ * furthest zoom the scene uses, with room to spare. A layer that lags the camera
+ * has to be laid out across its own compressed span plus one viewport, or the
+ * far end of a district would run off the end of it.
+ */
+const MAX_VIEW = { width: 1660, height: 940 } as const;
+
+/** Span a parallax layer has to cover for the camera's whole run across a level. */
+const layerSpan = (levelWidth: number, parallax: number): number =>
+  parallax * Math.max(0, levelWidth - MAX_VIEW.width) + MAX_VIEW.width;
 
 /**
  * Arcade steps at a fixed 60Hz — `main.ts` leaves Phaser's default — and does no
@@ -138,10 +167,36 @@ export class LevelBuilder {
     }
     this.buildAmbience(level, world);
     this.buildGoal(level, world);
+    this.buildWeather(level, world);
 
     return world;
   }
 
+  /**
+   * The district's rain. Owned by the level, so it stops and is retired with it,
+   * and handed every roof line the hero could be standing on — the splashes it
+   * strikes there are what make the rest of it read as weather.
+   */
+  private buildWeather(level: LevelDefinition, world: LevelWorld): void {
+    // Struck a little below the roof line rather than on it: the line itself is
+    // the lit edge the player reads a landing off, and a splash drawn over it
+    // would be both invisible and in the way.
+    const surfaces: RainSurface[] = level.buildings.map(({ bounds }) => ({
+      left: bounds.x,
+      right: rectRight(bounds),
+      y: bounds.y + 16,
+    }));
+    surfaces.push({ left: 0, right: level.width, y: level.streetY + 8 });
+
+    world.own(new RainCurtain(this.scene, weatherFor(level), surfaces));
+  }
+
+  /**
+   * Sky, cloud, painted city, and the glow the wet air holds over the horizon —
+   * four layers, each scrolling at its own rate. Only the horizontal rate
+   * differs: a layer that also lagged vertically would lift off the street line
+   * it is drawn to stand on the moment the hero climbed.
+   */
   private buildSky(level: LevelDefinition, world: LevelWorld): void {
     world.track(
       this.scene.add
@@ -155,9 +210,12 @@ export class LevelBuilder {
         .setDepth(DEPTH.sky),
     );
 
-    // The backdrop art is one panorama; repeat it across wider levels.
-    const panels = Math.max(1, Math.ceil(level.width / 1867));
-    const panelWidth = level.width / panels;
+    // The backdrop art is one panorama; repeat it across the span it has to
+    // cover, which is shorter than the level now that it lags the camera. Every
+    // district draws it at the same width, so no level squeezes the painting.
+    const span = layerSpan(level.width, PARALLAX.panorama);
+    const panelWidth = 1867;
+    const panels = Math.max(1, Math.ceil(span / panelWidth));
     for (let panel = 0; panel < panels; panel += 1) {
       world.track(
         this.scene.add
@@ -168,9 +226,94 @@ export class LevelBuilder {
           )
           .setDisplaySize(panelWidth + 8, 1040)
           .setDepth(DEPTH.backdrop)
+          .setScrollFactor(PARALLAX.panorama, 1)
           .setFlipX(panel % 2 === 1),
       );
     }
+
+    // The panorama ends in a hard line against open sky. Dissolve it, or a
+    // district tall enough to fly above the paint shows the join.
+    world.track(
+      this.scene.add
+        .image(span / 2, level.streetY - 1044, "skyFade")
+        .setOrigin(0.5, 0)
+        .setDisplaySize(span, 190)
+        .setTint(0x10172b)
+        .setDepth(DEPTH.backdrop + 0.1)
+        .setScrollFactor(PARALLAX.panorama, 1),
+    );
+
+    this.buildCloud(level, world);
+    this.buildHorizonGlow(level, world);
+  }
+
+  /**
+   * Rain cloud over the dead sky above the panorama, drifting on the wind. Drawn
+   * over the top of the painted city rather than behind it: one tile deep, so
+   * the band thins away into the skyline instead of ending on a line.
+   */
+  private buildCloud(level: LevelDefinition, world: LevelWorld): void {
+    const bottom = level.streetY - 820;
+    if (bottom <= 0) {
+      return;
+    }
+
+    const span = layerSpan(level.width, PARALLAX.cloud);
+    const cloud = world.track(
+      this.scene.add
+        .tileSprite(span / 2, bottom / 2, span, bottom, "rainHaze")
+        .setTileScale(3.2, bottom / 256)
+        .setAlpha(0.9)
+        .setDepth(DEPTH.cloud)
+        .setScrollFactor(PARALLAX.cloud, 1),
+    );
+
+    // One tween on the texture offset, rather than anything per frame.
+    world.tween({
+      targets: cloud,
+      tilePositionX: 512,
+      duration: 96000,
+      repeat: -1,
+      ease: "Linear",
+    });
+  }
+
+  /**
+   * The district's own colour, hanging in the air over the skyline. It is added
+   * to the panorama rather than laid over it, so the painted city still reads
+   * through, and it breathes slowly — the one piece of light in the backdrop
+   * that is allowed to move.
+   */
+  private buildHorizonGlow(level: LevelDefinition, world: LevelWorld): void {
+    const span = layerSpan(level.width, PARALLAX.horizon);
+    const height = 320;
+    const glow = world.track(
+      this.scene.add
+        .tileSprite(
+          span / 2,
+          level.streetY - 480 - height / 2,
+          span,
+          height,
+          "horizonGlow",
+        )
+        .setTileScale(1, height / 256)
+        .setTint(accentColor(level.accent))
+        // Named rather than `Phaser.BlendModes.ADD`, so this module still needs
+        // Phaser for types only and stays testable outside a booted game.
+        .setBlendMode("ADD")
+        .setAlpha(0.5)
+        .setDepth(DEPTH.horizon)
+        .setScrollFactor(PARALLAX.horizon, 1),
+    );
+
+    world.tween({
+      targets: glow,
+      alpha: 0.78,
+      duration: 5200,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.inOut",
+    });
   }
 
   private buildStreet(level: LevelDefinition, world: LevelWorld): void {
@@ -316,10 +459,27 @@ export class LevelBuilder {
         )
         .setDepth(DEPTH.roofDecor),
     );
+    // The lit edge stays the same colour in every district: it is the tell for
+    // "this is landable", and a district whose accent is the same red as a
+    // failing ledge would turn that tell into a lie.
     world.track(
       this.scene.add
         .rectangle(center.x, bounds.y + 3, bounds.width - 8, 16, 0x55e8f0, 0.9)
         .setDepth(-7.1),
+    );
+    // The wet reads on the deck itself: the accent pooling in standing water
+    // under the edge light and fading off within a stride. Added rather than
+    // laid over, so it lifts the deck instead of tinting it.
+    world.track(
+      this.scene.add
+        .image(center.x, bounds.y + 8, "horizonGlow")
+        .setTint(accentColor(level.accent))
+        .setOrigin(0.5, 0)
+        .setDisplaySize(bounds.width - 30, 38)
+        .setFlipY(true)
+        .setBlendMode("ADD")
+        .setAlpha(0.75)
+        .setDepth(-6.95),
     );
     // Roof props stand on the roof line, not hovering above it.
     world.track(
@@ -585,6 +745,12 @@ export class LevelBuilder {
     });
   }
 }
+
+/** A district accent — authored as CSS hex — as a Phaser tint. */
+const accentColor = (accent: string): number => {
+  const parsed = Number.parseInt(accent.replace("#", ""), 16);
+  return Number.isFinite(parsed) ? parsed : 0x55e8f0;
+};
 
 /** One open polyline through `points`, so a sagging cable draws as one stroke. */
 const strokeThrough = (
