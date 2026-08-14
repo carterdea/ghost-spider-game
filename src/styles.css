@@ -25,11 +25,11 @@ body {
   background: #080a13;
 }
 
+/* The canvas fills this box, and the HUD is laid out over the same box — so
+   every corner the HUD pins to is a corner of the game, not of the window. */
 #app {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
 }
 
 #game {
@@ -43,7 +43,7 @@ body {
 
 #hud {
   pointer-events: none;
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 3;
   color: var(--ink);
@@ -76,7 +76,7 @@ body {
 }
 
 .status-cluster {
-  width: min(360px, calc(100vw - 28px));
+  width: min(360px, calc(100% - 28px));
   border-radius: 8px;
   padding: 12px;
 }
@@ -333,11 +333,18 @@ body {
   transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Ten bindings do not fit on one line in a narrow window, and a strip that runs
+   off the edge of the screen teaches nothing. It wraps instead — right-aligned,
+   so it grows up and inward from its own corner. */
 .hint-chip {
   position: absolute;
   right: max(14px, env(safe-area-inset-right));
   bottom: max(16px, env(safe-area-inset-bottom));
-  max-width: min(520px, calc(100vw - 28px));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px 14px;
+  max-width: min(560px, calc(100% - 28px));
   border-radius: 8px;
   padding: 8px 11px;
   color: #dce2ff;
@@ -345,14 +352,10 @@ body {
   line-height: 1.45;
 }
 
+/* A key and the verb it fires are one unit and never break apart; the gap
+   between units does the separating a middot used to, and survives a wrap. */
 .hint {
   white-space: nowrap;
-}
-
-.hint + .hint::before {
-  content: "·";
-  margin: 0 6px;
-  color: rgba(220, 226, 255, 0.45);
 }
 
 .hint-key {
@@ -361,12 +364,14 @@ body {
   font-weight: 800;
 }
 
+/* Cleared of the wrapped hint strip below it: the two are centred and corner-
+   pinned respectively, and on a mid-width window their boxes cross. */
 .message {
   position: absolute;
   left: 50%;
-  bottom: max(62px, calc(env(safe-area-inset-bottom) + 52px));
+  bottom: max(88px, calc(env(safe-area-inset-bottom) + 78px));
   transform: translateX(-50%);
-  max-width: min(560px, calc(100vw - 28px));
+  max-width: min(560px, calc(100% - 28px));
   border: 1px solid color-mix(in srgb, var(--level-accent) 40%, transparent);
   border-radius: 8px;
   padding: 10px 12px;
@@ -442,7 +447,7 @@ body {
   display: grid;
   justify-items: center;
   gap: 6px;
-  max-width: min(520px, calc(100vw - 32px));
+  max-width: min(520px, calc(100% - 32px));
   transform: translate(-50%, -50%);
   border: 1px solid color-mix(in srgb, var(--level-accent) 55%, transparent);
   border-radius: 12px;
@@ -486,7 +491,7 @@ body {
 
 /* The title screen is the one place the game says its own name. */
 .run-banner.is-title {
-  max-width: min(620px, calc(100vw - 32px));
+  max-width: min(620px, calc(100% - 32px));
   padding: 30px 34px 26px;
 }
 

@@ -164,6 +164,40 @@ describe("first render", () => {
   });
 });
 
+describe("message toast", () => {
+  const headlineOf = (levelIndex: number): string =>
+    `${LEVELS[levelIndex].name}: ${LEVELS[levelIndex].subtitle}`;
+
+  test("stays empty rather than echoing the district panel", () => {
+    hud.render(makeState({ levelIndex: 0, message: headlineOf(0) }));
+
+    expect(query(root, ".message").textContent).toBe("");
+    // The line itself is not lost: it is what the panel is for.
+    expect(query(root, ".level-name").textContent).toBe(LEVELS[0].name);
+    expect(query(root, ".level-subtitle").textContent).toBe(LEVELS[0].subtitle);
+  });
+
+  test("still carries anything the run has to say", () => {
+    hud.render(makeState({ levelIndex: 0, message: headlineOf(0) }));
+    hud.render(makeState({ levelIndex: 0, message: "Web bomb away." }));
+
+    expect(query(root, ".message").textContent).toBe("Web bomb away.");
+  });
+
+  test("clears again when the next district announces itself", () => {
+    hud.render(makeState({ levelIndex: 0, message: "Web bomb away." }));
+    hud.render(makeState({ levelIndex: 1, message: headlineOf(1) }));
+
+    expect(query(root, ".message").textContent).toBe("");
+  });
+
+  test("keeps a headline that is not this district's own", () => {
+    hud.render(makeState({ levelIndex: 1, message: headlineOf(0) }));
+
+    expect(query(root, ".message").textContent).toBe(headlineOf(0));
+  });
+});
+
 describe("incremental rendering", () => {
   test("re-rendering identical state performs no DOM writes", () => {
     const state = makeState({ score: 40, message: "Hold on." });

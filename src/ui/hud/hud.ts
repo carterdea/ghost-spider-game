@@ -70,7 +70,10 @@ export class Hud {
   private levelIndex?: number;
   private visitedCount?: number;
   private gadget: SelectedGadget = "";
+  /** What the toast is showing, which is not always what the state says. */
   private message?: string;
+  /** The district panel's own line, rebuilt only when the district turns over. */
+  private headline = "";
   private status?: RunStatus;
   private chain?: number;
   private muted?: boolean;
@@ -138,9 +141,13 @@ export class Hud {
     if (charges) {
       this.writeCharges(charges);
     }
-    if (player.message !== this.message) {
-      this.message = player.message;
-      nodes.message.textContent = player.message;
+    // The district panel already carries its own headline. The toast sits in the
+    // best space on the screen and is worth spending on news — a bomb away, the
+    // Weaver holding the bridge — so an echo of the panel is dropped instead.
+    const toast = player.message === this.headline ? "" : player.message;
+    if (toast !== this.message) {
+      this.message = toast;
+      nodes.message.textContent = toast;
     }
     if (chain !== this.chain) {
       this.chain = chain;
@@ -169,6 +176,7 @@ export class Hud {
 
   private writeLevel(levelIndex: number): void {
     const level = getLevelByIndex(levelIndex);
+    this.headline = `${level.name}: ${level.subtitle}`;
     this.nodes.kicker.textContent = `Level ${levelIndex + 1} / ${LEVELS.length}`;
     this.nodes.levelName.textContent = level.name;
     this.nodes.subtitle.textContent = level.subtitle;

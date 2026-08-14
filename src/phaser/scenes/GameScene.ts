@@ -42,6 +42,7 @@ import { WebRenderer } from "../fx/WebRenderer";
 import { LevelBuilder } from "../world/LevelBuilder";
 import type { LevelWorld } from "../world/LevelWorld";
 import { createPropTextures } from "../world/textures";
+import { frameZoom } from "../world/viewport";
 import { bossSound, bossSpawnFor } from "./bossBinding";
 import { RunFeedback } from "./feedback";
 import { syncRunMusic } from "./runMusic";
@@ -50,9 +51,14 @@ const ATTACK_COOLDOWN = 280;
 const HIT_COOLDOWN = 700;
 const STRIKE_RANGE = 96;
 
-/** Camera eases out as the hero picks up speed, so fast swings read wider. */
-const ZOOM_NEAR = 1;
-const ZOOM_FAR = 0.82;
+/**
+ * How far the camera eases out of its resting frame as the hero picks up speed,
+ * so fast swings read wider. Factors on the framing zoom rather than zooms in
+ * their own right: the window decides the frame, this decides how much of it a
+ * fast hero is given — see `frameZoom`.
+ */
+const EASE_RESTING = 1;
+const EASE_FAST = 0.82;
 const ZOOM_SPEED_RANGE = 900;
 
 /** Speed that maps to a full-intensity swing whoosh: the swing solver's cap. */
@@ -83,6 +89,8 @@ export class GameScene extends Phaser.Scene {
   private attackCooldownUntil = 0;
   private hitCooldownUntil = 0;
   private shieldView?: Phaser.GameObjects.Arc;
+  /** Where the speed ease currently sits, so a resize can reframe around it. */
+  private zoomEase = EASE_RESTING;
 
   public constructor() {
     super("game");
@@ -101,11 +109,19 @@ export class GameScene extends Phaser.Scene {
     this.setUpAudio();
     this.syncMusic();
 
+    // The window is the viewport, so every resize is a reframe. Phaser resizes
+    // the camera itself; what it cannot know is how much world the new shape
+    // should be holding.
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.reframe);
+
     // Registered before anything it owns exists: Phaser's own groups tear
     // themselves down on this event in creation order, and a group destroyed
     // out from under `EnemyDirector.destroy()` throws mid-shutdown and leaves
     // the restart half-finished.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      // The scale manager outlives the scene: an un-removed handler would
+      // reframe a camera the next boot has already replaced.
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.reframe);
       this.enemies?.destroy();
       this.webs?.destroy();
       this.feedback?.destroy();
@@ -319,7 +335,7 @@ export class GameScene extends Phaser.Scene {
 
     this.enemies?.update(time, player);
     this.updateShield(player, time);
-    this.updateCameraZoom(controller.speed, delta);
+    this.updateCameraZoom(level, controller.speed, delta);
 
     if (this.state.player.health === 0) {
       this.knockOut(player);
@@ -421,7 +437,7 @@ export class GameScene extends Phaser.Scene {
 
   private loadLevel(level: LevelDefinition): void {
     this.teardownLevel();
-    this.resetTransientState();
+    this.resetTransientState(level);
 
     const builder = this.builder;
     const enemies = this.enemies;
@@ -454,10 +470,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Cooldowns and camera framing belong to the run, not to the next level. */
-  private resetTransientState(): void {
+  private resetTransientState(level: LevelDefinition): void {
     this.attackCooldownUntil = 0;
     this.hitCooldownUntil = 0;
-    this.cameras.main.setZoom(ZOOM_NEAR);
+    this.zoomEase = EASE_RESTING;
+    this.cameras.main.setZoom(
+      frameZoom(this.scale.gameSize, level, EASE_RESTING),
+    );
   }
 
   private teardownLevel(): void {
@@ -615,17 +634,36 @@ export class GameScene extends Phaser.Scene {
     player.play("player-idle", true);
   }
 
-  private updateCameraZoom(speed: number, delta: number): void {
-    const target = Phaser.Math.Linear(
-      ZOOM_NEAR,
-      ZOOM_FAR,
+  private updateCameraZoom(
+    level: LevelDefinition,
+    speed: number,
+    delta: number,
+  ): void {
+    this.zoomEase = Phaser.Math.Linear(
+      EASE_RESTING,
+      EASE_FAST,
       clamp(speed / ZOOM_SPEED_RANGE, 0, 1),
     );
     const camera = this.cameras.main;
     camera.setZoom(
-      Phaser.Math.Linear(camera.zoom, target, Math.min(1, delta / 260)),
+      Phaser.Math.Linear(
+        camera.zoom,
+        frameZoom(this.scale.gameSize, level, this.zoomEase),
+        Math.min(1, delta / 260),
+      ),
     );
   }
+
+  /**
+   * Snaps the frame to the window it now has. Not eased: a resize is already a
+   * jolt, and easing out of it would read as the camera lurching afterwards.
+   */
+  private readonly reframe = (): void => {
+    const level = getLevelByIndex(this.state.progression.levelIndex);
+    this.cameras.main.setZoom(
+      frameZoom(this.scale.gameSize, level, this.zoomEase),
+    );
+  };
 
   private attack(player: Phaser.Physics.Arcade.Sprite, time: number): void {
     this.attackCooldownUntil = time + ATTACK_COOLDOWN;

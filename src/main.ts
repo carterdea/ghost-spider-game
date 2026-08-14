@@ -1,12 +1,15 @@
 import Phaser from "phaser";
 import { GameScene } from "./phaser/scenes/GameScene";
+import { MIN_VIEW } from "./phaser/world/viewport";
 import "./styles.css";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: "game",
-  width: 1280,
-  height: 720,
+  // Only the first frame is this size: `RESIZE` hands the game the window as
+  // soon as it boots, and every frame after that is whatever the window is.
+  width: MIN_VIEW.width,
+  height: MIN_VIEW.height,
   backgroundColor: "#101521",
   pixelArt: false,
   physics: {
@@ -18,8 +21,11 @@ const config: Phaser.Types.Core.GameConfig = {
     },
   },
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    // The canvas is the window. FIT letterboxed every window that was not 16:9
+    // — a fifth of the screen went to black bars at 1280x577 — so the framing
+    // is the camera's job instead, and the camera can do it without waste:
+    // see `frameZoom`.
+    mode: Phaser.Scale.RESIZE,
   },
   scene: [GameScene],
 };

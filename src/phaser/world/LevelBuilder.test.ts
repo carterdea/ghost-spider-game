@@ -7,6 +7,7 @@ import {
   SceneDouble,
 } from "../testing/sceneDouble";
 import { LevelBuilder } from "./LevelBuilder";
+import { MAX_VIEW } from "./viewport";
 
 const buildOn = (scene: SceneDouble, level: LevelDefinition) =>
   new LevelBuilder(asScene(scene)).build(level);
@@ -149,9 +150,13 @@ describe("backdrop depth", () => {
       ...panels.map((panel) => panel.x + panel.displayWidth / 2),
     );
 
-    // Furthest the camera can push this layer, plus the viewport it has to
-    // fill once it gets there.
-    expect(painted).toBeGreaterThanOrEqual(rate * level.width + 1280);
+    // Furthest the camera can push this layer, plus what is still left of the
+    // widest frame it may ever show once it gets there. Measured against the
+    // cap the camera is actually held to, so widening the frame cannot quietly
+    // outrun the paint.
+    expect(painted).toBeGreaterThanOrEqual(
+      rate * level.width + MAX_VIEW.width * (1 - rate),
+    );
   });
 });
 

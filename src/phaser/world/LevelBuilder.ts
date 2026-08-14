@@ -28,6 +28,7 @@ import {
   platformOffsetAt,
   type Rider,
 } from "./movers";
+import { MAX_VIEW } from "./viewport";
 
 const DEPTH = {
   sky: -12,
@@ -60,14 +61,13 @@ const PARALLAX = {
 } as const;
 
 /**
- * The widest and tallest the camera ever shows: 1280x720 eased out to the
- * furthest zoom the scene uses, with room to spare. A layer that lags the camera
- * has to be laid out across its own compressed span plus one viewport, or the
- * far end of a district would run off the end of it.
+ * Span a parallax layer has to cover for the camera's whole run across a level.
+ *
+ * A layer that lags the camera is laid out across its own compressed span plus
+ * one viewport, or the far end of a district runs off the end of it. The window
+ * is variable now, so "one viewport" is the widest frame the camera is ever
+ * allowed to show — which `frameZoom` enforces rather than merely assumes.
  */
-const MAX_VIEW = { width: 1660, height: 940 } as const;
-
-/** Span a parallax layer has to cover for the camera's whole run across a level. */
 const layerSpan = (levelWidth: number, parallax: number): number =>
   parallax * Math.max(0, levelWidth - MAX_VIEW.width) + MAX_VIEW.width;
 
