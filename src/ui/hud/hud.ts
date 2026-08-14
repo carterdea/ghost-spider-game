@@ -5,7 +5,14 @@ import type {
   RunStatus,
 } from "../../game/simulation/state";
 import { getLevelByIndex } from "../../game/simulation/systems/progression";
+import {
+  ARSENAL,
+  GADGET_ORDER,
+} from "../../game/simulation/systems/weapons/arsenal";
 import { buildHud, type HudNodes } from "./dom";
+
+/** Charges carried, by weapon. The rack writes it; the HUD only reads it. */
+export type GadgetCharges = Readonly<Record<GadgetKind, number>>;
 
 const BANNERS: Record<RunStatus, { title: string; hint: string } | null> = {
   playing: null,
@@ -77,18 +84,32 @@ export class Hud {
   private status?: RunStatus;
   private chain?: number;
   private muted?: boolean;
+  /**
+   * Last charge count painted per weapon. `-1` is "never painted", which is
+   * what makes the first frame fill every pip strip in.
+   */
+  private readonly charges = new Map<GadgetKind, number>();
 
   public constructor(root: HTMLElement) {
     this.root = root;
     this.nodes = buildHud(root);
+    for (const kind of GADGET_ORDER) {
+      this.charges.set(kind, -1);
+    }
   }
 
   /**
-   * `chain` is the takedown streak the hero is on and `muted` the sound state;
-   * both live outside `GameState`, and both default to the quiet case so a
-   * caller that does not track them still renders a correct HUD.
+   * `chain` is the takedown streak the hero is on, `muted` the sound state and
+   * `charges` what is left in the arsenal. All three live outside `GameState`,
+   * and all three default to the quiet case so a caller that does not track
+   * them still renders a correct HUD.
    */
-  public render(state: GameState, chain = 0, muted = false): void {
+  public render(
+    state: GameState,
+    chain = 0,
+    muted = false,
+    charges?: GadgetCharges,
+  ): void {
     const { player, progression } = state;
     const nodes = this.nodes;
 
@@ -123,6 +144,9 @@ export class Hud {
     if (player.gadget !== this.gadget) {
       this.writeGadget(this.gadget, player.gadget);
       this.gadget = player.gadget;
+    }
+    if (charges) {
+      this.writeCharges(charges);
     }
     if (player.message !== this.message) {
       this.message = player.message;
@@ -173,10 +197,37 @@ export class Hud {
 
   private writeGadget(previous: SelectedGadget, active: SelectedGadget): void {
     if (previous !== "") {
-      this.nodes.gadgets.get(previous)?.classList.remove("is-active");
+      this.nodes.gadgets.get(previous)?.root.classList.remove("is-active");
     }
     if (active !== "") {
-      this.nodes.gadgets.get(active)?.classList.add("is-active");
+      this.nodes.gadgets.get(active)?.root.classList.add("is-active");
+    }
+  }
+
+  /**
+   * Dims the pips the hero has spent. Charges are whole numbers, so a steady
+   * frame compares six integers and touches nothing.
+   */
+  private writeCharges(charges: GadgetCharges): void {
+    for (const kind of GADGET_ORDER) {
+      const held = charges[kind];
+      if (held === this.charges.get(kind)) {
+        continue;
+      }
+      this.charges.set(kind, held);
+
+      const chip = this.nodes.gadgets.get(kind);
+      if (!chip) {
+        continue;
+      }
+      chip.pips.forEach((pip, index) => {
+        pip.classList.toggle("is-spent", index >= held);
+      });
+      chip.root.classList.toggle("is-empty", held <= 0);
+      chip.root.setAttribute(
+        "aria-label",
+        `${ARSENAL[kind].label}: ${held} of ${ARSENAL[kind].capacity}`,
+      );
     }
   }
 

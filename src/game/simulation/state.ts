@@ -7,7 +7,18 @@ export type EnemyKind = "robot" | "gunner" | "drone";
 export type BossKind = "boss";
 /** Anything that can exist as an enemy at runtime. */
 export type ActorKind = EnemyKind | BossKind;
-export type GadgetKind = "web-net" | "web-shield" | "web-wings";
+/**
+ * The hero's arsenal. Each entry's tuning — charges, recharge, cooldown and the
+ * lines it prints — lives in one table in `systems/weapons/arsenal`, so adding a
+ * weapon never means adding a branch.
+ */
+export type GadgetKind =
+  | "web-bomb"
+  | "impact-web"
+  | "web-line"
+  | "web-net"
+  | "web-shield"
+  | "web-wings";
 
 /** Where a run currently stands. Drives the HUD banner and input handling. */
 export type RunStatus = "playing" | "cleared" | "knockedOut";
@@ -86,7 +97,7 @@ export const createInitialGameState = (level: LevelDefinition): GameState => ({
     health: 100,
     maxHealth: 100,
     score: 0,
-    gadget: "web-net",
+    gadget: "web-bomb",
     swinging: false,
     shieldUntil: 0,
     message: `${level.name}: ${level.subtitle}`,

@@ -12,6 +12,10 @@ import {
   createInitialGameState,
   type GameState,
 } from "../../game/simulation/state";
+import {
+  ARSENAL,
+  GADGET_ORDER,
+} from "../../game/simulation/systems/weapons/arsenal";
 import { Hud } from "./hud";
 
 /**
@@ -271,23 +275,96 @@ describe("progress dots", () => {
 });
 
 describe("gadgets", () => {
-  test("highlights the selected gadget and only that one", () => {
-    hud.render(makeState({ gadget: "web-net" }));
+  /** Which weapons are lit, by name, so the assertion survives a reordering. */
+  const active = (): string[] =>
+    Array.from(root.querySelectorAll(".gadget-chip.is-active")).map(
+      (chip) => (chip as HTMLElement).dataset.gadget ?? "",
+    );
+
+  test("shows the whole arsenal, one chip per weapon", () => {
+    hud.render(makeState({}));
 
     const chips = Array.from(root.querySelectorAll(".gadget-chip"));
-    expect(chips).toHaveLength(3);
-    expect(chips.map((chip) => chip.classList.contains("is-active"))).toEqual([
-      true,
-      false,
-      false,
+    expect(chips).toHaveLength(GADGET_ORDER.length);
+    expect(chips.map((chip) => (chip as HTMLElement).dataset.gadget)).toEqual([
+      ...GADGET_ORDER,
     ]);
+  });
 
-    hud.render(makeState({ gadget: "web-wings" }));
-    expect(chips.map((chip) => chip.classList.contains("is-active"))).toEqual([
-      false,
-      false,
-      true,
-    ]);
+  test("highlights the selected gadget and only that one", () => {
+    hud.render(makeState({ gadget: "web-net" }));
+    expect(active()).toEqual(["web-net"]);
+
+    hud.render(makeState({ gadget: "web-bomb" }));
+    expect(active()).toEqual(["web-bomb"]);
+  });
+
+  test("gives every weapon a pip for each charge it can hold", () => {
+    hud.render(makeState({}));
+
+    for (const kind of GADGET_ORDER) {
+      const chip = query(root, `[data-gadget="${kind}"]`);
+      expect(chip.querySelectorAll(".gadget-pip")).toHaveLength(
+        ARSENAL[kind].capacity,
+      );
+    }
+  });
+});
+
+describe("charges", () => {
+  const pips = (kind: keyof typeof ARSENAL): boolean[] =>
+    Array.from(
+      query(root, `[data-gadget="${kind}"]`).querySelectorAll(".gadget-pip"),
+    ).map((pip) => pip.classList.contains("is-spent"));
+
+  const fullArsenal = (): Record<keyof typeof ARSENAL, number> => ({
+    "web-bomb": ARSENAL["web-bomb"].capacity,
+    "impact-web": ARSENAL["impact-web"].capacity,
+    "web-line": ARSENAL["web-line"].capacity,
+    "web-net": ARSENAL["web-net"].capacity,
+    "web-shield": ARSENAL["web-shield"].capacity,
+    "web-wings": ARSENAL["web-wings"].capacity,
+  });
+
+  test("a full arsenal spends no pips", () => {
+    hud.render(makeState({}), 0, false, fullArsenal());
+
+    expect(pips("web-bomb")).toEqual([false, false]);
+    expect(
+      query(root, '[data-gadget="web-bomb"]').classList.contains("is-empty"),
+    ).toBe(false);
+  });
+
+  test("spending a charge dims exactly one pip", () => {
+    hud.render(makeState({}), 0, false, fullArsenal());
+    hud.render(makeState({}), 0, false, { ...fullArsenal(), "web-bomb": 1 });
+
+    expect(pips("web-bomb")).toEqual([false, true]);
+  });
+
+  test("an empty weapon dims every pip and marks the chip", () => {
+    hud.render(makeState({}), 0, false, { ...fullArsenal(), "web-bomb": 0 });
+
+    expect(pips("web-bomb")).toEqual([true, true]);
+    expect(
+      query(root, '[data-gadget="web-bomb"]').classList.contains("is-empty"),
+    ).toBe(true);
+  });
+
+  test("a recharge lights the pip back up", () => {
+    hud.render(makeState({}), 0, false, { ...fullArsenal(), "web-net": 0 });
+    hud.render(makeState({}), 0, false, { ...fullArsenal(), "web-net": 2 });
+
+    expect(pips("web-net")).toEqual([false, false, true, true]);
+    expect(
+      query(root, '[data-gadget="web-net"]').classList.contains("is-empty"),
+    ).toBe(false);
+  });
+
+  test("a caller that tracks no charges still renders", () => {
+    hud.render(makeState({}));
+
+    expect(pips("web-bomb")).toEqual([false, false]);
   });
 });
 

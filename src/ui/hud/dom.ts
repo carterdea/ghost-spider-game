@@ -1,13 +1,11 @@
 import { LEVELS } from "../../game/content/levels";
 import type { GadgetKind } from "../../game/simulation/state";
+import {
+  ARSENAL,
+  GADGET_ORDER,
+} from "../../game/simulation/systems/weapons/arsenal";
 
 const HERO_NAME = "Ghost Pirouette";
-
-const GADGETS: ReadonlyArray<readonly [GadgetKind, string]> = [
-  ["web-net", "Net"],
-  ["web-shield", "Shield"],
-  ["web-wings", "Wings"],
-];
 
 const HINTS: ReadonlyArray<readonly [string, string]> = [
   ["A/D", "move"],
@@ -15,7 +13,7 @@ const HINTS: ReadonlyArray<readonly [string, string]> = [
   ["Space", "jump"],
   ["E", "hold to swing"],
   ["J", "strike"],
-  ["Q/K", "gadget"],
+  ["Q/K", "cycle / fire"],
   ["Shift", "glide"],
   ["M", "mute"],
   ["R", "restart"],
@@ -32,6 +30,16 @@ const SPEAKER = {
   slash: "M10.6 4.6 15.2 11.6",
 } as const;
 
+/**
+ * One weapon's chip: the slot itself, and one pip per charge it can hold. The
+ * pips are built to the weapon's capacity, so the HUD never has to be told how
+ * many the hero carries.
+ */
+export interface GadgetChip {
+  readonly root: HTMLElement;
+  readonly pips: readonly HTMLElement[];
+}
+
 /** Every node the HUD ever writes to. Built once, then reused every frame. */
 export interface HudNodes {
   score: HTMLElement;
@@ -45,7 +53,7 @@ export interface HudNodes {
   levelName: HTMLElement;
   subtitle: HTMLElement;
   dots: readonly HTMLElement[];
-  gadgets: ReadonlyMap<GadgetKind, HTMLElement>;
+  gadgets: ReadonlyMap<GadgetKind, GadgetChip>;
   message: HTMLElement;
   banner: HTMLElement;
   bannerTitle: HTMLElement;
@@ -99,6 +107,26 @@ const buildMute = (doc: Document, parent: HTMLElement): HTMLElement => {
   return wrapper;
 };
 
+/** One weapon slot: its name, and a pip for every charge it holds at full. */
+const buildGadgetChip = (
+  add: Add,
+  row: HTMLElement,
+  kind: GadgetKind,
+): GadgetChip => {
+  const spec = ARSENAL[kind];
+  const root = add(row, "span", "gadget-chip");
+  root.dataset.gadget = kind;
+  add(root, "span", "gadget-label", spec.label);
+
+  const strip = add(root, "span", "gadget-pips");
+  strip.setAttribute("aria-hidden", "true");
+  const pips = Array.from({ length: spec.capacity }, () =>
+    add(strip, "span", "gadget-pip"),
+  );
+
+  return { root, pips };
+};
+
 const buildStatusCluster = (
   add: Add,
   parent: HTMLElement,
@@ -135,13 +163,9 @@ const buildStatusCluster = (
   const threats = add(objective, "span", "objective-threats");
 
   const gadgetRow = add(cluster, "div", "gadget-row");
-  gadgetRow.setAttribute("aria-label", "Gadget");
+  gadgetRow.setAttribute("aria-label", "Arsenal");
   const gadgets = new Map(
-    GADGETS.map(([kind, label]) => {
-      const chip = add(gadgetRow, "span", "gadget-chip", label);
-      chip.dataset.gadget = kind;
-      return [kind, chip] as const;
-    }),
+    GADGET_ORDER.map((kind) => [kind, buildGadgetChip(add, gadgetRow, kind)]),
   );
 
   return { score, combo, mute, bar, barFill, health, threats, gadgets };

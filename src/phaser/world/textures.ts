@@ -1,5 +1,5 @@
 import type Phaser from "phaser";
-import { colors } from "../../game/assets/manifest";
+import { artKeys, colors } from "../../game/assets/manifest";
 
 /**
  * Every texture drawn at runtime. The hero, enemies and pedestrians come from
@@ -370,6 +370,27 @@ const DRAWINGS = {
 export const PROP_TEXTURES = Object.keys(DRAWINGS) as readonly PropTextureKey[];
 
 export type PropTextureKey = keyof typeof DRAWINGS;
+
+/**
+ * Every texture the arsenal draws from, in one place. All but the net are
+ * painted sprites off the raster pipeline now; the drawn placeholders they
+ * replaced are gone.
+ */
+export const WEAPON_TEXTURES = {
+  bomb: artKeys.weapons.webBomb,
+  bombArmed: artKeys.weapons.webBombArmed[0],
+  mesh: artKeys.weapons.webMesh,
+  impact: artKeys.weapons.impactWeb,
+  dart: artKeys.weapons.webLineDart,
+  // No painted net yet, so this one is still the drawn placeholder.
+  net: "webNet",
+} as const satisfies Record<string, string>;
+
+/**
+ * The armed charge pulses while its fuse burns. Frame 0 is the texture a charge
+ * takes when it sticks; the cycle plays over it.
+ */
+export const ARMED_BOMB_FRAMES = artKeys.weapons.webBombArmed;
 
 /**
  * Generates the prop textures this scene is missing. Textures are game-global
