@@ -44,7 +44,7 @@ bun test
 - `E`: hold to swing; the web catches the best arc ahead of you and lets go at
   the top so you keep your momentum
 - `J`: web-glob strike, or a close-range kick near enemies
-- `Q`: cycle gadget · `K`: use gadget
+- `Q`: cycle weapon · `K`: fire it
 - `Shift`: slow the fall with web-wings
 - `M`: mute · `R`: restart
 
@@ -73,6 +73,21 @@ coming, and every attack leaves a window where the boss cannot hurt you —
 that is the punish, so take it.
 
 Chaining takedowns without touching the ground pays a score multiplier.
+
+## The Arsenal
+
+Six weapons on one shared cooldown, each with its own charges and its own
+recharge. Scarcity is the balance, not damage: a bomb clears a rooftop, so you
+carry two and wait for them, while the mobility gadgets come back fastest.
+
+| | What it is for |
+|---|---|
+| Web bomb | Sticks, telegraphs, bursts into a mesh. Least damage at the edge |
+| Impact web | Staggers and knocks back — the answer to a wind-up |
+| Web line | Yanks a target toward you |
+| Web net | Snares. Cancels a boss wind-up, once |
+| Web shield | Catches one shot |
+| Web wings | A vault, and a slower fall on `Shift` |
 
 Enemies have to actually see you — range, a forward cone and a clear line —
 and every attack is telegraphed and followed by a recovery window, so fights
