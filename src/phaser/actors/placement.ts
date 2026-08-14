@@ -29,6 +29,26 @@ export const applyBodyBox = (
     .setOffset(box.offsetX, box.offsetY);
 };
 
+/** The slice of a sprite `fitWidth` needs. */
+export interface SizedSprite {
+  readonly width: number;
+  setScale(value: number): unknown;
+}
+
+/**
+ * Scales a sprite so it draws `width` pixels wide, and returns the scale used.
+ *
+ * Every weapon sprite goes through this, so the size a weapon reads at on
+ * screen is stated once in the code that fires it rather than baked into the
+ * texture. Swapping a 36px placeholder for a 192px raster frame then changes
+ * nothing but the texture key.
+ */
+export const fitWidth = (sprite: SizedSprite, width: number): number => {
+  const scale = sprite.width > 0 ? width / sprite.width : 1;
+  sprite.setScale(scale);
+  return scale;
+};
+
 /**
  * The slice of a Phaser sprite placement reads. Narrow on purpose: it is what
  * makes the offset maths below unit-testable without booting the engine.

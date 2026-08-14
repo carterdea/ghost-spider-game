@@ -9,7 +9,6 @@ import { clamp } from "../../game/simulation/physics/vector";
 import {
   createInitialGameState,
   enterLevel,
-  type GadgetKind,
   type GameState,
 } from "../../game/simulation/state";
 import { damagePlayer } from "../../game/simulation/systems/combat";
@@ -28,17 +27,15 @@ import {
   type PlayerStep,
 } from "../actors/PlayerController";
 import { applyBodyBox, BODY_BOXES } from "../actors/placement";
+import { WeaponRack } from "../actors/WeaponRack";
 import { WebRenderer } from "../fx/WebRenderer";
 import { LevelBuilder } from "../world/LevelBuilder";
 import type { LevelWorld } from "../world/LevelWorld";
 import { createPropTextures } from "../world/textures";
 import { bossSound, bossSpawnFor } from "./bossBinding";
 import { RunFeedback } from "./feedback";
-import { spawnWebBurst } from "./webBurst";
 
-const GADGETS: GadgetKind[] = ["web-net", "web-shield", "web-wings"];
 const ATTACK_COOLDOWN = 280;
-const GADGET_COOLDOWN = 650;
 const HIT_COOLDOWN = 700;
 const STRIKE_RANGE = 96;
 
@@ -66,13 +63,13 @@ export class GameScene extends Phaser.Scene {
   private projectiles?: Phaser.Physics.Arcade.Group;
   private world?: LevelWorld;
   private feedback?: RunFeedback;
+  private rack?: WeaponRack;
 
   private audio?: GameAudio;
   /** Last frame's position, so a fast swing cannot tunnel through the goal. */
   private lastPlayerPosition: Vec2 = { x: 0, y: 0 };
 
   private attackCooldownUntil = 0;
-  private gadgetCooldownUntil = 0;
   private hitCooldownUntil = 0;
   private shieldView?: Phaser.GameObjects.Arc;
 
@@ -99,6 +96,7 @@ export class GameScene extends Phaser.Scene {
       this.enemies?.destroy();
       this.webs?.destroy();
       this.feedback?.destroy();
+      this.rack?.destroy();
       this.audio?.setWind(0);
       // Phaser has already taken the level's groups, tweens and timers. Let
       // the handle go rather than leaving the next boot to tear down corpses.
@@ -110,11 +108,12 @@ export class GameScene extends Phaser.Scene {
 
     this.projectiles = this.physics.add.group({ allowGravity: false });
     this.builder = new LevelBuilder(this);
-    this.enemies = new EnemyDirector(
+    const enemies = new EnemyDirector(
       this,
       () => this.audio?.play("enemyShot"),
       (event) => this.audio?.play(bossSound(event)),
     );
+    this.enemies = enemies;
     this.webs = new WebRenderer(this);
 
     const player = this.physics.add.sprite(0, 0, artKeys.hero.idle[0]);
@@ -124,7 +123,15 @@ export class GameScene extends Phaser.Scene {
     player.play("player-idle");
     this.player = player;
     this.controller = new PlayerController(player);
-    this.feedback = new RunFeedback(this, player, this.audio);
+    const feedback = new RunFeedback(this, player, this.audio);
+    this.feedback = feedback;
+    this.rack = new WeaponRack({
+      scene: this,
+      state: this.state,
+      enemies,
+      feedback,
+      play: (event) => this.audio?.play(event),
+    });
 
     this.cameras.main.startFollow(player, true, 0.09, 0.09);
     this.cameras.main.setDeadzone(180, 130);
@@ -150,6 +157,7 @@ export class GameScene extends Phaser.Scene {
       this.state,
       this.feedback?.combo.count ?? 0,
       this.audio?.isMuted() ?? false,
+      this.rack?.ammo.charges,
     );
   }
 
@@ -231,8 +239,10 @@ export class GameScene extends Phaser.Scene {
       1 - clamp(player.y / level.height, 0, 1),
     );
 
+    this.rack?.update(time);
     if (this.wasPressed(actions, "cycleGadget")) {
-      this.cycleGadget();
+      this.rack?.cycle();
+      this.audio?.play("gadgetCycle");
     }
     if (
       this.wasPressed(actions, "attack") &&
@@ -240,11 +250,10 @@ export class GameScene extends Phaser.Scene {
     ) {
       this.attack(player, time);
     }
-    if (
-      this.wasPressed(actions, "gadget") &&
-      time >= this.gadgetCooldownUntil
-    ) {
-      this.useGadget(player, time);
+    if (this.wasPressed(actions, "gadget")) {
+      // The rack owns its own ammo and shared cooldown, so the scene no longer
+      // gates this: an empty slot has to reach `use` to say it is empty.
+      this.rack?.use(player, time);
     }
 
     this.enemies?.update(time, player);
@@ -375,6 +384,9 @@ export class GameScene extends Phaser.Scene {
       enemies.spawnBoss(bossSpawnFor(level), this.state);
     }
     this.registerCombat(player, enemies, world);
+    // After the spawns for the same reason `registerCombat` is: the rack
+    // registers a shot and a charge overlap per enemy, boss included.
+    this.rack?.beginLevel(world);
 
     this.cameras.main.setBounds(0, 0, level.width, level.height);
     this.cameras.main.centerOn(level.playerSpawn.x, level.playerSpawn.y);
@@ -383,13 +395,13 @@ export class GameScene extends Phaser.Scene {
   /** Cooldowns and camera framing belong to the run, not to the next level. */
   private resetTransientState(): void {
     this.attackCooldownUntil = 0;
-    this.gadgetCooldownUntil = 0;
     this.hitCooldownUntil = 0;
     this.cameras.main.setZoom(ZOOM_NEAR);
   }
 
   private teardownLevel(): void {
     this.enemies?.clear();
+    this.rack?.clear();
     this.projectiles?.clear(true, true);
     this.shieldView?.destroy();
     this.shieldView = undefined;
@@ -624,44 +636,6 @@ export class GameScene extends Phaser.Scene {
     this.requireWorld().delay(1100, () => projectile.destroy());
   }
 
-  private cycleGadget(): void {
-    const next =
-      (GADGETS.indexOf(this.state.player.gadget) + 1) % GADGETS.length;
-    this.state.player.gadget = GADGETS[next];
-    this.audio?.play("gadgetCycle");
-    this.state.player.message = `Gadget ready: ${this.state.player.gadget}.`;
-  }
-
-  private useGadget(player: Phaser.Physics.Arcade.Sprite, time: number): void {
-    this.gadgetCooldownUntil = time + GADGET_COOLDOWN;
-    const facing = player.flipX ? -1 : 1;
-
-    if (this.state.player.gadget === "web-net") {
-      this.fireWebProjectile(
-        player.x + facing * 32,
-        player.y - 8,
-        facing,
-        "net",
-      );
-      this.audio?.play("gadgetNet");
-      this.state.player.message = "Web net launched.";
-      return;
-    }
-
-    if (this.state.player.gadget === "web-shield") {
-      this.state.player.shieldUntil = time + 1100;
-      this.createWebBurst(player.x, player.y, 58, 760);
-      this.audio?.play("gadgetShield");
-      this.state.player.message = "Web shield spun.";
-      return;
-    }
-
-    player.setVelocityY(-420);
-    this.createWebBurst(player.x - facing * 22, player.y + 8, 42, 520);
-    this.audio?.play("gadgetWings");
-    this.state.player.message = "Web-wings vault.";
-  }
-
   private updateShield(
     player: Phaser.Physics.Arcade.Sprite,
     time: number,
@@ -680,15 +654,6 @@ export class GameScene extends Phaser.Scene {
         .setDepth(9);
     }
     this.shieldView.setPosition(player.x, player.y);
-  }
-
-  private createWebBurst(
-    x: number,
-    y: number,
-    radius: number,
-    duration: number,
-  ): void {
-    spawnWebBurst(this, this.requireWorld(), x, y, radius, duration);
   }
 
   private knockOut(player: Phaser.Physics.Arcade.Sprite): void {

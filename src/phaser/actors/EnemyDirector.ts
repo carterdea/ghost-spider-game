@@ -53,6 +53,12 @@ export interface EnemyView {
   /** Last decision the brain reached — handy for HUD and debugging. */
   aiState: EnemyAiState;
   snaredUntil: number;
+  /**
+   * While this stands, the brain's velocity is not applied: the body is flying
+   * where a weapon threw it. Without it a knockback lives for a single frame,
+   * because the next brain step writes straight over it.
+   */
+  launchedUntil: number;
   /** Y the drone bobs around; air enemies ignore gravity. */
   hoverY: number;
   /** Set only on the finale boss, which runs a different brain entirely. */
@@ -163,6 +169,7 @@ export class EnemyDirector {
       brain: createAiMemory(1, spawn.position.x * 0.01),
       aiState: "patrol",
       snaredUntil: 0,
+      launchedUntil: 0,
       hoverY: spawn.position.y,
     };
   }
@@ -189,6 +196,7 @@ export class EnemyDirector {
       brain: createAiMemory(-1),
       aiState: "patrol",
       snaredUntil: 0,
+      launchedUntil: 0,
       hoverY: sprite.y,
       boss: createBossRuntime(spawn),
     };
@@ -324,9 +332,13 @@ export class EnemyDirector {
 
   private applyIntent(view: EnemyView, intent: AiIntent, time: number): void {
     const { sprite } = view;
-    sprite.setVelocityX(intent.velocityX);
-    if (intent.velocityY !== null) {
-      sprite.setVelocityY(intent.velocityY);
+    // A body still flying from a knockback or a yank keeps the velocity the
+    // weapon gave it; the brain resumes the moment the throw is spent.
+    if (time >= view.launchedUntil) {
+      sprite.setVelocityX(intent.velocityX);
+      if (intent.velocityY !== null) {
+        sprite.setVelocityY(intent.velocityY);
+      }
     }
 
     view.direction = intent.facing;
@@ -427,11 +439,29 @@ export class EnemyDirector {
     return this.telegraph;
   }
 
-  public snare(view: EnemyView): void {
+  /**
+   * Holds an enemy still. `durationMs` lets a lighter weapon buy a shorter
+   * hold; the boss ignores it entirely and always gets its own brief one, so no
+   * gadget can talk its way into a longer lock than the fight allows.
+   */
+  public snare(view: EnemyView, durationMs = SNARE_DURATION): void {
     view.snaredUntil =
-      this.scene.time.now + (view.boss ? BOSS_SNARE_DURATION : SNARE_DURATION);
+      this.scene.time.now + (view.boss ? BOSS_SNARE_DURATION : durationMs);
     view.sprite.setVelocity(0, 0);
     view.sprite.setTint(colors.web);
+  }
+
+  /**
+   * Throws an enemy along `velocity` and keeps the brain off its body until the
+   * throw is spent. The boss is immune: it is held by its arena and its own
+   * motion solver, and shoving it out of either breaks the fight.
+   */
+  public launch(view: EnemyView, velocity: Vec2, durationMs: number): void {
+    if (view.boss || !view.sprite.active) {
+      return;
+    }
+    view.launchedUntil = this.scene.time.now + durationMs;
+    view.sprite.setVelocity(velocity.x, velocity.y);
   }
 
   public defeat(view: EnemyView): void {

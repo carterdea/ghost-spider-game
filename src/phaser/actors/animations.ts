@@ -16,6 +16,9 @@ const DEFINITIONS: readonly AnimationDefinition[] = [
   { key: "robot-walk", frames: artKeys.robot, frameRate: 5 },
   { key: "gunner-walk", frames: artKeys.enforcer, frameRate: 4 },
   { key: "drone-fly", frames: artKeys.drone, frameRate: 6 },
+  // A charge pulses while its fuse burns. The tint carries how close the burst
+  // is; this just keeps the silk alive underneath it.
+  { key: "web-bomb-armed", frames: artKeys.weapons.webBombArmed, frameRate: 8 },
 ];
 
 /**
