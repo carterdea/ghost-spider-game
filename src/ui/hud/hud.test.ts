@@ -142,12 +142,15 @@ describe("first render", () => {
   });
 
   test("counts only live enemies of the current level", () => {
-    hud.render(makeState({ enemyHealths: [10, 0, 0, 5] }));
+    // Glasshouse Terraces, which authors four patrols. The district has to be
+    // one that ships with enemies: the label reads a patrol-less district
+    // differently, and the warm-up district ships with none.
+    hud.render(makeState({ levelIndex: 4, enemyHealths: [10, 0, 0, 5] }));
     expect(query(root, ".objective-threats").textContent).toBe(
       "2 threats remain",
     );
 
-    hud.render(makeState({ enemyHealths: [0, 0] }));
+    hud.render(makeState({ levelIndex: 4, enemyHealths: [0, 0, 0, 0] }));
     expect(query(root, ".objective-threats").textContent).toBe(
       "District clear",
     );
@@ -651,5 +654,27 @@ describe("message safety", () => {
     hud.render(makeState({}));
 
     expect(query(root, ".message").getAttribute("aria-live")).toBe("polite");
+  });
+});
+
+describe("threat label", () => {
+  test("a district with no patrols is not credited as cleared", () => {
+    // The warm-up district ships with zero enemies, so "District clear" on its
+    // first frame congratulates the player for something they have not done.
+    expect(LEVELS[0].enemies).toHaveLength(0);
+
+    hud.render(makeState({ levelIndex: 0 }));
+
+    expect(root.textContent).toContain("No patrols here");
+    expect(root.textContent).not.toContain("District clear");
+  });
+
+  test("a district emptied by the player is credited as cleared", () => {
+    const levelIndex = LEVELS.findIndex((level) => level.enemies.length > 0);
+    const enemyHealths = LEVELS[levelIndex].enemies.map(() => 0);
+
+    hud.render(makeState({ levelIndex, enemyHealths }));
+
+    expect(root.textContent).toContain("District clear");
   });
 });

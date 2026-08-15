@@ -25,7 +25,15 @@ const MIN_SHOWN_CHAIN = 2;
 /** Where the chip stops getting hotter, matching the multiplier's own cap. */
 const MAX_HEAT = 7;
 
-const threatLabel = (alive: number): string => {
+/**
+ * `authored` separates a district cleared from one that never had patrols:
+ * the warm-up district ships with none, and announcing "District clear" on its
+ * first frame credits the player with something they have not done yet.
+ */
+const threatLabel = (alive: number, authored: number): string => {
+  if (authored === 0) {
+    return "No patrols here";
+  }
   if (alive <= 0) {
     return "District clear";
   }
@@ -117,9 +125,17 @@ export class Hud {
     }
 
     const threats = countLivingEnemies(state);
-    if (threats !== this.threats) {
+    if (
+      threats !== this.threats ||
+      progression.levelIndex !== this.levelIndex
+    ) {
       this.threats = threats;
-      nodes.threats.textContent = threatLabel(threats);
+      // Authored count, not the live list: defeated enemies may be reaped from
+      // state, and a cleared district must not read as one that never had any.
+      nodes.threats.textContent = threatLabel(
+        threats,
+        getLevelByIndex(progression.levelIndex).enemies.length,
+      );
     }
 
     // Name, subtitle, accent and kicker all turn over together on a transition.
