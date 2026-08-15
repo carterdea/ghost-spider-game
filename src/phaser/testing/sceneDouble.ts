@@ -317,6 +317,162 @@ class FakeStaticGroup {
   }
 }
 
+/**
+ * The Arcade body hanging off a physics sprite.
+ *
+ * Only the parts the actors actually set: a footprint, a gravity switch and the
+ * velocity Arcade would integrate. Nothing here moves anything — a test that
+ * cares where a body ended up drives the sprite directly.
+ */
+class FakeArcadeBody {
+  public width = 0;
+  public height = 0;
+  public readonly offset = { x: 0, y: 0 };
+  public allowGravity = true;
+  public readonly velocity = { x: 0, y: 0 };
+
+  public setSize(width: number, height: number): this {
+    this.width = width;
+    this.height = height;
+    return this;
+  }
+
+  public setOffset(x: number, y: number): this {
+    this.offset.x = x;
+    this.offset.y = y;
+    return this;
+  }
+
+  public setAllowGravity(allow = true): this {
+    this.allowGravity = allow;
+    return this;
+  }
+}
+
+/**
+ * A sprite with a body, as the actor layer drives one.
+ *
+ * `active` and the velocity are what the tests read: a director holding an
+ * enemy still, or a knockback the brain must not write over, both show up here.
+ */
+export class FakeSprite extends FakeGameObject {
+  public readonly body = new FakeArcadeBody();
+  public active = true;
+  public scaleX = 1;
+  public scaleY = 1;
+  public displayOriginY = 0;
+  public width = 192;
+  public height = 192;
+  public flipX = false;
+  public tint: number | null = null;
+  public collideWorldBounds = false;
+  /** Every animation key handed to `play`, newest last. */
+  public readonly animations: string[] = [];
+  private readonly data = new Map<string, unknown>();
+
+  public constructor(texture = "") {
+    super("sprite", texture);
+  }
+
+  public override setScale(value = 1): this {
+    this.scaleX = value;
+    this.scaleY = value;
+    return this;
+  }
+
+  public override setTint(color?: number): this {
+    this.tint = color ?? null;
+    return this;
+  }
+
+  public clearTint(): this {
+    this.tint = null;
+    return this;
+  }
+
+  public override setFlipX(flip = false): this {
+    this.flipX = flip;
+    return this;
+  }
+
+  public setCollideWorldBounds(collide = true): this {
+    this.collideWorldBounds = collide;
+    return this;
+  }
+
+  public play(key: string): this {
+    this.animations.push(key);
+    return this;
+  }
+
+  public setVelocity(x: number, y = x): this {
+    this.body.velocity.x = x;
+    this.body.velocity.y = y;
+    return this;
+  }
+
+  public setVelocityX(x: number): this {
+    this.body.velocity.x = x;
+    return this;
+  }
+
+  public setVelocityY(y: number): this {
+    this.body.velocity.y = y;
+    return this;
+  }
+
+  public setData(key: string, value: unknown): this {
+    this.data.set(key, value);
+    return this;
+  }
+
+  public getData(key: string): unknown {
+    return this.data.get(key);
+  }
+
+  public override destroy(): void {
+    super.destroy();
+    this.active = false;
+  }
+}
+
+/**
+ * A dynamic group, which unlike the static one hands back sprites with bodies
+ * and can be emptied without being thrown away.
+ */
+export class FakeGroup {
+  public readonly children: FakeSprite[] = [];
+  public destroyed = false;
+
+  public constructor(private readonly scene: SceneDouble) {}
+
+  public create(x: number, y: number, texture: string): FakeSprite {
+    const sprite = this.scene.record(new FakeSprite(texture));
+    sprite.setPosition(x, y);
+    this.children.push(sprite);
+    return sprite;
+  }
+
+  /** Arcade skips destroyed members; so does this. */
+  public getChildren(): FakeSprite[] {
+    return this.children.filter((child) => !child.destroyed);
+  }
+
+  public clear(destroyChild = false, _removeFromScene = false): this {
+    if (destroyChild) {
+      for (const child of this.children) {
+        child.destroy();
+      }
+    }
+    this.children.length = 0;
+    return this;
+  }
+
+  public destroy(): void {
+    this.destroyed = true;
+  }
+}
+
 /** The slice of the world a camera is showing, as the weather reads it. */
 class FakeWorldView {
   public x = 0;
@@ -417,6 +573,7 @@ export class SceneDouble {
   public readonly timerLog: FakeTimer[] = [];
   public readonly colliderLog: FakeCollider[] = [];
   public readonly groupLog: FakeStaticGroup[] = [];
+  public readonly dynamicGroupLog: FakeGroup[] = [];
   public readonly bodyLog: FakeBody[] = [];
   public readonly generatedTextures: string[] = [];
   public readonly existingTextures = new Set<string>();
@@ -531,6 +688,13 @@ export class SceneDouble {
         this.groupLog.push(group);
         return group;
       },
+      group: (): FakeGroup => {
+        const group = new FakeGroup(this);
+        this.dynamicGroupLog.push(group);
+        return group;
+      },
+      sprite: (x: number, y: number, texture: string): FakeSprite =>
+        this.record(new FakeSprite(texture)).setPosition(x, y),
       collider: (
         objectA: unknown,
         objectB: unknown,
