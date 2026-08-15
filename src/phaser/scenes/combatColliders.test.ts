@@ -217,6 +217,50 @@ describe("enemy bullets", () => {
     expect(harness.hurts).toBe(0);
   });
 
+  test("a two-shot burst costs one hit, not two", () => {
+    const harness = setUp([]);
+    const collision = collisionBetween(
+      harness.scene,
+      harness.player,
+      harness.bullets,
+    );
+    const second = new Body(0, 0);
+
+    harness.scene.now = 1000;
+    collision.fire(harness.player, new Body(0, 0));
+    // A gunner's burst is two shots 180ms apart, far inside the window.
+    harness.scene.now = 1180;
+    collision.fire(harness.player, second);
+
+    expect(harness.state.player.health).toBe(88);
+    expect(harness.hurts).toBe(1);
+    // Absorbed, not ignored: the shot still stops at the hero.
+    expect(second.destroyCount).toBe(1);
+  });
+
+  test("a shot and a tackle share the one window", () => {
+    const harness = setUp([enemyState({ damage: 11 })]);
+    const shot = collisionBetween(
+      harness.scene,
+      harness.player,
+      harness.bullets,
+    );
+    const contact = collisionBetween(
+      harness.scene,
+      harness.player,
+      harness.enemies[0].body,
+    );
+
+    harness.scene.now = 1000;
+    shot.fire(harness.player, new Body(0, 0));
+    harness.scene.now = 1300;
+    contact.fire(harness.player, harness.enemies[0].body);
+
+    // One window whatever opened it. Charging for both leaves a shot that
+    // knocks the hero into a robot's arms with no immunity at all.
+    expect(harness.state.player.health).toBe(88);
+  });
+
   test("hurt once the shield has expired", () => {
     const harness = setUp([]);
     harness.state.player.shieldUntil = 500;

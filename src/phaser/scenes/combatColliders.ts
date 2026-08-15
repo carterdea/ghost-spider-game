@@ -83,6 +83,13 @@ export const registerCombat = (deps: CombatDeps): void => {
         state.player.message = "Web shield caught the shot.";
         return;
       }
+      // The window is shared with contact damage because it is one window: a
+      // gunner's burst is two shots 180ms apart, and charging for both turns a
+      // single telegraphed attack into double damage that no dodge splits.
+      if (scene.time.now < hitCooldownUntil) {
+        return;
+      }
+      hitCooldownUntil = scene.time.now + HIT_COOLDOWN;
       damagePlayer(state, 12, "Hit by a skyline shot.");
       feedback.hurt();
       // Silent at zero health: `knockOut` has its own, louder sound.
