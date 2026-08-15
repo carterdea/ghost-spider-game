@@ -168,6 +168,29 @@ describe("a net on the boss", () => {
     return { harness, boss };
   };
 
+  test("a sleeping Weaver can still be shot awake from across the arena", () => {
+    const { harness, boss } = withBoss();
+    // The hero stays well outside the wake radius, so proximity cannot be what
+    // starts the fight.
+    (harness.player as unknown as FakeSprite).setPosition(-2000, 1200);
+    play(harness, 200);
+
+    // Nothing is open yet because there are no windows yet. Closed here made
+    // the brain's only ranged wake — taking damage — impossible to reach.
+    expect(boss.boss?.intent.state).toBe("dormant");
+    expect(boss.state.invulnerable).toBe(false);
+  });
+
+  test("but closes again the moment the fight is actually on", () => {
+    const { harness, boss } = withBoss();
+    (harness.player as unknown as FakeSprite).setPosition(820, 420);
+    play(harness, 1200);
+
+    expect(boss.boss?.intent.state).not.toBe("dormant");
+    // Awake and outside a punish window: the gate is doing its job.
+    expect(boss.state.invulnerable).toBe(!boss.boss?.intent.vulnerable);
+  });
+
   test("lands the first time", () => {
     const { harness, boss } = withBoss();
 

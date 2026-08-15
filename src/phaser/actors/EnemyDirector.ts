@@ -342,7 +342,15 @@ export class EnemyDirector {
     // The other half of the same trade: the window that is safe to dive into is
     // the only one that pays. Written here so every weapon path is covered by
     // the one rule rather than each remembering it.
-    view.state.invulnerable = !boss.intent.vulnerable;
+    //
+    // Dormant is outside that trade entirely — there are no windows yet. Gating
+    // it too made the Weaver unwakeable from range: the brain's only wake that
+    // does not need the hero inside its radius is `healthFraction < 1`, and a
+    // deflected shot never lowers it. See "wakes when shot from outside its
+    // wake radius" in `ai/boss/brain.test`, which the fight could no longer
+    // reach.
+    view.state.invulnerable =
+      !boss.intent.vulnerable && boss.intent.state !== "dormant";
 
     if (step.intent.attack) {
       this.launchBossAttack(step.intent.attack);
