@@ -254,8 +254,33 @@ export interface FakeTimer {
   fired: boolean;
 }
 
-class FakeCollider {
+/** What Arcade hands a collision handler: the two bodies that touched. */
+export type CollisionHandler = (objectA: never, objectB: never) => void;
+
+/**
+ * A registered collision, held rather than simulated.
+ *
+ * The double runs no physics, so nothing here decides whether two bodies
+ * actually intersect. It keeps the pair and the handler so a test can state the
+ * intersection itself and drive the handler with `fire`, which is what makes
+ * the collision wiring in a scene testable at all.
+ */
+export class FakeCollider {
   public destroyed = false;
+  public fireCount = 0;
+
+  public constructor(
+    public readonly kind: "collider" | "overlap" = "collider",
+    public readonly objectA?: unknown,
+    public readonly objectB?: unknown,
+    public readonly handler?: CollisionHandler,
+  ) {}
+
+  /** Calls the handler as Arcade would, sprite-side argument first. */
+  public fire(objectA?: unknown, objectB?: unknown): void {
+    this.fireCount += 1;
+    this.handler?.(objectA as never, objectB as never);
+  }
 
   public destroy(): void {
     this.destroyed = true;
@@ -503,6 +528,17 @@ export class SceneDouble {
         this.groupLog.push(group);
         return group;
       },
+      collider: (
+        objectA: unknown,
+        objectB: unknown,
+        handler?: CollisionHandler,
+      ): FakeCollider =>
+        this.newCollider("collider", objectA, objectB, handler),
+      overlap: (
+        objectA: unknown,
+        objectB: unknown,
+        handler?: CollisionHandler,
+      ): FakeCollider => this.newCollider("overlap", objectA, objectB, handler),
     },
   };
 
@@ -529,10 +565,26 @@ export class SceneDouble {
   }
 
   /** A collider handle the systems under test can hold and later destroy. */
-  public newCollider(): FakeCollider {
-    const collider = new FakeCollider();
+  public newCollider(
+    kind: "collider" | "overlap" = "collider",
+    objectA?: unknown,
+    objectB?: unknown,
+    handler?: CollisionHandler,
+  ): FakeCollider {
+    const collider = new FakeCollider(kind, objectA, objectB, handler);
     this.colliderLog.push(collider);
     return collider;
+  }
+
+  /**
+   * The registration made for a given pair, in the order the scene made them.
+   * Tests name a collision by the objects it was wired between rather than by
+   * its index, so inserting an unrelated collider cannot silently repoint them.
+   */
+  public collisionsBetween(objectA: unknown, objectB: unknown): FakeCollider[] {
+    return this.colliderLog.filter(
+      (entry) => entry.objectA === objectA && entry.objectB === objectB,
+    );
   }
 
   /** Fires a pending timer the way Phaser's clock would. */
