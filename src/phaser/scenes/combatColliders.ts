@@ -14,6 +14,9 @@ import type { RunFeedback } from "./feedback";
 /** One shared window of invulnerability after any hit the hero takes. */
 const HIT_COOLDOWN = 700;
 
+/** What a shot costs when it arrived without an owner to price it. */
+const UNOWNED_SHOT_DAMAGE = 12;
+
 /**
  * The stand-off numbers. Deliberately below the strike: closing is the risk,
  * so it is where the damage lives — see `STRIKE_DAMAGE` in `GameScene`.
@@ -70,6 +73,7 @@ export const registerCombat = (deps: CombatDeps): void => {
 
   world.collider(
     scene.physics.add.overlap(player, enemies.bullets, (_, bulletObject) => {
+      const bullet = bulletObject as Phaser.Physics.Arcade.Sprite;
       // A held world runs no physics, so this should not fire at all once the
       // run is over — but a teardown releases the world for a frame, and one
       // frame of a shot still in the air was enough to knock out a hero who
@@ -77,7 +81,8 @@ export const registerCombat = (deps: CombatDeps): void => {
       if (!deps.isPlaying()) {
         return;
       }
-      (bulletObject as Phaser.Physics.Arcade.Sprite).destroy();
+      const damage = bullet.getData("damage") as number | undefined;
+      bullet.destroy();
       if (scene.time.now < state.player.shieldUntil) {
         deps.audio?.play("shieldBlock");
         state.player.message = "Web shield caught the shot.";
@@ -90,7 +95,14 @@ export const registerCombat = (deps: CombatDeps): void => {
         return;
       }
       hitCooldownUntil = scene.time.now + HIT_COOLDOWN;
-      damagePlayer(state, 12, "Hit by a skyline shot.");
+      // The shot carries what its owner was authored for. Reading it here is
+      // the only way a district's threat scaling reaches a gunner, whose
+      // damage never arrives any other way.
+      damagePlayer(
+        state,
+        damage ?? UNOWNED_SHOT_DAMAGE,
+        "Hit by a skyline shot.",
+      );
       feedback.hurt();
       // Silent at zero health: `knockOut` has its own, louder sound.
       if (state.player.health > 0) {
@@ -167,7 +179,9 @@ export const registerCombat = (deps: CombatDeps): void => {
         if (
           !deps.isPlaying() ||
           scene.time.now < hitCooldownUntil ||
-          scene.time.now < enemy.snaredUntil ||
+          // The director's clock, not the scene's: a snare is measured in time
+          // the enemy was actually running, and a pause must not spend it.
+          enemies.now < enemy.snaredUntil ||
           // Harmless touch is not a hit. The brain zeroes contact damage
           // outside a committed strike, and the cooldown is shared across
           // every enemy: brushing a patrol would otherwise announce a hit

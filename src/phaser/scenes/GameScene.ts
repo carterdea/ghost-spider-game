@@ -403,7 +403,7 @@ export class GameScene extends Phaser.Scene {
       this.rack?.use(player, this.weaponClock(time));
     }
 
-    this.enemies?.update(time, delta, player);
+    this.enemies?.update(delta, player);
     this.updateShield(player, time);
     this.updateCameraZoom(level, controller.speed, delta);
 

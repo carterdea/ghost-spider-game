@@ -80,6 +80,7 @@ const enemyAt = (x: number, state: EnemyState): Enemy => {
 const directorOf = (
   enemies: Enemy[],
   bullets: object,
+  clock: { now: number },
 ): { director: EnemyDirector; snared: EnemyView[]; defeated: EnemyView[] } => {
   const snared: EnemyView[] = [];
   const defeated: EnemyView[] = [];
@@ -89,6 +90,11 @@ const directorOf = (
     director: {
       bullets,
       all: enemies.map((enemy) => enemy.view),
+      // Its own clock, which is what a snare is measured against — the scene's
+      // keeps running through a pause the enemy is not.
+      get now() {
+        return clock.now;
+      },
       snare: (view: EnemyView) => snared.push(view),
       defeat: (view: EnemyView) => defeated.push(view),
     } as unknown as EnemyDirector,
@@ -107,6 +113,8 @@ interface Harness {
   defeated: EnemyView[];
   hurts: number;
   playing: boolean;
+  /** The director's clock, which snares and knockbacks are measured against. */
+  clock: { now: number };
 }
 
 const setUp = (enemyStates: EnemyState[]): Harness => {
@@ -119,7 +127,8 @@ const setUp = (enemyStates: EnemyState[]): Harness => {
   const enemies = enemyStates.map((each, index) =>
     enemyAt(200 + index * 50, each),
   );
-  const { director, snared, defeated } = directorOf(enemies, bullets);
+  const clock = { now: 0 };
+  const { director, snared, defeated } = directorOf(enemies, bullets, clock);
 
   const harness: Harness = {
     scene,
@@ -133,6 +142,7 @@ const setUp = (enemyStates: EnemyState[]): Harness => {
     defeated,
     hurts: 0,
     playing: true,
+    clock,
   };
 
   registerCombat({
@@ -215,6 +225,21 @@ describe("enemy bullets", () => {
     expect(bullet.destroyCount).toBe(1);
     expect(harness.state.player.health).toBe(100);
     expect(harness.hurts).toBe(0);
+  });
+
+  test("cost what the enemy that fired them was authored for", () => {
+    const harness = setUp([]);
+    const collision = collisionBetween(
+      harness.scene,
+      harness.player,
+      harness.bullets,
+    );
+
+    collision.fire(harness.player, new Body(0, 0, { damage: 22 }));
+
+    // A gunner never sets a contact strike, so this is the only route its
+    // authored damage — and the district's threat scaling — ever takes.
+    expect(harness.state.player.health).toBe(78);
   });
 
   test("a two-shot burst costs one hit, not two", () => {
@@ -340,7 +365,19 @@ describe("contact damage", () => {
 
   test("a snared enemy cannot hurt the player it is pinned against", () => {
     striker.view.snaredUntil = 400;
-    harness.scene.now = 100;
+    harness.clock.now = 100;
+
+    touch(striker);
+
+    expect(harness.state.player.health).toBe(100);
+  });
+
+  test("a snare is spent by the director's clock, not the scene's", () => {
+    striker.view.snaredUntil = 400;
+    // A long pause: wall time runs past the snare while the enemy, held with
+    // the rest of the world, has not served any of it.
+    harness.scene.now = 9000;
+    harness.clock.now = 100;
 
     touch(striker);
 

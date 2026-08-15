@@ -76,6 +76,13 @@ const SNARE_DURATION = 1800;
 /** A netted boss goes limp far more briefly; the brain then shrugs nets off. */
 const BOSS_SNARE_DURATION = 420;
 const BULLET_LIFETIME = 2600;
+
+/**
+ * What a Weaver shot costs. Its own number rather than an authored one: the
+ * boss's contact damage is rewritten every frame from its strike, and its
+ * volleys are tuned against the punish loop, not against a district.
+ */
+const BOSS_SHOT_DAMAGE = 12;
 /** A frame this long or longer is a stall; the AI must not teleport through it. */
 const MAX_STEP = 0.05;
 /** Bullets leave from here rather than the sprite centre. */
@@ -134,6 +141,15 @@ export class EnemyDirector {
    */
   public get cover(): readonly Rect[] {
     return this.blockers;
+  }
+
+  /**
+   * The clock every deadline on an `EnemyView` is measured against. Anything
+   * outside this class comparing against `snaredUntil` has to ask for it
+   * rather than reach for the scene's, which does not stop when the run does.
+   */
+  public get now(): number {
+    return this.simClock;
   }
 
   public spawn(
@@ -240,17 +256,17 @@ export class EnemyDirector {
    * wall time went on winding up, recovering and firing straight through the
    * freeze that was supposed to have stopped everything.
    */
-  public update(
-    time: number,
-    delta: number,
-    player: Phaser.Physics.Arcade.Sprite,
-  ): void {
+  public update(delta: number, player: Phaser.Physics.Arcade.Sprite): void {
     const dt = clamp(delta / 1000, 0, MAX_STEP);
     this.simClock += dt * 1000;
+    // The scene clock is not passed in at all: every deadline the director
+    // keeps is its own, and having both clocks in reach is what left snares
+    // and knockbacks measured against wall time while bullets were not.
+    const time = this.simClock;
 
     const overlay = this.requireTelegraph();
     overlay.clear();
-    this.cullBullets(this.simClock);
+    this.cullBullets(time);
 
     for (const view of this.views) {
       if (!view.sprite.active) {
@@ -344,7 +360,7 @@ export class EnemyDirector {
     }
     const nova = attack.kind === "nova";
     for (const shot of attack.shots) {
-      this.fire(shot.origin, shot.velocity, {
+      this.fire(shot.origin, shot.velocity, BOSS_SHOT_DAMAGE, {
         scale: nova ? 1.6 : 2,
         tint: nova ? colors.wingLavender : colors.danger,
         muzzle: BOSS_MUZZLE_OFFSET,
@@ -389,7 +405,14 @@ export class EnemyDirector {
     this.paint(view, intent.telegraph, time);
 
     if (intent.attack?.kind === "shot") {
-      this.fire(intent.attack.origin, intent.attack.velocity);
+      // A gunner's authored damage arrives this way and only this way — it
+      // never sets a strike, so `state.damage` stays zero for its whole life
+      // and the district's threat scaling would otherwise never reach it.
+      this.fire(
+        intent.attack.origin,
+        intent.attack.velocity,
+        view.contactDamage,
+      );
     }
   }
 
@@ -444,7 +467,12 @@ export class EnemyDirector {
     overlay.strokeCircle(x, y, Phaser.Math.Linear(78, 22, amount));
   }
 
-  private fire(origin: Vec2, velocity: Vec2, style: BulletStyle = {}): void {
+  private fire(
+    origin: Vec2,
+    velocity: Vec2,
+    damage: number,
+    style: BulletStyle = {},
+  ): void {
     const heading = Math.atan2(velocity.y, velocity.x);
     const muzzle = style.muzzle ?? MUZZLE_OFFSET;
     const bullet = this.bullets.create(
@@ -457,6 +485,7 @@ export class EnemyDirector {
     bullet.setScale(style.scale ?? 1);
     bullet.setTint(style.tint ?? colors.danger);
     bullet.setDepth(4);
+    bullet.setData("damage", damage);
     bullet.setData("expiresAt", this.simClock + BULLET_LIFETIME);
     this.onShot?.();
   }
@@ -489,7 +518,7 @@ export class EnemyDirector {
    */
   public snare(view: EnemyView, durationMs = SNARE_DURATION): void {
     view.snaredUntil =
-      this.scene.time.now + (view.boss ? BOSS_SNARE_DURATION : durationMs);
+      this.simClock + (view.boss ? BOSS_SNARE_DURATION : durationMs);
     view.sprite.setVelocity(0, 0);
     view.sprite.setTint(colors.web);
   }
@@ -503,7 +532,7 @@ export class EnemyDirector {
     if (view.boss || !view.sprite.active) {
       return;
     }
-    view.launchedUntil = this.scene.time.now + durationMs;
+    view.launchedUntil = this.simClock + durationMs;
     view.sprite.setVelocity(velocity.x, velocity.y);
   }
 
