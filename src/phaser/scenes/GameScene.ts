@@ -607,6 +607,19 @@ export class GameScene extends Phaser.Scene {
       }),
     );
 
+    // Targeting treats buildings as sight blockers, so gunfire has to respect
+    // the same geometry. Without this a shot crosses a roof and still lands,
+    // and breaking line of sight after reading a telegraph buys nothing.
+    world.collider(
+      this.physics.add.collider(
+        enemies.bullets,
+        world.platforms,
+        (bulletObject) => {
+          (bulletObject as Phaser.Physics.Arcade.Sprite).destroy();
+        },
+      ),
+    );
+
     for (const enemy of enemies.all) {
       // Sprite first, group second: Arcade hands the callback the lone sprite
       // before the group member, so the other order would treat the enemy as
