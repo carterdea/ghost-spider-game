@@ -43,9 +43,18 @@ const threatLabel = (alive: number, authored: number): string => {
 const dotClass = (visited: boolean, current: boolean): string =>
   `level-dot${visited ? " is-active" : ""}${current ? " is-current" : ""}`;
 
-/** A knocked-out hero always sees the banner, whatever the run status says. */
-const bannerStatus = (state: GameState): RunStatus =>
-  state.player.health <= 0 ? "knockedOut" : state.progression.status;
+/**
+ * A knocked-out hero sees the banner on the frame their health reaches zero,
+ * before the scene has posed them. A run that already ended some other way is
+ * the exception: a cleared skyline is not taken back by a late blow, so the
+ * status the run settled on wins.
+ */
+const bannerStatus = (state: GameState): RunStatus => {
+  const { status } = state.progression;
+  return state.player.health <= 0 && status === "playing"
+    ? "knockedOut"
+    : status;
+};
 
 /** Counted rather than filtered: this runs every frame and must not allocate. */
 const countLivingEnemies = (state: GameState): number => {

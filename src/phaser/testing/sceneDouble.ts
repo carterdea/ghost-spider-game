@@ -20,6 +20,7 @@ export class FakeGameObject {
   public destroyCount = 0;
   public scrollFactorX = 1;
   public scrollFactorY = 1;
+  public visible = true;
 
   public constructor(
     public readonly kind: string,
@@ -83,7 +84,8 @@ export class FakeGameObject {
     return this;
   }
 
-  public setVisible(): this {
+  public setVisible(visible = true): this {
+    this.visible = visible;
     return this;
   }
 

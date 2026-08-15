@@ -33,6 +33,12 @@ const noContact = (): Contact => ({
  * Stands in for the Arcade sprite. The controller only ever writes a velocity,
  * so the harness plays Arcade's part: integrate that velocity, clamp it to the
  * body's max, and report contact where the body lands.
+ *
+ * The body is modelled as Arcade really keeps it — a position of its own that
+ * the sprite catches up with by the *delta* since `prev`, in POST_UPDATE, after
+ * the scene's own update has run. Anything that moves the sprite from inside
+ * that update has to sync the body or the frame's leftover travel is added on
+ * top of wherever it was put.
  */
 class SpriteStub {
   public x = 0;
@@ -49,8 +55,16 @@ class SpriteStub {
     height: BODY_BOXES.hero.height,
     blocked: noContact(),
     touching: noContact(),
+    position: { x: 0, y: 0 },
+    prev: { x: 0, y: 0 },
     setAllowGravity: (): unknown => undefined,
     setAllowDrag: (): unknown => undefined,
+    /** Arcade's own: move the body, stop it, and forget the step delta. */
+    reset: (x: number, y: number): void => {
+      this.setPosition(x, y);
+      this.setVelocity(0, 0);
+      this.syncBody();
+    },
   };
   public readonly scene = { time: { now: 0 } };
 
@@ -58,6 +72,25 @@ class SpriteStub {
     this.x = x;
     this.y = y;
     return this;
+  }
+
+  /** One Arcade step: the body moves now, the sprite in POST_UPDATE. */
+  public advance(dx: number, dy: number): void {
+    this.body.position.x += dx;
+    this.body.position.y += dy;
+  }
+
+  /** POST_UPDATE: the sprite is carried by however far the body has gone. */
+  public postUpdate(): void {
+    this.x += this.body.position.x - this.body.prev.x;
+    this.y += this.body.position.y - this.body.prev.y;
+    this.body.prev = { ...this.body.position };
+  }
+
+  /** Puts the body where the sprite is, with no travel outstanding. */
+  public syncBody(): void {
+    this.body.position = { x: this.x, y: this.y };
+    this.body.prev = { x: this.x, y: this.y };
   }
 
   public setVelocity(x: number, y: number): this {
@@ -152,8 +185,8 @@ class Harness {
       Math.hypot(velocityX, velocityY) / ARCADE_STEP_HZ,
     );
 
-    this.sprite.x += velocityX * seconds;
-    this.sprite.y += velocityY * seconds;
+    this.sprite.advance(velocityX * seconds, velocityY * seconds);
+    this.sprite.postUpdate();
 
     this.sprite.body.blocked = noContact();
     this.sprite.body.touching = noContact();
@@ -185,8 +218,10 @@ class Harness {
     }
   }
 
+  /** Separation moves the body as well as the sprite, so nothing is pending. */
   private land(surface: number): void {
     this.sprite.y = surface - FEET;
+    this.sprite.syncBody();
     this.sprite.body.blocked.down = true;
     this.sprite.body.blocked.none = false;
   }
@@ -452,6 +487,33 @@ describe("web attach and release", () => {
 
     expect(harness.controller.releasedAnchor).toBeUndefined();
     expect(harness.controller.currentRope).toBeUndefined();
+  });
+});
+
+describe("respawning between levels", () => {
+  /**
+   * A level transition respawns the hero from inside the scene's update, which
+   * Arcade has already stepped the world for. The body's travel for that frame
+   * is written onto the sprite afterwards, as a delta, so a reset that only
+   * moved the transform was displaced by whatever the hero had been doing —
+   * ~21px at the swing cap, up to 40 at `MAX_TRANSPORT_SPEED`, through a roof
+   * they are only dropped 60px above.
+   */
+  test("a respawn is not displaced by the frame's leftover body travel", () => {
+    const harness = new Harness({ x: 200, y: 600 });
+    // Falling hard, and mid-frame: the body has moved, the sprite has not.
+    harness.run(30, {});
+    const pending = harness.sprite.velocity.y * (FRAME_MS / 1000);
+    // A terminal-velocity fall alone is most of a hero's height off the spawn.
+    expect(pending).toBeGreaterThan(15);
+    harness.sprite.advance(0, pending);
+
+    const spawn = { x: 900, y: 1080 };
+    harness.controller.reset(spawn);
+    harness.sprite.postUpdate();
+
+    expect(harness.sprite.x).toBe(spawn.x);
+    expect(harness.sprite.y).toBe(spawn.y - FEET);
   });
 });
 

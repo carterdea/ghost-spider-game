@@ -199,6 +199,17 @@ export class PlayerController {
   /** `ground` is a standing position: the hero's feet land on it. */
   public reset(ground: Vec2): void {
     standOn(this.sprite, ground.x, ground.y);
+    // Through the body, not only the transform. Arcade writes a body's step
+    // displacement onto its sprite as a *delta* in POST_UPDATE, which runs
+    // after the scene update a level transition respawns from — so moving the
+    // transform alone left the frame's leftover travel to be added on top of
+    // the spawn, up to 40px of it, through a roof the hero is dropped 60px
+    // above. `Body.reset` syncs `prev`, which is what that delta is measured
+    // from, and stops the body.
+    (this.sprite.body as Phaser.Physics.Arcade.Body).reset(
+      this.sprite.x,
+      this.sprite.y,
+    );
     this.velocity = { x: 0, y: 0 };
     this.memory = createLocomotionMemory();
     this.rope = undefined;
@@ -212,7 +223,6 @@ export class PlayerController {
     // drop is still a launch off that roof.
     this.lastSurfaceY = ground.y;
     this.launching = false;
-    this.sprite.setVelocity(0, 0);
     this.sprite.setAngle(0);
     this.sprite.clearTint();
   }
@@ -228,6 +238,17 @@ export class PlayerController {
    */
   public shove(velocity: Vec2): void {
     this.velocity = { x: velocity.x, y: velocity.y };
+  }
+
+  /**
+   * A vault: vertical kick, horizontal run left alone. `shove` is the same door
+   * in, and replaces both axes — right for a knockback thrown from a direction,
+   * wrong for the web-wings, which add height to the arc the hero is already
+   * on. Writing `setVelocityY` on the body is not a way in at all: `commit`
+   * overwrites the body every frame, so the lift survived a single Arcade step.
+   */
+  public lift(velocityY: number): void {
+    this.velocity = { x: this.velocity.x, y: velocityY };
   }
 
   public update(

@@ -30,6 +30,17 @@ describe("readActions", () => {
     expect(readActions(keyboard({ pause: [false, false] })).pause).toBe(false);
   });
 
+  /**
+   * Mute is an action rather than a raw `keydown-M` listener because Phaser
+   * only swallows the OS auto-repeat for keys it has been asked to hold, and
+   * the scene reads actions on the edge of a press. Every repeat used to write
+   * `localStorage` and restart the sequencer.
+   */
+  test("mute is an action, so a held key is one press", () => {
+    expect(readActions(keyboard({ mute: [true] })).mute).toBe(true);
+    expect(readActions(keyboard()).mute).toBe(false);
+  });
+
   test("leaves every other action alone", () => {
     const actions = readActions(keyboard({ start: [false, true] }));
 

@@ -27,6 +27,7 @@ import { spawnWebBurst } from "../scenes/webBurst";
 import type { LevelWorld } from "../world/LevelWorld";
 import { WEAPON_TEXTURES } from "../world/textures";
 import type { EnemyDirector, EnemyView } from "./EnemyDirector";
+import type { PlayerController } from "./PlayerController";
 import { fitWidth } from "./placement";
 import { WebBombs } from "./WebBombs";
 
@@ -112,6 +113,8 @@ export interface WeaponRackDeps {
   readonly state: GameState;
   readonly enemies: EnemyDirector;
   readonly feedback: RunFeedback;
+  /** The hero's motion. The wings are the one weapon that moves them. */
+  readonly controller: PlayerController;
   readonly play: (event: SoundEvent) => void;
 }
 
@@ -367,7 +370,10 @@ export class WeaponRack {
   }
 
   private vault(player: Phaser.Physics.Arcade.Sprite, facing: -1 | 1): void {
-    player.setVelocityY(WINGS_LIFT);
+    // Through the controller: the sim owns velocity, and a `setVelocityY` on
+    // the body is erased by the next `commit` — the vault used to survive one
+    // 1/60 step, about seven pixels of lift.
+    this.deps.controller.lift(WINGS_LIFT);
     this.burstAt(player.x - facing * 22, player.y + 8, WINGS_BURST);
     this.deps.play(WEAPON_SOUND.wings);
   }

@@ -285,6 +285,24 @@ describe("run status banner", () => {
     );
   });
 
+  test("a cleared run is not taken back by a late blow", () => {
+    // A shot still in the air when the final goal was touched used to land on a
+    // hero who had already won, and flipped the victory banner to the knockout
+    // one while the run itself still read as cleared.
+    hud.render(
+      makeState({
+        status: "cleared",
+        levelIndex: LEVELS.length - 1,
+        health: 0,
+      }),
+    );
+
+    const banner = query(root, ".run-banner");
+    expect(banner.classList.contains("is-cleared")).toBe(true);
+    expect(banner.classList.contains("is-knockedOut")).toBe(false);
+    expect(root.dataset.run).toBe("cleared");
+  });
+
   test("hides again when a new run starts", () => {
     hud.render(makeState({ status: "knockedOut", health: 0 }));
     hud.render(makeState({ status: "playing", health: 100 }));

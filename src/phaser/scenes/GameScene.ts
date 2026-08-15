@@ -64,6 +64,19 @@ const GLOB_DAMAGE = 16;
 const NET_DAMAGE = 12;
 
 /**
+ * Where a landed fist throws its target. The lift is what makes the shove
+ * legible: a target left on the floor is scrubbed off by the very next step of
+ * gravity and separation, and reads as a hit that pushed nothing.
+ */
+const STRIKE_KNOCKBACK = (facing: number): Vec2 => ({
+  x: facing * 240,
+  y: -140,
+});
+
+/** How long that throw overrides the target's own brain. */
+const STRIKE_HOLD_MS = 220;
+
+/**
  * How far the camera eases out of its resting frame as the hero picks up speed,
  * so fast swings read wider. Factors on the framing zoom rather than zooms in
  * their own right: the window decides the frame, this decides how much of it a
@@ -171,6 +184,7 @@ export class GameScene extends Phaser.Scene {
       state: this.state,
       enemies,
       feedback,
+      controller: this.controller,
       play: (event) => this.audio?.play(event),
     });
 
@@ -218,15 +232,21 @@ export class GameScene extends Phaser.Scene {
     // A context only runs once the page has been touched, so the score waits
     // for the first keypress rather than starting with the scene.
     this.input.keyboard?.once("keydown", () => this.audio?.music.start());
+  }
 
-    this.input.keyboard?.on("keydown-M", () => {
-      const audio = this.audio;
-      if (!audio) {
-        return;
-      }
-      audio.setMuted(!audio.isMuted());
-      this.state.player.message = audio.isMuted() ? "Sound off." : "Sound on.";
-    });
+  /**
+   * M. Read as an action on the edge of the press rather than answered with a
+   * raw `keydown-M`, which the OS repeats while the key is held: each repeat
+   * wrote `localStorage` and restarted the sequencer, and the run ended up
+   * muted or not by the parity of however many arrived.
+   */
+  private toggleMute(): void {
+    const audio = this.audio;
+    if (!audio) {
+      return;
+    }
+    audio.setMuted(!audio.isMuted());
+    this.state.player.message = audio.isMuted() ? "Sound off." : "Sound on.";
   }
 
   public update(time: number, delta: number): void {
@@ -236,8 +256,19 @@ export class GameScene extends Phaser.Scene {
       this.previousActions = actions;
       this.audio?.setWind(0);
       this.audio?.music.setIdle();
+      // The run's last word is a cue, and a cue is scheduled ahead of itself:
+      // restarting during the knocked-out sting left ~3s of it ringing over the
+      // title. `setIdle` decides what plays next; this ends what is still
+      // playing. A pause deliberately does neither — it ducks to the bed and
+      // keeps the arrangement's place.
+      this.audio?.music.silence();
       this.scene.restart();
       return;
+    }
+
+    // Every status can be muted, so this is read before the run is.
+    if (this.wasPressed(actions, "mute")) {
+      this.toggleMute();
     }
 
     // Space is both the start prompt and the jump, so the press that lifts the
@@ -251,14 +282,18 @@ export class GameScene extends Phaser.Scene {
       this.setPaused();
     }
 
-    const playing = this.state.progression.status === "playing";
-    const held = this.state.progression.status === "paused";
+    const playing = this.playing;
     tickRunClock(this.state, delta);
 
     // The world runs slow for a beat after a blow lands, and stops dead while
-    // the run is held. Both are the same physics flag, so both go through the
-    // one call that owns it — see `RunFeedback.step`.
-    const simDelta = this.feedback?.step(delta, held) ?? delta;
+    // the run is not being played. Both are the same physics flag, so both go
+    // through the one call that owns it — see `RunFeedback.holdWorld`.
+    //
+    // Every non-playing status holds it, not only a pause: the title builds its
+    // district behind the panel, and a run that has ended still had bullets in
+    // the air, which went on flying and hitting long after the final goal was
+    // touched because nothing was left running to cull them.
+    const simDelta = this.feedback?.step(delta, !playing) ?? delta;
 
     if (playing) {
       this.updateRun(actions, time, simDelta);
@@ -267,8 +302,20 @@ export class GameScene extends Phaser.Scene {
       this.player?.setVelocity(0, 0);
     }
 
+    // Re-derived once the run has had its frame. `updateRun` can end the run —
+    // and `knockOut` explicitly releases the world when it drops its effects —
+    // while a blow landed inside it asks for a freeze `step` has already run
+    // past. Arcade steps the world before the scene updates, so a hold written
+    // here is the earliest one the next step can see.
+    this.feedback?.holdWorld(!this.playing);
+
     this.renderHud();
     this.previousActions = actions;
+  }
+
+  /** Only a live run simulates, and only a live run takes damage. */
+  private get playing(): boolean {
+    return this.state.progression.status === "playing";
   }
 
   /**
@@ -519,6 +566,13 @@ export class GameScene extends Phaser.Scene {
   ): void {
     world.collider(
       this.physics.add.overlap(player, enemies.bullets, (_, bulletObject) => {
+        // A held world runs no physics, so this should not fire at all once the
+        // run is over — but a teardown releases the world for a frame, and one
+        // frame of a shot still in the air was enough to knock out a hero who
+        // had already cleared the skyline.
+        if (!this.playing) {
+          return;
+        }
         (bulletObject as Phaser.Physics.Arcade.Sprite).destroy();
         if (this.time.now < this.state.player.shieldUntil) {
           this.audio?.play("shieldBlock");
@@ -574,6 +628,7 @@ export class GameScene extends Phaser.Scene {
       world.collider(
         this.physics.add.overlap(player, enemy.sprite, () => {
           if (
+            !this.playing ||
             this.time.now < this.hitCooldownUntil ||
             this.time.now < enemy.snaredUntil
           ) {
@@ -724,7 +779,12 @@ export class GameScene extends Phaser.Scene {
       }
 
       this.audio?.play("melee");
-      enemy.sprite.setVelocityX(facing * 240);
+      // Through the director, not straight onto the body: `enemies.update` runs
+      // later in this same frame and rewrites the velocity from the brain's
+      // intent, with no physics step in between, so a plain `setVelocityX` was
+      // invisible on anything the blow did not finish. `launch` is what holds
+      // the brain off the body until the throw is spent.
+      this.enemies?.launch(enemy, STRIKE_KNOCKBACK(facing), STRIKE_HOLD_MS);
 
       const defeated = this.requireFeedback().damage(
         this.state,

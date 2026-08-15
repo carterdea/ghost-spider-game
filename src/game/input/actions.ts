@@ -11,6 +11,7 @@ export type GameAction =
   | "glide"
   | "start"
   | "pause"
+  | "mute"
   | "reset";
 
 export type ActionState = Record<GameAction, boolean>;
@@ -39,6 +40,7 @@ export const createEmptyActions = (): ActionState => ({
   glide: false,
   start: false,
   pause: false,
+  mute: false,
   reset: false,
 });
 

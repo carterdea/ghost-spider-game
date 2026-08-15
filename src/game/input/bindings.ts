@@ -19,6 +19,11 @@ const KEY_CODES: Record<GameAction, readonly number[]> = {
     Phaser.Input.Keyboard.KeyCodes.ENTER,
   ],
   pause: [Phaser.Input.Keyboard.KeyCodes.ESC, Phaser.Input.Keyboard.KeyCodes.P],
+  // Bound here rather than answered with a raw `keydown-M`: Phaser only
+  // swallows the OS auto-repeat for codes it holds a `Key` object for, so an
+  // unbound M toggled the mute again on every repeat — a `localStorage` write
+  // and a sequencer restart apiece, settling on whatever parity they landed on.
+  mute: [Phaser.Input.Keyboard.KeyCodes.M],
   reset: [Phaser.Input.Keyboard.KeyCodes.R],
 };
 

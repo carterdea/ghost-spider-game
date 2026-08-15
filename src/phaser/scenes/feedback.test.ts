@@ -299,6 +299,37 @@ describe("hit-stop", () => {
     expect(scene.physics.world.isPaused).toBe(false);
   });
 
+  test("a freeze asked for after the frame's step still reaches Arcade first", () => {
+    // Arcade steps the world before the scene updates, so a blow landed by the
+    // scene itself — a fist, a gadget — misses the `step` that already ran this
+    // frame. Left there, one more whole physics step and collision pass would
+    // go through before the freeze was seen.
+    const { feedback, scene } = harness();
+    feedback.step(FRAME_MS);
+
+    feedback.damage(state(), enemy(10), 20, "melee", asHero(new HeroStub()), {
+      x: 0,
+      y: 0,
+    });
+    expect(scene.physics.world.isPaused).toBe(false);
+
+    feedback.holdWorld(false);
+
+    expect(scene.physics.world.isPaused).toBe(true);
+  });
+
+  test("a run that ends inside the scene's update holds the world", () => {
+    // `knockOut` drops the run's effects, which releases the world, and only
+    // then poses the hero. Nothing may step in between.
+    const { feedback, scene } = harness();
+    feedback.step(FRAME_MS);
+    feedback.reset();
+
+    feedback.holdWorld(true);
+
+    expect(scene.physics.world.isPaused).toBe(true);
+  });
+
   test("a teardown mid-pause is put right by the next frame", () => {
     const { feedback, scene } = harness();
 

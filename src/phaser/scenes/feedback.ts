@@ -109,19 +109,32 @@ export class RunFeedback {
    * pausing — rather than scaling `world.timeScale` — is what keeps Arcade from
    * banking the skipped time and spending it all on the frame the freeze lifts.
    *
-   * `held` is the run being paused. It shares `world.isPaused` with the
-   * hit-stop, and this line is the only place either of them writes it: the
-   * world runs when neither wants it stopped, recomputed from both every frame.
-   * Nothing latches, so lifting a pause over a live freeze leaves the freeze
-   * holding the world, and a freeze that expires under a pause changes nothing
-   * — the two can never strand each other.
+   * `held` is the run not being played — a pause, the title, either way it
+   * ends. It shares `world.isPaused` with the hit-stop, and `holdWorld` is the
+   * only place either of them writes it.
    */
   public step(deltaMs: number, held = false): number {
     const simDelta = this.impact.step(deltaMs);
-    this.world.isPaused = held || this.impact.frozen;
+    this.holdWorld(held);
     this.holdTweens(held);
     this.particles.update(held ? 0 : simDelta);
     return simDelta;
+  }
+
+  /**
+   * Whether Arcade may step, recomputed from both the things that stop it: the
+   * world runs when neither the run nor a freeze wants it held. Nothing
+   * latches, so lifting a pause over a live freeze leaves the freeze holding
+   * the world, and a freeze that expires under a pause changes nothing — the
+   * two can never strand each other.
+   *
+   * Callable on its own because Arcade steps the world *before* the scene
+   * updates: a freeze asked for during that update — a landed fist, a gadget —
+   * or a run that ended inside it has already missed `step`, and would not
+   * reach the world until the frame after next.
+   */
+  public holdWorld(held: boolean): void {
+    this.world.isPaused = held || this.impact.frozen;
   }
 
   /**
