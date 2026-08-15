@@ -22,10 +22,6 @@ import {
   togglePause,
 } from "../../game/simulation/state";
 import {
-  contactKnockback,
-  damagePlayer,
-} from "../../game/simulation/systems/combat";
-import {
   getLevelByIndex,
   isFinalLevelIndex,
   isGoalReached,
@@ -34,7 +30,7 @@ import {
 } from "../../game/simulation/systems/progression";
 import { Hud } from "../../ui/hud/hud";
 import { createCharacterAnimations } from "../actors/animations";
-import { EnemyDirector, type EnemyView } from "../actors/EnemyDirector";
+import { EnemyDirector } from "../actors/EnemyDirector";
 import {
   PlayerController,
   type PlayerMode,
@@ -48,11 +44,11 @@ import type { LevelWorld } from "../world/LevelWorld";
 import { createPropTextures } from "../world/textures";
 import { frameZoom } from "../world/viewport";
 import { bossSound, bossSpawnFor } from "./bossBinding";
+import { registerCombat } from "./combatColliders";
 import { RunFeedback } from "./feedback";
 import { syncRunMusic } from "./runMusic";
 
 const ATTACK_COOLDOWN = 280;
-const HIT_COOLDOWN = 700;
 const STRIKE_RANGE = 96;
 
 /**
@@ -64,8 +60,6 @@ const STRIKE_RANGE = 96;
  * where the damage lives.
  */
 const STRIKE_DAMAGE = 34;
-const GLOB_DAMAGE = 16;
-const NET_DAMAGE = 12;
 
 /**
  * Where a landed fist throws its target. The lift is what makes the shove
@@ -119,7 +113,6 @@ export class GameScene extends Phaser.Scene {
   private lastPlayerPosition: Vec2 = { x: 0, y: 0 };
 
   private attackCooldownUntil = 0;
-  private hitCooldownUntil = 0;
   private shieldView?: Phaser.GameObjects.Arc;
   /** Where the speed ease currently sits, so a resize can reframe around it. */
   private zoomEase = EASE_RESTING;
@@ -544,7 +537,19 @@ export class GameScene extends Phaser.Scene {
     if (isFinalLevelIndex(this.state.progression.levelIndex)) {
       enemies.spawnBoss(bossSpawnFor(level), this.state);
     }
-    this.registerCombat(player, enemies, world);
+    registerCombat({
+      scene: this,
+      state: this.state,
+      player,
+      enemies,
+      world,
+      projectiles: this.requireProjectiles(),
+      feedback: this.requireFeedback(),
+      webs: this.webs,
+      controller: this.controller,
+      audio: this.audio,
+      isPlaying: () => this.playing,
+    });
     // After the spawns for the same reason `registerCombat` is: the rack
     // registers a shot and a charge overlap per enemy, boss included.
     this.rack?.beginLevel(world);
@@ -559,7 +564,6 @@ export class GameScene extends Phaser.Scene {
   /** Cooldowns and camera framing belong to the run, not to the next level. */
   private resetTransientState(level: LevelDefinition): void {
     this.attackCooldownUntil = 0;
-    this.hitCooldownUntil = 0;
     this.zoomEase = EASE_RESTING;
     this.cameras.main.setZoom(
       frameZoom(this.scale.gameSize, level, EASE_RESTING),
@@ -576,124 +580,6 @@ export class GameScene extends Phaser.Scene {
     this.feedback?.reset();
     this.world?.destroy();
     this.world = undefined;
-  }
-
-  private registerCombat(
-    player: Phaser.Physics.Arcade.Sprite,
-    enemies: EnemyDirector,
-    world: LevelWorld,
-  ): void {
-    world.collider(
-      this.physics.add.overlap(player, enemies.bullets, (_, bulletObject) => {
-        // A held world runs no physics, so this should not fire at all once the
-        // run is over — but a teardown releases the world for a frame, and one
-        // frame of a shot still in the air was enough to knock out a hero who
-        // had already cleared the skyline.
-        if (!this.playing) {
-          return;
-        }
-        (bulletObject as Phaser.Physics.Arcade.Sprite).destroy();
-        if (this.time.now < this.state.player.shieldUntil) {
-          this.audio?.play("shieldBlock");
-          this.state.player.message = "Web shield caught the shot.";
-          return;
-        }
-        damagePlayer(this.state, 12, "Hit by a skyline shot.");
-        this.feedback?.hurt();
-        // Silent at zero health: `knockOut` has its own, louder sound.
-        if (this.state.player.health > 0) {
-          this.audio?.play("playerHurt");
-        }
-      }),
-    );
-
-    // Targeting treats buildings as sight blockers, so gunfire has to respect
-    // the same geometry. Without this a shot crosses a roof and still lands,
-    // and breaking line of sight after reading a telegraph buys nothing.
-    world.collider(
-      this.physics.add.collider(
-        enemies.bullets,
-        world.platforms,
-        (bulletObject) => {
-          (bulletObject as Phaser.Physics.Arcade.Sprite).destroy();
-        },
-      ),
-    );
-
-    for (const enemy of enemies.all) {
-      // Sprite first, group second: Arcade hands the callback the lone sprite
-      // before the group member, so the other order would treat the enemy as
-      // the projectile and destroy it on the first hit.
-      world.collider(
-        this.physics.add.overlap(
-          enemy.sprite,
-          this.requireProjectiles(),
-          (_, projectileObject) => {
-            const projectile = projectileObject as Phaser.Physics.Arcade.Sprite;
-            if (!projectile.active) {
-              return;
-            }
-            const power = projectile.getData("power") as "glob" | "net";
-            // Read before it is destroyed: the sparks fly from where the web
-            // struck, not from the enemy's centre.
-            const struckAt = { x: projectile.x, y: projectile.y };
-            this.webs?.splat(struckAt, power === "net" ? 1 : 0.45);
-            projectile.destroy();
-            if (power === "net") {
-              enemies.snare(enemy);
-              this.audio?.play("enemySnared");
-            }
-            const defeated = this.requireFeedback().damage(
-              this.state,
-              enemy.state,
-              power === "net" ? NET_DAMAGE : GLOB_DAMAGE,
-              "shot",
-              enemy.sprite,
-              struckAt,
-            );
-            if (defeated) {
-              enemies.defeat(enemy);
-            }
-          },
-        ),
-      );
-
-      world.collider(
-        this.physics.add.overlap(player, enemy.sprite, () => {
-          if (
-            !this.playing ||
-            this.time.now < this.hitCooldownUntil ||
-            this.time.now < enemy.snaredUntil ||
-            // Harmless touch is not a hit. The brain zeroes contact damage
-            // outside a committed strike, and the cooldown is shared across
-            // every enemy: brushing a patrol would otherwise announce a hit
-            // that never happened and buy 700ms of immunity that swallows a
-            // real lunge from someone else.
-            enemy.state.damage <= 0
-          ) {
-            return;
-          }
-          this.hitCooldownUntil = this.time.now + HIT_COOLDOWN;
-          damagePlayer(this.state, enemy.state.damage, contactMessage(enemy));
-          // Thrown clear, not merely made invulnerable. Without this the hero
-          // stays inside the enemy and takes the same hit on every tick of the
-          // cooldown, with no input that escapes it. It goes through the
-          // controller because the sim owns velocity — and it can only fire on
-          // a frame the physics world ran, so a pause or a hit-stop can never
-          // bank one and spend it on the frame the world comes back.
-          this.controller?.shove(
-            contactKnockback(
-              { x: player.x, y: player.y },
-              { x: enemy.sprite.x, y: enemy.sprite.y },
-            ),
-          );
-          this.feedback?.hurt();
-          if (this.state.player.health > 0) {
-            this.audio?.play("playerHurt");
-          }
-        }),
-      );
-    }
   }
 
   /**
@@ -969,10 +855,3 @@ const handPosition = (player: Phaser.Physics.Arcade.Sprite): Vec2 => ({
   x: player.x + (player.flipX ? -FIST_OFFSET.x : FIST_OFFSET.x),
   y: player.y + FIST_OFFSET.y,
 });
-
-const contactMessage = (enemy: EnemyView): string => {
-  if (enemy.state.kind === "gunner") {
-    return "Close-range blast.";
-  }
-  return enemy.state.kind === "drone" ? "Drone zap." : "Robot tackle.";
-};
