@@ -212,7 +212,7 @@ describe("enemy bullets", () => {
   test("are caught by the web shield without costing health", () => {
     const harness = setUp([]);
     harness.state.player.shieldUntil = 500;
-    harness.scene.now = 200;
+    harness.state.progression.elapsedMs = 200;
     const collision = collisionBetween(
       harness.scene,
       harness.player,
@@ -251,16 +251,52 @@ describe("enemy bullets", () => {
     );
     const second = new Body(0, 0);
 
-    harness.scene.now = 1000;
+    harness.state.progression.elapsedMs = 1000;
     collision.fire(harness.player, new Body(0, 0));
     // A gunner's burst is two shots 180ms apart, far inside the window.
-    harness.scene.now = 1180;
+    harness.state.progression.elapsedMs = 1180;
     collision.fire(harness.player, second);
 
     expect(harness.state.player.health).toBe(88);
     expect(harness.hurts).toBe(1);
     // Absorbed, not ignored: the shot still stops at the hero.
     expect(second.destroyCount).toBe(1);
+  });
+
+  test("a pause does not spend the window they bought", () => {
+    const harness = setUp([]);
+    const collision = collisionBetween(
+      harness.scene,
+      harness.player,
+      harness.bullets,
+    );
+
+    harness.state.progression.elapsedMs = 1000;
+    collision.fire(harness.player, new Body(0, 0));
+    // Half a minute on the wall, none of it played. The window is time the
+    // hero was given to recover in, so a pause cannot hand it back spent.
+    harness.scene.now = 90_000;
+    collision.fire(harness.player, new Body(0, 0));
+
+    expect(harness.state.player.health).toBe(88);
+  });
+
+  test("a paused shield still catches the shot waiting on the other side", () => {
+    const harness = setUp([]);
+    harness.state.player.shieldUntil = 1100;
+    harness.state.progression.elapsedMs = 300;
+    harness.scene.now = 90_000;
+    const collision = collisionBetween(
+      harness.scene,
+      harness.player,
+      harness.bullets,
+    );
+
+    collision.fire(harness.player, new Body(0, 0));
+
+    // The shield is a charge the hero spent. Measured on the wall it burned
+    // down through the pause and the charge went with it.
+    expect(harness.state.player.health).toBe(100);
   });
 
   test("a shot and a tackle share the one window", () => {
@@ -276,9 +312,9 @@ describe("enemy bullets", () => {
       harness.enemies[0].body,
     );
 
-    harness.scene.now = 1000;
+    harness.state.progression.elapsedMs = 1000;
     shot.fire(harness.player, new Body(0, 0));
-    harness.scene.now = 1300;
+    harness.state.progression.elapsedMs = 1300;
     contact.fire(harness.player, harness.enemies[0].body);
 
     // One window whatever opened it. Charging for both leaves a shot that
@@ -289,7 +325,7 @@ describe("enemy bullets", () => {
   test("hurt once the shield has expired", () => {
     const harness = setUp([]);
     harness.state.player.shieldUntil = 500;
-    harness.scene.now = 600;
+    harness.state.progression.elapsedMs = 600;
     const collision = collisionBetween(
       harness.scene,
       harness.player,
@@ -357,7 +393,7 @@ describe("contact damage", () => {
     // One hit, not two: the second touch lands inside the 700ms window.
     expect(harness.state.player.health).toBe(82);
 
-    harness.scene.now = 700;
+    harness.state.progression.elapsedMs = 700;
     touch(striker);
 
     expect(harness.state.player.health).toBe(64);

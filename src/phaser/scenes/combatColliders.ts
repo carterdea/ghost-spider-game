@@ -70,6 +70,14 @@ export const registerCombat = (deps: CombatDeps): void => {
   const feedback: RunFeedback = deps.feedback;
   const controller: PlayerController | undefined = deps.controller;
   let hitCooldownUntil = 0;
+  /**
+   * The clock everything the hero is owed is measured against.
+   *
+   * Not the scene's: it runs through a pause, so a hold longer than the window
+   * left handed back a hero whose invulnerability had quietly expired and whose
+   * shield had burned down while they were not playing.
+   */
+  const playedMs = (): number => state.progression.elapsedMs;
 
   world.collider(
     scene.physics.add.overlap(player, enemies.bullets, (_, bulletObject) => {
@@ -83,7 +91,7 @@ export const registerCombat = (deps: CombatDeps): void => {
       }
       const damage = bullet.getData("damage") as number | undefined;
       bullet.destroy();
-      if (scene.time.now < state.player.shieldUntil) {
+      if (playedMs() < state.player.shieldUntil) {
         deps.audio?.play("shieldBlock");
         state.player.message = "Web shield caught the shot.";
         return;
@@ -91,10 +99,10 @@ export const registerCombat = (deps: CombatDeps): void => {
       // The window is shared with contact damage because it is one window: a
       // gunner's burst is two shots 180ms apart, and charging for both turns a
       // single telegraphed attack into double damage that no dodge splits.
-      if (scene.time.now < hitCooldownUntil) {
+      if (playedMs() < hitCooldownUntil) {
         return;
       }
-      hitCooldownUntil = scene.time.now + HIT_COOLDOWN;
+      hitCooldownUntil = playedMs() + HIT_COOLDOWN;
       // The shot carries what its owner was authored for. Reading it here is
       // the only way a district's threat scaling reaches a gunner, whose
       // damage never arrives any other way.
@@ -178,7 +186,7 @@ export const registerCombat = (deps: CombatDeps): void => {
       scene.physics.add.overlap(player, enemy.sprite, () => {
         if (
           !deps.isPlaying() ||
-          scene.time.now < hitCooldownUntil ||
+          playedMs() < hitCooldownUntil ||
           // The director's clock, not the scene's: a snare is measured in time
           // the enemy was actually running, and a pause must not spend it.
           enemies.now < enemy.snaredUntil ||
@@ -191,7 +199,7 @@ export const registerCombat = (deps: CombatDeps): void => {
         ) {
           return;
         }
-        hitCooldownUntil = scene.time.now + HIT_COOLDOWN;
+        hitCooldownUntil = playedMs() + HIT_COOLDOWN;
         damagePlayer(state, enemy.state.damage, contactMessage(enemy));
         // Thrown clear, not merely made invulnerable. Without this the hero
         // stays inside the enemy and takes the same hit on every tick of the

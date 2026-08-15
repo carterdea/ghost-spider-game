@@ -404,7 +404,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.enemies?.update(delta, player);
-    this.updateShield(player, time);
+    // The run clock, the same one the shield was stamped against: on the
+    // scene's the ring outlived a pause the shield itself had not.
+    this.updateShield(player, this.state.progression.elapsedMs);
     this.updateCameraZoom(level, controller.speed, delta);
 
     if (this.state.player.health === 0) {

@@ -254,7 +254,10 @@ export class WeaponRack {
 
     this.deps.state.player.message = ARSENAL[kind].firedMessage;
     // What the weapon then puts into the world is the scene's to time.
-    this.dispatch[kind](player, player.flipX ? -1 : 1, clock.scene);
+    // The run clock: the only weapon reading this is the shield, and a shield
+    // that is up is something the hero has paid for. Held on the scene clock it
+    // burned down through a pause, taking the charge with it.
+    this.dispatch[kind](player, player.flipX ? -1 : 1, clock.run);
   }
 
   private throwBomb(
