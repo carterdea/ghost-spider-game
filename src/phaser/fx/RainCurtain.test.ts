@@ -17,8 +17,15 @@ const ROOFS: readonly RainSurface[] = [
   { left: 1100, right: 1800, y: 300 },
 ];
 
-const curtainOn = (scene: SceneDouble, surfaces = ROOFS): RainCurtain =>
-  new RainCurtain(asScene(scene), WEATHER, surfaces);
+/**
+ * A curtain hung over a view the camera has already drawn once, which is every
+ * frame after the one the district was built on.
+ */
+const curtainOn = (scene: SceneDouble, surfaces = ROOFS): RainCurtain => {
+  const curtain = new RainCurtain(asScene(scene), WEATHER, surfaces);
+  scene.events.emit("render");
+  return curtain;
+};
 
 const sheetsOf = (scene: SceneDouble): FakeTileSprite[] =>
   scene.objects.filter(
@@ -95,6 +102,58 @@ describe("the curtain", () => {
       expect(sheet.width).toBeGreaterThanOrEqual(diagonal);
       expect(sheet.height).toBeGreaterThanOrEqual(diagonal);
       expect(sheet.x).toBe(scene.cameras.main.worldView.centerX);
+    }
+  });
+});
+
+describe("raising the curtain", () => {
+  test("the sheets stay off the world until the camera has framed the district", () => {
+    const scene = new SceneDouble();
+    const curtain = new RainCurtain(asScene(scene), WEATHER, ROOFS);
+
+    // A curtain is raised while the level is being built, and a camera only
+    // refreshes its view when it renders: until then the view on offer is the
+    // one the last district was framed through.
+    expect(sheetsOf(scene).every((sheet) => sheet.visible)).toBe(false);
+    curtain.update(16);
+    expect(sheetsOf(scene).every((sheet) => sheet.tilePositionY === 0)).toBe(
+      true,
+    );
+
+    scene.events.emit("render");
+
+    for (const sheet of sheetsOf(scene)) {
+      expect(sheet.visible).toBe(true);
+      expect(sheet.x).toBe(scene.cameras.main.worldView.centerX);
+      expect(sheet.y).toBe(scene.cameras.main.worldView.centerY);
+    }
+  });
+
+  test("the district it was built on is never read as a frame of camera travel", () => {
+    const moved = new SceneDouble();
+    const still = new SceneDouble();
+
+    // Built against the district being left, then framed on the new one.
+    const carried = new RainCurtain(asScene(moved), WEATHER, ROOFS);
+    moved.cameras.main.centerOn(9000, 4000);
+    moved.events.emit("render");
+    const settled = curtainOn(still);
+
+    withFixedRandom(0.5, () => {
+      run(carried, 200, 1000 / 60);
+      run(settled, 200, 1000 / 60);
+    });
+
+    for (const [index, sheet] of sheetsOf(moved).entries()) {
+      expect(sheet.x).toBe(moved.cameras.main.worldView.centerX);
+      // Nothing moved in either scene, so the sheets have to agree: a curtain
+      // that took the distance between the districts as travel would have been
+      // scrolled and turned by a gale.
+      expect(sheet.tilePositionX).toBeCloseTo(
+        sheetsOf(still)[index].tilePositionX,
+        4,
+      );
+      expect(sheet.rotation).toBeCloseTo(sheetsOf(still)[index].rotation, 4);
     }
   });
 });
@@ -199,6 +258,20 @@ describe("teardown", () => {
     expect(scene.events.count("update")).toBe(0);
     expect(scene.events.count("shutdown")).toBe(0);
     expect(scene.liveObjects()).toHaveLength(0);
+  });
+
+  test("a curtain torn down before its first frame stays torn down", () => {
+    const scene = new SceneDouble();
+    const curtain = new RainCurtain(asScene(scene), WEATHER, ROOFS);
+
+    curtain.destroy();
+    scene.events.emit("render");
+
+    expect(scene.events.count("render")).toBe(0);
+    expect(scene.liveObjects()).toHaveLength(0);
+    expect(scene.objects.every((object) => object.destroyCount === 1)).toBe(
+      true,
+    );
   });
 
   test("tearing down twice destroys each object exactly once", () => {

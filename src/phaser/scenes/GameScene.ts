@@ -365,7 +365,7 @@ export class GameScene extends Phaser.Scene {
     );
 
     this.state.player.swinging = step.mode === "swinging";
-    this.renderWeb(player, step.rope?.anchor, step.released);
+    this.renderWeb(player, step, controller.isLaunching);
     this.animatePlayer(player, actions, step.mode);
     this.feedback?.lean(step.mode, player.body?.velocity.x ?? 0, delta);
     this.feedback?.land(step.landingImpact);
@@ -532,6 +532,9 @@ export class GameScene extends Phaser.Scene {
     // After the spawns for the same reason `registerCombat` is: the rack
     // registers a shot and a charge overlap per enemy, boss included.
     this.rack?.beginLevel(world);
+    // Webbing picks up the district's colour, so the line belongs to the place
+    // it is strung across rather than sitting over it.
+    this.webs?.setAccent(level.accent);
 
     this.cameras.main.setBounds(0, 0, level.width, level.height);
     this.cameras.main.centerOn(level.playerSpawn.x, level.playerSpawn.y);
@@ -605,6 +608,7 @@ export class GameScene extends Phaser.Scene {
             // Read before it is destroyed: the sparks fly from where the web
             // struck, not from the enemy's centre.
             const struckAt = { x: projectile.x, y: projectile.y };
+            this.webs?.splat(struckAt, power === "net" ? 1 : 0.45);
             projectile.destroy();
             if (power === "net") {
               enemies.snare(enemy);
@@ -657,18 +661,27 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * `fromSurface` separates a launch off a rooftop from a snatch in open air:
+   * a full knot flare on every re-catch turns one arc into a string of flashes.
+   *
+   * The rope is measured from the hero's centre rather than the fist, because
+   * that is where the solver measures it — from the fist the line carries about
+   * ten pixels of phantom slack and never draws taut.
+   */
   private renderWeb(
     player: Phaser.Physics.Arcade.Sprite,
-    anchor: Vec2 | undefined,
-    released: boolean,
+    step: PlayerStep,
+    fromSurface: boolean,
   ): void {
     const webs = this.webs;
     if (!webs) {
       return;
     }
 
-    if (!anchor) {
-      const cut = released ? this.controller?.releasedAnchor : undefined;
+    const rope = step.rope;
+    if (!rope) {
+      const cut = step.released ? this.controller?.releasedAnchor : undefined;
       if (cut) {
         webs.release(cut, handPosition(player));
       } else {
@@ -677,7 +690,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    webs.drawLine(anchor, handPosition(player));
+    const hand = handPosition(player);
+    if (step.attached) {
+      webs.launch(rope.anchor, hand, fromSurface);
+    }
+    webs.drawLine(rope.anchor, hand, rope.length, player);
   }
 
   private animatePlayer(

@@ -44,6 +44,7 @@ interface Splash {
 
 /** Phaser's own event names, spelled out so this module need not import Phaser. */
 const SCENE_UPDATE = "update";
+const SCENE_RENDER = "render";
 const SCENE_SHUTDOWN = "shutdown";
 
 /** Redrawing a sheet's geometry is only worth it once the view really changed. */
@@ -70,6 +71,7 @@ export class RainCurtain {
   private sheetSize = 0;
   private splashDebt = 0;
   private previous?: { x: number; y: number };
+  private seated = false;
   private destroyed = false;
 
   public constructor(
@@ -81,27 +83,26 @@ export class RainCurtain {
     this.weather = weather;
     this.surfaces = surfaces;
 
-    // Sized and placed against the view up front: a sheet that waited for its
-    // first update would be drawn as a small square somewhere else for a frame.
-    const view = scene.cameras.main.worldView;
-    this.sheetSize = sheetSizeFor(view.width, view.height);
+    // Built where they belong in the display list, but not yet anywhere in the
+    // world: the curtain is raised by the level builder, and a camera only
+    // refreshes `worldView` when it renders, so until this scene has drawn once
+    // the view on offer is the one the last district was framed through. Placing
+    // the sheets against it hung the new district's rain a screen away for a
+    // frame, and left the first real frame reading that gap as a gale of camera
+    // travel. A frame with no rain on it is the cheaper of the two.
     this.sheets = RAIN_LAYERS.map((layer) =>
       scene.add
-        .tileSprite(
-          view.centerX,
-          view.centerY,
-          this.sheetSize,
-          this.sheetSize,
-          layer.texture,
-        )
+        .tileSprite(0, 0, 1, 1, layer.texture)
         .setDepth(layer.depth)
         .setAlpha(layer.alpha * weather.intensity)
         .setTileScale(layer.tileScale)
-        .setScrollFactor(1),
+        .setScrollFactor(1)
+        .setVisible(false),
     );
     this.spray = scene.add.graphics().setDepth(SPLASH_DEPTH);
 
     scene.events.on(SCENE_UPDATE, this.tick);
+    scene.events.once(SCENE_RENDER, this.seat);
     scene.events.once(SCENE_SHUTDOWN, this.onShutdown);
   }
 
@@ -120,7 +121,7 @@ export class RainCurtain {
    */
   public update(deltaMs: number): void {
     const seconds = deltaMs / 1000;
-    if (this.destroyed || !(seconds > 0)) {
+    if (this.destroyed || !this.seated || !(seconds > 0)) {
       return;
     }
     if (this.scene.physics.world.isPaused) {
@@ -171,6 +172,7 @@ export class RainCurtain {
     }
     this.destroyed = true;
     this.scene.events.off(SCENE_UPDATE, this.tick);
+    this.scene.events.off(SCENE_RENDER, this.seat);
     this.scene.events.off(SCENE_SHUTDOWN, this.onShutdown);
     this.splashes.length = 0;
     for (const sheet of this.sheets) {
@@ -181,6 +183,28 @@ export class RainCurtain {
 
   private readonly tick = (_time: number, delta: number): void => {
     this.update(delta);
+  };
+
+  /**
+   * Hangs the sheets over the view, once — the scene has now rendered, so the
+   * camera is showing this district rather than the last one. The travel history
+   * starts here too: without it the next frame would read the whole distance
+   * between the two districts as a single frame of wind.
+   */
+  private readonly seat = (): void => {
+    if (this.destroyed || this.seated) {
+      return;
+    }
+    const view = this.scene.cameras.main.worldView;
+    this.sheetSize = sheetSizeFor(view.width, view.height);
+    for (const sheet of this.sheets) {
+      sheet
+        .setSize(this.sheetSize, this.sheetSize)
+        .setPosition(view.centerX, view.centerY)
+        .setVisible(true);
+    }
+    this.previous = { x: view.centerX, y: view.centerY };
+    this.seated = true;
   };
 
   private readonly onShutdown = (): void => {
