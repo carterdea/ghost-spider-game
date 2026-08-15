@@ -16,6 +16,7 @@ import {
   type FakeGain,
   type FakeNode,
   FakeOscillator,
+  type FakeSource,
 } from "../testing/fakeAudioContext";
 import { CUES } from "./cues";
 import { createMusic, type StopTimer } from "./index";
@@ -649,6 +650,31 @@ describe("driving the engine", () => {
     expect(context.sources).toHaveLength(playing);
   });
 
+  /**
+   * A pause ducks to the idle pad instead of stopping, so the same take is
+   * still running under the panel. Resuming asks to start again, and must not
+   * be taken as a fresh run: that would cut the loop and restart the bar.
+   */
+  test("resuming a pause leaves the take that is already running alone", () => {
+    const audio = build();
+    audio.music.start();
+    run(1);
+    const ringing = context.sources.filter(
+      (source) => (source.stoppedAt ?? 0) > context.currentTime,
+    );
+    expect(ringing.length).toBeGreaterThan(0);
+
+    audio.music.setIdle();
+    audio.music.setDistrict(2);
+    audio.music.start();
+    run(0.05);
+
+    for (const source of ringing) {
+      expect(source.stoppedAt ?? 0).toBeGreaterThan(source.startedAt ?? 0);
+    }
+    expect(audio.music.isPlaying()).toBe(true);
+  });
+
   test("stops on destroy", () => {
     const audio = build();
     audio.music.start();
@@ -716,6 +742,21 @@ describe("cues", () => {
   const musicBusLevel = (): number =>
     (context.created[2] as FakeGain).gain.schedule.at(-1)?.value ?? -1;
 
+  /** Voices the cue placed in the future, which is all of them. */
+  const scheduledAhead = (): FakeSource[] =>
+    context.sources.filter(
+      (source) => (source.startedAt ?? 0) > context.currentTime,
+    );
+
+  /** A voice stopped no later than it starts can never make a sound. */
+  const expectNeverSounds = (sources: readonly FakeSource[]): void => {
+    for (const source of sources) {
+      expect(source.stoppedAt ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+        source.startedAt ?? 0,
+      );
+    }
+  };
+
   test("replace the loop rather than playing over it", () => {
     const audio = build();
     audio.music.start();
@@ -753,6 +794,38 @@ describe("cues", () => {
     audio.music.cue("knockedOut");
 
     expect(context.sources.length).toBeGreaterThan(0);
+  });
+
+  test("do not ring on underneath the run that restarts during them", () => {
+    const audio = build();
+    audio.music.start();
+    run(1);
+
+    audio.music.cue("knockedOut");
+    const cued = scheduledAhead();
+    expect(cued.length).toBeGreaterThan(0);
+
+    // R, a second into a three-second sting: a new run, a new loop.
+    audio.music.start();
+    run(0.2);
+
+    expectNeverSounds(cued);
+    expect(audio.music.isPlaying()).toBe(true);
+    expect(scheduledAhead().length).toBeGreaterThan(0);
+  });
+
+  test("are cut on the spot when the run is torn down", () => {
+    const audio = build();
+    audio.music.start();
+    run(1);
+    audio.music.cue("levelCleared");
+    const cued = scheduledAhead();
+    expect(cued.length).toBeGreaterThan(0);
+
+    audio.music.silence();
+
+    expectNeverSounds(cued);
+    expect(audio.music.isPlaying()).toBe(false);
   });
 
   test("stay silent while muted", () => {

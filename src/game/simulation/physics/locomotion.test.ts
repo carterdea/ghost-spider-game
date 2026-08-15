@@ -267,6 +267,47 @@ describe("horizontal movement", () => {
   });
 });
 
+/**
+ * Sub-steps are 1/120s at 60Hz but 1/240s at 240Hz, so any window that is spent
+ * before the jump is judged against it is shorter on a slow display. Five
+ * milliseconds is the gap between those two sub-steps: enough to catch it.
+ */
+describe("input windows do not depend on the display", () => {
+  const SLIVER = 0.005;
+
+  const jumpedWith = (
+    memory: Partial<LocomotionMemory>,
+    grounded: boolean,
+    input: Partial<LocomotionInput>,
+    dt: number,
+  ): boolean =>
+    stepLocomotion(
+      bodyOf(0, 100),
+      { ...createLocomotionMemory(), ...memory },
+      inputOf(input),
+      grounded,
+      TUNING,
+      dt,
+    ).jumped;
+
+  test("the last sliver of coyote time launches at any refresh rate", () => {
+    const press = { jumpPressed: true, jumpHeld: true };
+    const at = (dt: number): boolean =>
+      jumpedWith({ coyoteRemaining: SLIVER }, false, press, dt);
+
+    expect(at(1 / 60)).toBe(true);
+    expect(at(1 / 240)).toBe(true);
+  });
+
+  test("the last sliver of a buffered press lands at any refresh rate", () => {
+    const at = (dt: number): boolean =>
+      jumpedWith({ jumpBufferRemaining: SLIVER }, true, { jumpHeld: true }, dt);
+
+    expect(at(1 / 60)).toBe(true);
+    expect(at(1 / 240)).toBe(true);
+  });
+});
+
 describe("frame-rate independence", () => {
   const plan = (_frame: number, time: number): FramePlan => ({
     /** Phase boundaries land on whole frames at both rates. */

@@ -169,6 +169,19 @@ export class AudioEngine {
     bus.gain.linearRampToValueAtTime(level, from + Math.max(seconds, MIN_RAMP));
   }
 
+  /**
+   * Cuts every music voice that has been scheduled, including notes placed
+   * seconds into the future. Fading the bus is how the score normally leaves;
+   * this is for a run being torn down, where an end-of-run cue would otherwise
+   * keep ringing under the next run's loop.
+   */
+  public stopScheduledMusic(): void {
+    if (this.destroyed) {
+      return;
+    }
+    stopAll(this.musicLive);
+  }
+
   /** `intensity` is 0–1: how hard the air is moving past the hero. */
   public setWind(intensity: number): void {
     if (this.destroyed) {
@@ -209,12 +222,7 @@ export class AudioEngine {
     this.destroyed = true;
 
     for (const live of [this.live, this.musicLive]) {
-      for (const [source, nodes] of live) {
-        source.onended = null;
-        stopNow(source);
-        disconnectAll([source, ...nodes]);
-      }
-      live.clear();
+      stopAll(live);
     }
 
     if (this.music) {
@@ -395,6 +403,16 @@ const disconnectAll = (nodes: AudioNode[]): void => {
   for (const node of nodes) {
     node.disconnect();
   }
+};
+
+/** Silences every voice in a map now, and forgets all of them. */
+const stopAll = (live: VoiceMap): void => {
+  for (const [source, nodes] of live) {
+    source.onended = null;
+    stopNow(source);
+    disconnectAll([source, ...nodes]);
+  }
+  live.clear();
 };
 
 /** A source that never started, or already stopped, throws on `stop`. */

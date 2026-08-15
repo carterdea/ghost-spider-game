@@ -49,6 +49,11 @@ export interface Music {
   setIdle(): void;
   /** Ends the loop and plays a short figure in its place. */
   cue(cue: MusicCue): void;
+  /**
+   * Cuts the score dead, including a cue still ringing in the future. For a run
+   * being torn down; `stop` is the one that fades.
+   */
+  silence(): void;
   isPlaying(): boolean;
   /** Driven by `GameAudio.setMuted`; callers do not need this. */
   setMuted(muted: boolean): void;
@@ -124,6 +129,10 @@ export const createMusic = (
     if (!engine || sequencer.isRunning) {
       return;
     }
+    // Whatever the loop was replaced by — an end-of-run cue, or its own tail
+    // under a mute — is scheduled well past `currentTime`, so the arrangement
+    // would start underneath it. A fresh take begins from silence.
+    engine.stopScheduledMusic();
     sequencer.start(engine.currentTime + START_LEAD);
     engine.setMusicLevel(MUSIC_LEVEL, START_FADE);
     startPump();
@@ -171,6 +180,14 @@ export const createMusic = (
         );
         engine.scheduleMusic(layers, from + note.at);
       }
+    },
+
+    silence(): void {
+      wanted = false;
+      sync();
+      // Never `getEngine()` here: with no engine there is nothing sounding, and
+      // asking would build a context for the sake of silencing it.
+      engine?.stopScheduledMusic();
     },
 
     isPlaying: (): boolean => sequencer.isRunning,

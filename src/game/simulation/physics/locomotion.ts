@@ -99,15 +99,24 @@ const gravityScale = (
 const apexControlBonus = (tuning: LocomotionTuning): number =>
   1 + (1 - tuning.apexGravityMultiplier) * 0.5;
 
-const tickTimers = (
+/** Standing on something refills the window; it only drains in the air. */
+const armCoyote = (
   runtime: Runtime,
   grounded: boolean,
   tuning: LocomotionTuning,
-  step: number,
 ): void => {
-  runtime.memory.coyoteRemaining = grounded
-    ? tuning.coyoteTime
-    : Math.max(0, runtime.memory.coyoteRemaining - step);
+  if (grounded) {
+    runtime.memory.coyoteRemaining = tuning.coyoteTime;
+  }
+};
+
+const ageTimers = (runtime: Runtime, grounded: boolean, step: number): void => {
+  if (!grounded) {
+    runtime.memory.coyoteRemaining = Math.max(
+      0,
+      runtime.memory.coyoteRemaining - step,
+    );
+  }
   runtime.memory.jumpBufferRemaining = Math.max(
     0,
     runtime.memory.jumpBufferRemaining - step,
@@ -224,12 +233,17 @@ const advance = (
   tuning: LocomotionTuning,
   step: number,
 ): void => {
-  tickTimers(runtime, grounded, tuning, step);
+  armCoyote(runtime, grounded, tuning);
   if (input.jumpPressed) {
     runtime.memory.jumpBufferRemaining = tuning.jumpBufferTime;
   }
 
   launchJumpWhenArmed(runtime, tuning);
+  // Spent only after the jump has been judged. Draining first would charge the
+  // press for a sub-step that has not happened yet, and sub-steps are shorter
+  // on a fast display — which would make the window itself refresh-rate bound.
+  ageTimers(runtime, grounded, step);
+
   applyJumpCut(runtime, input.jumpHeld, tuning);
   applyVertical(runtime, input, grounded, tuning, step);
   applyHorizontal(runtime, input, grounded, tuning, step);

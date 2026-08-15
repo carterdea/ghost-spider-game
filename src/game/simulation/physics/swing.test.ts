@@ -317,6 +317,31 @@ describe("pumping", () => {
     expect(backward).toBeLessThan(coasting - 1e5);
   });
 
+  /**
+   * Hanging dead still straight under the anchor, gravity is purely radial and
+   * the rope removes all of it. Without a heading to fall back on, the pump has
+   * no direction of travel to push along and the hero hangs there for good.
+   */
+  describe("a dead hang under the anchor", () => {
+    const hanging = (): SwingBody => ({
+      position: { x: ANCHOR.x, y: ANCHOR.y + ROPE_LENGTH },
+      velocity: { x: 0, y: 0 },
+    });
+
+    const driftAfterASecond = (pump: number): number =>
+      simulate(hanging(), rope(), { reel: 0, pump }, frictionless, 1 / 60, 60)
+        .body.position.x;
+
+    test("stays put with no pump, and under a brake there is nothing to slow", () => {
+      expect(driftAfterASecond(0)).toBeCloseTo(0, 9);
+      expect(driftAfterASecond(-1)).toBeCloseTo(0, 9);
+    });
+
+    test("swings off under a forward pump", () => {
+      expect(driftAfterASecond(1)).toBeGreaterThan(10);
+    });
+  });
+
   test("does nothing while the rope is slack", () => {
     const start: SwingBody = {
       position: { x: 0, y: -100 },

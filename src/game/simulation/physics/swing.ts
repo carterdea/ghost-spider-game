@@ -112,11 +112,17 @@ const pumpAccelerationOn = (
 
   const tangent = tangentOf(normalize(subtract(body.position, rope.anchor)));
   const travel = dot(body.velocity, tangent);
-  if (travel === 0) {
+  // A stalled hero has no travel to add to. Straight below the anchor gravity
+  // is purely radial and the rope eats all of it, so without a first shove the
+  // hang is permanent; the tangent supplies the heading, pointing the shove the
+  // way the pump leans. Braking nothing stays nothing.
+  const stalled = travel === 0;
+  if (stalled && pump < 0) {
     return ZERO;
   }
 
-  return scale(tangent, Math.sign(travel) * pump * tuning.pumpAcceleration);
+  const heading = stalled ? Math.sign(tangent.x) : Math.sign(travel);
+  return scale(tangent, heading * pump * tuning.pumpAcceleration);
 };
 
 const accelerationOn = (
