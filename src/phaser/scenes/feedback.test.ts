@@ -94,7 +94,7 @@ describe("landing", () => {
   test("a kerb-height arrival is not a landing", () => {
     const { audio, feedback, scene } = harness();
 
-    feedback.land(200);
+    feedback.land(200, false);
 
     expect(intensitiesOf(audio, "land")).toHaveLength(0);
     expect(scene.cameras.main.shakes).toHaveLength(0);
@@ -103,7 +103,7 @@ describe("landing", () => {
   test("one arrival is one report, sized by what the floor swallowed", () => {
     const { audio, feedback, scene } = harness();
 
-    feedback.land(450);
+    feedback.land(450, true);
 
     expect(intensitiesOf(audio, "land")).toEqual([0.5]);
     expect(scene.cameras.main.shakes).toHaveLength(1);
@@ -112,7 +112,7 @@ describe("landing", () => {
   test("the thump tops out rather than running away", () => {
     const { audio, feedback } = harness();
 
-    feedback.land(4000);
+    feedback.land(4000, true);
 
     expect(intensitiesOf(audio, "land")).toEqual([1]);
   });
@@ -127,14 +127,14 @@ describe("landing", () => {
     });
     expect(feedback.combo.count).toBe(1);
 
-    feedback.land(700);
+    feedback.land(700, true);
 
     expect(feedback.combo.count).toBe(0);
     // The best of the run survives the chain that set it.
     expect(feedback.combo.best).toBe(1);
   });
 
-  test("a kerb-height arrival leaves the chain running", () => {
+  test("a graze in mid-air leaves the chain running", () => {
     const { feedback } = harness();
     const world = state();
 
@@ -142,9 +142,27 @@ describe("landing", () => {
       x: 0,
       y: 0,
     });
-    feedback.land(120);
+    feedback.land(120, false);
 
     expect(feedback.combo.count).toBe(1);
+  });
+
+  test("standing on something ends the chain however softly it began", () => {
+    const { audio, feedback } = harness();
+    const world = state();
+
+    feedback.damage(world, enemy(10), 20, "melee", asHero(new HeroStub()), {
+      x: 0,
+      y: 0,
+    });
+    // Every frame on foot arrives here with no impact to report. Left to the
+    // impact alone, a hero could walk between street-level enemies and bank the
+    // airborne multiplier and its healing forever.
+    feedback.land(0, true);
+
+    expect(feedback.combo.count).toBe(0);
+    // Silently: there was no arrival worth a thump or a kick.
+    expect(intensitiesOf(audio, "land")).toHaveLength(0);
   });
 });
 

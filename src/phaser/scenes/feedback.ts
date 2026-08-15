@@ -169,8 +169,17 @@ export class RunFeedback {
    * the thump, the dust and the kick are all sized from it, and it ends any
    * chain that was running — a chain is a run of takedowns kept in the air.
    */
-  public land(impactSpeed: number): void {
-    if (impactSpeed <= LANDING_FLOOR) {
+  public land(impactSpeed: number, grounded: boolean): void {
+    const arrived = impactSpeed > LANDING_FLOOR;
+    // Standing on something ends a chain whether or not the arrival was hard
+    // enough to be worth reporting. A chain is a run of takedowns kept in the
+    // air, and a hero strolling between two street-level enemies is keeping
+    // nothing in the air — without this they bank the airborne multiplier and
+    // its healing on foot, indefinitely.
+    if (grounded || arrived) {
+      breakCombo(this.combo);
+    }
+    if (!arrived) {
       return;
     }
 
@@ -178,7 +187,6 @@ export class RunFeedback {
     this.audio?.play("land", power);
     this.particles.dust(this.hero.x, this.hero.y + FEET_OFFSET, power);
     this.impact.shake(power * LANDING_SHAKE);
-    breakCombo(this.combo);
   }
 
   /**

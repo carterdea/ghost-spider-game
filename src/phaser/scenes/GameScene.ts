@@ -371,7 +371,7 @@ export class GameScene extends Phaser.Scene {
     this.renderWeb(player, step, controller.isLaunching);
     this.animatePlayer(player, actions, step.mode);
     this.feedback?.lean(step.mode, player.body?.velocity.x ?? 0, delta);
-    this.feedback?.land(step.landingImpact);
+    this.feedback?.land(step.landingImpact, step.mode === "grounded");
     this.playMotionSounds(
       step,
       controller,
