@@ -94,7 +94,7 @@ carry two and wait for them, while the mobility gadgets come back fastest.
 | Impact web | Staggers and knocks back — the answer to a wind-up |
 | Web line | Yanks a target toward you |
 | Web net | Snares. Cancels a boss wind-up, once |
-| Web shield | Catches one shot |
+| Web shield | Catches shots for a moment |
 | Web wings | A vault, and a slower fall on `Shift` |
 
 Enemies have to actually see you — range, a forward cone and a clear line —
