@@ -1,4 +1,4 @@
-import Phaser from "phaser";
+import type Phaser from "phaser";
 import { artKeys, colors } from "../../game/assets/manifest";
 import type {
   EnemyLane,
@@ -21,6 +21,7 @@ import {
 } from "../../game/simulation/ai";
 import {
   clamp,
+  lerp,
   type Rect,
   type Vec2,
 } from "../../game/simulation/physics/vector";
@@ -464,7 +465,7 @@ export class EnemyDirector {
       return;
     }
 
-    overlay.strokeCircle(x, y, Phaser.Math.Linear(78, 22, amount));
+    overlay.strokeCircle(x, y, lerp(78, 22, amount));
   }
 
   private fire(

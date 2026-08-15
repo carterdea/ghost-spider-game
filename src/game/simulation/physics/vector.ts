@@ -39,6 +39,10 @@ export const normalize = (v: Vec2): Vec2 => {
   return magnitude === 0 ? { x: 0, y: 0 } : scale(v, 1 / magnitude);
 };
 
+/** Straight-line interpolation, `t` running 0 to 1. */
+export const lerp = (from: number, to: number, t: number): number =>
+  from + (to - from) * t;
+
 export const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
