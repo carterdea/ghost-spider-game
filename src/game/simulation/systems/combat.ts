@@ -84,8 +84,19 @@ const TAKEDOWN_MESSAGE: Record<ActorKind, string> = {
  */
 const TAKEDOWN_HEAL = 4;
 
-/** Silk spun back in. Never past full: a chain cannot bank health for later. */
+/**
+ * Silk spun back in. Never past full, so a chain cannot bank health for later,
+ * and never off zero.
+ *
+ * A knockout is not read until the run's own update, which lands after the
+ * physics step that caused it. A takedown paid out in that same step — a bullet
+ * and a killing punch arriving together — would otherwise lift the hero off
+ * zero before anything noticed they were down, and the run would carry on.
+ */
 export const healPlayer = (state: GameState, amount: number): void => {
+  if (state.player.health === 0) {
+    return;
+  }
   state.player.health = Math.min(
     state.player.maxHealth,
     state.player.health + amount,

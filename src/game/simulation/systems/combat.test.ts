@@ -127,6 +127,18 @@ describe("takedowns return health", () => {
     expect(state.player.health).toBe(50);
   });
 
+  test("a takedown cannot lift the hero back off zero", () => {
+    const state = stateWith(["robot"]);
+
+    damagePlayer(state, 999, "Hit by a skyline shot.");
+    damageEnemy(state, state.enemies[0], 60);
+
+    // Both can land in one physics step, and the knockout is not read until
+    // the run's own update afterwards: healing here would carry the run on
+    // past a hero who is already down.
+    expect(state.player.health).toBe(0);
+  });
+
   test("healing never passes full", () => {
     const state = stateWith(["robot"]);
     state.player.health = state.player.maxHealth - 1;
