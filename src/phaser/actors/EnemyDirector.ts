@@ -120,6 +120,14 @@ export class EnemyDirector {
     return this.views;
   }
 
+  /**
+   * The level's solids, as the enemies see them. Shared so the hero's own
+   * aiming respects the cover an enemy is standing behind.
+   */
+  public get cover(): readonly Rect[] {
+    return this.blockers;
+  }
+
   public spawn(
     level: LevelDefinition,
     state: GameState,

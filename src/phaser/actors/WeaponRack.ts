@@ -358,7 +358,17 @@ export class WeaponRack {
    */
   private castLine(player: Phaser.Physics.Arcade.Sprite, facing: -1 | 1): void {
     const hero = { x: player.x, y: player.y };
-    const target = pickYankTarget(hero, facing, this.aimTargets());
+    // Annotated rather than reached through `this.deps`: dead-code analysis
+    // resolves a member against the declared type of whatever it is read from,
+    // and a property chain carries none — see the same note in
+    // `combatColliders`.
+    const enemies: EnemyDirector = this.deps.enemies;
+    const target = pickYankTarget(
+      hero,
+      facing,
+      this.aimTargets(),
+      enemies.cover,
+    );
     if (!target) {
       this.deps.state.player.message = "The line found nothing.";
       this.deps.play(WEAPON_SOUND.lineMiss);

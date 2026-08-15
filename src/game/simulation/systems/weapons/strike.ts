@@ -1,4 +1,11 @@
-import { distance, normalize, subtract, type Vec2 } from "../../physics/vector";
+import { hasLineOfSight } from "../../ai/vision";
+import {
+  distance,
+  normalize,
+  type Rect,
+  subtract,
+  type Vec2,
+} from "../../physics/vector";
 
 /**
  * The two single-target weapons, as the vectors they produce.
@@ -68,16 +75,21 @@ export const yankVelocity = (target: Vec2, hero: Vec2): Vec2 => {
 };
 
 /**
- * The nearest target the hero could tether: within reach, and within the cone
- * they are facing. Returns `null` when the line would find nothing.
+ * The nearest target the hero could tether: within reach, within the cone they
+ * are facing, and not behind cover. Returns `null` when the line would find
+ * nothing.
  *
  * A cone rather than a ray, because the hero is usually mid-arc and pointing
- * somewhere other than at the thing they meant to hit.
+ * somewhere other than at the thing they meant to hit. `cover` is required
+ * rather than optional because forgetting it is the whole failure: a tether
+ * that ignores buildings drags enemies through the façade they were standing
+ * behind, while every other directed weapon stops at it.
  */
 export const pickYankTarget = (
   hero: Vec2,
   facing: -1 | 1,
   targets: readonly AimTarget[],
+  cover: readonly Rect[],
 ): AimTarget | null => {
   let best: AimTarget | null = null;
   let bestGap = Number.POSITIVE_INFINITY;
@@ -89,6 +101,11 @@ export const pickYankTarget = (
     }
     const offset = subtract(target.position, hero);
     if (Math.abs(Math.atan2(offset.y, offset.x * facing)) > WEB_LINE.spread) {
+      continue;
+    }
+    // The same test the enemies use to see, so cover reads the same way in
+    // both directions: what can hide from you, you cannot tether.
+    if (!hasLineOfSight(hero, target.position, cover)) {
       continue;
     }
     best = target;
