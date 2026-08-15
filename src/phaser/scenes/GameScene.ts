@@ -663,7 +663,13 @@ export class GameScene extends Phaser.Scene {
           if (
             !this.playing ||
             this.time.now < this.hitCooldownUntil ||
-            this.time.now < enemy.snaredUntil
+            this.time.now < enemy.snaredUntil ||
+            // Harmless touch is not a hit. The brain zeroes contact damage
+            // outside a committed strike, and the cooldown is shared across
+            // every enemy: brushing a patrol would otherwise announce a hit
+            // that never happened and buy 700ms of immunity that swallows a
+            // real lunge from someone else.
+            enemy.state.damage <= 0
           ) {
             return;
           }
