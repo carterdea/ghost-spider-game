@@ -91,7 +91,15 @@ export class EnemyDirector {
   private telegraph?: Phaser.GameObjects.Graphics;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
   private blockers: readonly Rect[] = [];
-  private lastTime = 0;
+  /**
+   * The director's own clock, advanced only by the simulation delta.
+   *
+   * The scene clock is wall time: it runs through a pause and through the
+   * hit-stop after a landed blow. Anything the enemies are owed has to be
+   * measured against a clock that stops when they do, or a pause quietly
+   * expires the shots they had in the air.
+   */
+  private simClock = 0;
   private readonly onShot?: () => void;
   private readonly onBossEvent?: (event: BossEvent) => void;
 
@@ -226,13 +234,23 @@ export class EnemyDirector {
     return this.views.find((view) => view.boss && view.sprite.active);
   }
 
-  public update(time: number, player: Phaser.Physics.Arcade.Sprite): void {
-    const dt = clamp((time - this.lastTime) / 1000, 0, MAX_STEP);
-    this.lastTime = time;
+  /**
+   * Runs the enemies for one frame. `delta` is the simulation delta, not the
+   * scene's: a landed blow slows the world for a beat, and brains stepped from
+   * wall time went on winding up, recovering and firing straight through the
+   * freeze that was supposed to have stopped everything.
+   */
+  public update(
+    time: number,
+    delta: number,
+    player: Phaser.Physics.Arcade.Sprite,
+  ): void {
+    const dt = clamp(delta / 1000, 0, MAX_STEP);
+    this.simClock += dt * 1000;
 
     const overlay = this.requireTelegraph();
     overlay.clear();
-    this.cullBullets(time);
+    this.cullBullets(this.simClock);
 
     for (const view of this.views) {
       if (!view.sprite.active) {
@@ -439,7 +457,7 @@ export class EnemyDirector {
     bullet.setScale(style.scale ?? 1);
     bullet.setTint(style.tint ?? colors.danger);
     bullet.setDepth(4);
-    bullet.setData("expiresAt", this.scene.time.now + BULLET_LIFETIME);
+    bullet.setData("expiresAt", this.simClock + BULLET_LIFETIME);
     this.onShot?.();
   }
 
@@ -508,7 +526,7 @@ export class EnemyDirector {
     this.views = [];
 
     this.blockers = [];
-    this.lastTime = 0;
+    this.simClock = 0;
     this.telegraph?.clear();
     this.liveBullets?.clear(true, true);
   }
