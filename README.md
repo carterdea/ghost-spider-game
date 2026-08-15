@@ -1,7 +1,7 @@
 # Ghost Spider Swing
 
 A Phaser 3 side-scroller about an original masked rooftop dancer web-swinging
-through a painted, five-district New York night.
+through a painted, eight-district New York night, ending in a boss.
 
 ## Stack
 
@@ -77,7 +77,10 @@ winding up faster than the last. The shape of a tell says which attack is
 coming, and every attack leaves a window where the boss cannot hurt you —
 that is the punish, so take it.
 
-Chaining takedowns without touching the ground pays a score multiplier.
+Chaining takedowns without touching the ground pays a score multiplier, and a
+takedown is the only thing that gives health back — a little, more inside a
+chain. One health bar carries across all eight districts, so the fighting you
+choose to do is what pays for the boss.
 
 ## The Arsenal
 
@@ -98,7 +101,9 @@ Enemies have to actually see you — range, a forward cone and a clear line —
 and every attack is telegraphed and followed by a recovery window, so fights
 are meant to be read and played around rather than absorbed. Robots close and
 lunge, gunners hold a stand-off and draw a sight line before firing, drones
-orbit above and dive.
+orbit above and dive. Gunners and drones also look over the ledge: the street
+is a real route, but it is not a free one, and a drone will leave its lane to
+chase you down it.
 
 ## Architecture
 
@@ -132,7 +137,7 @@ a declarative table of oscillator and noise layers, one entry per game event.
 
 The score lives in `src/audio/music/`, composed as note data rather than
 waveforms: A natural minor, 104 BPM, an 18.5 second loop whose stems layer up
-across the five districts so the run escalates as you go. `toMidiFile()`
+across the run in two waves so it escalates as you go. `toMidiFile()`
 exports it as a real MIDI file if you want to edit the song in a DAW.
 
 ## Art
