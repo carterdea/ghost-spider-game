@@ -52,6 +52,18 @@ const HIT_COOLDOWN = 700;
 const STRIKE_RANGE = 96;
 
 /**
+ * A strike lands from inside the enemy's own reach; a glob is thrown from
+ * anywhere. Paying them 20 and 16 asked the player to close for a fifth more
+ * damage, so the honest answer was always to stand off and throw — and the
+ * boss fight in particular read as kiting rather than as diving into the
+ * opening its recovery window exists to offer. Closing is the risk, so it is
+ * where the damage lives.
+ */
+const STRIKE_DAMAGE = 34;
+const GLOB_DAMAGE = 16;
+const NET_DAMAGE = 12;
+
+/**
  * How far the camera eases out of its resting frame as the hero picks up speed,
  * so fast swings read wider. Factors on the framing zoom rather than zooms in
  * their own right: the window decides the frame, this decides how much of it a
@@ -547,7 +559,7 @@ export class GameScene extends Phaser.Scene {
             const defeated = this.requireFeedback().damage(
               this.state,
               enemy.state,
-              power === "net" ? 12 : 16,
+              power === "net" ? NET_DAMAGE : GLOB_DAMAGE,
               "shot",
               enemy.sprite,
               struckAt,
@@ -717,7 +729,7 @@ export class GameScene extends Phaser.Scene {
       const defeated = this.requireFeedback().damage(
         this.state,
         enemy.state,
-        20,
+        STRIKE_DAMAGE,
         "melee",
         enemy.sprite,
         { x: enemy.sprite.x, y: enemy.sprite.y },
