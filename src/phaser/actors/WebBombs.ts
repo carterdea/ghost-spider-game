@@ -51,6 +51,13 @@ const ARMED_PULSE = 0.14;
 const PULSE_CYCLES = 26;
 
 export interface BombHooks {
+  /**
+   * The run clock. Fuses are stamped against it rather than wall time: a fuse
+   * on wall time keeps burning through a pause it cannot be seen to burn
+   * through, so every charge held when the game stopped would detonate
+   * together on the frame it started again.
+   */
+  readonly now: () => number;
   /** A charge has anchored itself and started its fuse. */
   readonly onStick: () => void;
   /** A charge has gone off at this point. */
@@ -116,7 +123,7 @@ export class WebBombs {
       return;
     }
 
-    charge.setData(BURST_AT, fuseEndsAt(this.scene.time.now));
+    charge.setData(BURST_AT, fuseEndsAt(this.hooks.now()));
     charge.setVelocity(0, 0);
     charge.setAngularVelocity(0);
     charge.setAngle(0);
@@ -136,6 +143,8 @@ export class WebBombs {
   /**
    * Burns the fuses. The telegraph is driven from the pure fuse rather than a
    * tween, so a charge cannot outlive the rule that governs it.
+   *
+   * `time` is the run clock, matching the stamp the fuse was lit with.
    */
   public update(time: number): void {
     if (!this.charges) {

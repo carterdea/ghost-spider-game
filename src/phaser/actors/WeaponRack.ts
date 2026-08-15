@@ -123,11 +123,14 @@ export class WeaponRack {
   private readonly bombs: WebBombs;
   private readonly dispatch: Record<GadgetKind, Fire>;
   private shotGroup?: Phaser.Physics.Arcade.Group;
+  /** The latest clock, so a collider firing between frames can stamp a fuse. */
+  private clock: WeaponClock = { scene: 0, run: 0 };
   private world?: LevelWorld;
 
   public constructor(deps: WeaponRackDeps) {
     this.deps = deps;
     this.bombs = new WebBombs(deps.scene, {
+      now: () => this.clock.run,
       onStick: () => deps.play(WEAPON_SOUND.bombArm),
       onBurst: (centre) => this.burst(centre),
     });
@@ -187,8 +190,9 @@ export class WeaponRack {
 
   /** Recharges and burns fuses. Run once a frame; each reads its own clock. */
   public update(clock: WeaponClock): void {
+    this.clock = clock;
     tickArsenal(this.ammo, clock.run);
-    this.bombs.update(clock.scene);
+    this.bombs.update(clock.run);
   }
 
   /** Whether the selected weapon could be fired right now. */
