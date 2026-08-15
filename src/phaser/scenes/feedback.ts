@@ -78,7 +78,10 @@ export class RunFeedback {
   private readonly tilt: HeroTilt;
   private readonly hero: Phaser.Physics.Arcade.Sprite;
   private readonly world: Phaser.Physics.Arcade.World;
+  private readonly tweens: Phaser.Tweens.TweenManager;
   private readonly audio?: GameAudio;
+  /** What the tween manager was last told, so a hold is applied on its edge. */
+  private tweensHeld = false;
 
   public constructor(
     scene: Phaser.Scene,
@@ -90,6 +93,7 @@ export class RunFeedback {
     this.tilt = new HeroTilt(hero);
     this.hero = hero;
     this.world = scene.physics.world;
+    this.tweens = scene.tweens;
     this.audio = audio;
   }
 
@@ -115,8 +119,31 @@ export class RunFeedback {
   public step(deltaMs: number, held = false): number {
     const simDelta = this.impact.step(deltaMs);
     this.world.isPaused = held || this.impact.frozen;
+    this.holdTweens(held);
     this.particles.update(held ? 0 : simDelta);
     return simDelta;
+  }
+
+  /**
+   * Tweens do not stop with the physics world, and the level's moving platforms
+   * are tween-driven and carry whatever is standing on them. Left running, a
+   * pause taken on a rising hoist would keep hauling the hero up the district
+   * while the game claimed to be stopped.
+   *
+   * Only the pause holds them, not the hit-stop: a freeze is tens of
+   * milliseconds and pausing the manager mid-blow would stall the very tweens
+   * the blow started. Applied on the edge, since `pauseAll` walks every tween.
+   */
+  private holdTweens(held: boolean): void {
+    if (held === this.tweensHeld) {
+      return;
+    }
+    this.tweensHeld = held;
+    if (held) {
+      this.tweens.pauseAll();
+    } else {
+      this.tweens.resumeAll();
+    }
   }
 
   /** Leans the hero into the direction of travel. Presentation only. */
@@ -186,6 +213,7 @@ export class RunFeedback {
     this.particles.reset();
     this.tilt.reset();
     this.world.isPaused = false;
+    this.holdTweens(false);
     breakCombo(this.combo);
   }
 

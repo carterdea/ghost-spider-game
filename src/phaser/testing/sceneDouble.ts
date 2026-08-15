@@ -213,10 +213,35 @@ export class FakeTween {
   public constructor(
     public readonly targets: unknown,
     public readonly onComplete?: () => void,
+    /** Held so a test can drive a schedule tween frame by frame. */
+    public readonly onUpdate?: () => void,
   ) {}
 
   public remove(): void {
     this.removed = true;
+  }
+}
+
+/**
+ * A dynamic Arcade body, as a moving deck sees one: a footprint and the game
+ * object it reads its position back from.
+ *
+ * The double does not model origins, so the position is the game object's own
+ * — which makes it the body's top-left corner, the corner Arcade measures its
+ * width and height from.
+ */
+export class FakeBody {
+  public enable = true;
+
+  public constructor(
+    public readonly gameObject: FakeGameObject,
+    public readonly width: number,
+    public readonly height: number,
+  ) {}
+
+  /** Arcade re-derives this from the game object every step, and so does this. */
+  public get position(): { x: number; y: number } {
+    return { x: this.gameObject.x, y: this.gameObject.y };
   }
 }
 
@@ -363,6 +388,7 @@ export class SceneDouble {
   public readonly timerLog: FakeTimer[] = [];
   public readonly colliderLog: FakeCollider[] = [];
   public readonly groupLog: FakeStaticGroup[] = [];
+  public readonly bodyLog: FakeBody[] = [];
   public readonly generatedTextures: string[] = [];
   public readonly existingTextures = new Set<string>();
   public readonly removedTextures: string[] = [];
@@ -392,8 +418,16 @@ export class SceneDouble {
   };
 
   public readonly tweens = {
-    add: (config: { targets: unknown; onComplete?: () => void }): FakeTween => {
-      const tween = new FakeTween(config.targets, config.onComplete);
+    add: (config: {
+      targets: unknown;
+      onComplete?: () => void;
+      onUpdate?: () => void;
+    }): FakeTween => {
+      const tween = new FakeTween(
+        config.targets,
+        config.onComplete,
+        config.onUpdate,
+      );
       this.tweenLog.push(tween);
       return tween;
     },
@@ -404,7 +438,16 @@ export class SceneDouble {
         }
       }
     },
+    pauseAll: (): void => {
+      this.tweensPaused = true;
+    },
+    resumeAll: (): void => {
+      this.tweensPaused = false;
+    },
   };
+
+  /** Whether the manager is holding every tween. Read by tests. */
+  public tweensPaused = false;
 
   public readonly time = {
     get now(): number {
@@ -441,6 +484,8 @@ export class SceneDouble {
     /** `isPaused` is the hit-stop's handle on the simulation. */
     world: {
       isPaused: false,
+      /** Everything a moving deck could be carrying. */
+      bodies: { getArray: (): FakeBody[] => this.bodyLog },
       setBounds: (
         x: number,
         y: number,
@@ -463,6 +508,22 @@ export class SceneDouble {
     // `time.now` is read through a getter on the double itself so tests can
     // advance the clock with `scene.now = ...`.
     Object.defineProperty(this.time, "now", { get: () => this.now });
+  }
+
+  /**
+   * A dynamic body in the world, positioned by its top-left corner. Returned
+   * so a test can watch where a moving deck leaves it.
+   */
+  public addBody(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): FakeBody {
+    const object = this.record(new FakeGameObject("sprite")).setPosition(x, y);
+    const body = new FakeBody(object, width, height);
+    this.bodyLog.push(body);
+    return body;
   }
 
   /** A collider handle the systems under test can hold and later destroy. */

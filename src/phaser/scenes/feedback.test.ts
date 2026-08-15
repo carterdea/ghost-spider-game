@@ -365,3 +365,43 @@ describe("the hero", () => {
     expect(scene.physics.world.isPaused).toBe(false);
   });
 });
+
+describe("a paused run and the level's tweens", () => {
+  test("a pause holds the tweens that drive the moving platforms", () => {
+    // Platform decks are tween-driven and carry whatever stands on them, and
+    // tweens do not stop with the physics world: a pause taken on a rising
+    // hoist would otherwise keep hauling the hero up the district.
+    const { feedback, scene } = harness();
+    expect(scene.tweensPaused).toBe(false);
+
+    feedback.step(FRAME_MS, true);
+    expect(scene.tweensPaused).toBe(true);
+
+    feedback.step(FRAME_MS, false);
+    expect(scene.tweensPaused).toBe(false);
+  });
+
+  test("a hit-stop leaves them running", () => {
+    // A freeze is tens of milliseconds; holding the manager mid-blow would
+    // stall the very tweens the blow just started.
+    const { feedback, scene } = harness();
+
+    feedback.damage(state(), enemy(10), 20, "melee", asHero(new HeroStub()), {
+      x: 0,
+      y: 0,
+    });
+    feedback.step(FRAME_MS);
+
+    expect(scene.physics.world.isPaused).toBe(true);
+    expect(scene.tweensPaused).toBe(false);
+  });
+
+  test("teardown releases them", () => {
+    const { feedback, scene } = harness();
+    feedback.step(FRAME_MS, true);
+    expect(scene.tweensPaused).toBe(true);
+
+    feedback.reset();
+    expect(scene.tweensPaused).toBe(false);
+  });
+});
