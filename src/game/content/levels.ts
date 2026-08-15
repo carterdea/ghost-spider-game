@@ -11,43 +11,25 @@ import type { LevelDefinition } from "./levels/types";
 
 export {
   anchorsInReach,
-  CABLE_ANCHOR_SPACING,
   cablePointAt,
   cablePoints,
   cableSegments,
-  FACADE_ANCHOR_SPACING,
   generateBuildingAnchors,
   generateCableAnchors,
   MIN_ANCHOR_CLEARANCE,
   ROOF_ANCHOR_SPACING,
-  ROOF_LEDGE_LIFT,
   SWING_REACH,
 } from "./levels/anchors";
-export {
-  type BuildingRow,
-  type CableRow,
-  compileLevel,
-  type EnemyRow,
-  type LevelBlueprint,
-  PLATFORM_DECK_HEIGHT,
-  type PlatformRow,
-  roofYAt,
-  STREET_Y,
-  WORLD_HEIGHT,
-} from "./levels/authoring";
+export { roofYAt } from "./levels/authoring";
 export type {
   AnchorPoint,
-  AnchorSource,
   Building,
-  BuildingKind,
   Cable,
   EnemyLane,
   EnemySpawn,
   LevelDefinition,
-  LevelGoal,
   Platform,
   PlatformCycle,
-  PlatformKind,
   PlatformMotion,
 } from "./levels/types";
 
@@ -68,6 +50,3 @@ export const LEVELS: readonly LevelDefinition[] = [
   harborCraneRun,
   bridgeLineFinale,
 ].map(compileLevel);
-
-export const getLevelById = (id: string): LevelDefinition | undefined =>
-  LEVELS.find((level) => level.id === id);

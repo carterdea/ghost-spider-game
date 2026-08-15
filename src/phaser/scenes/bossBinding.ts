@@ -9,7 +9,7 @@ import type { BossSpawn } from "../../game/simulation/state";
  * it stands, and what each beat of the fight sounds like.
  */
 
-export const BOSS_ID = "the-weaver";
+const BOSS_ID = "the-weaver";
 
 /** How far either side of the beacon the Weaver may roam. */
 const ARENA_REACH = 1500;

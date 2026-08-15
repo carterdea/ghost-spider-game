@@ -40,7 +40,7 @@ export const midiOf = (name: NoteName): number => {
   );
 };
 
-export const midiToHz = (midi: number): number =>
+const midiToHz = (midi: number): number =>
   A4_HZ * 2 ** ((midi - A4_MIDI) / SEMITONES_PER_OCTAVE);
 
 /**

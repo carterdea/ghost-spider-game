@@ -99,7 +99,7 @@ export interface RunSummary {
   elapsedMs: number;
 }
 
-export const createEnemyState = (spawn: EnemySpawn): EnemyState => ({
+const createEnemyState = (spawn: EnemySpawn): EnemyState => ({
   id: spawn.id,
   kind: spawn.kind,
   health: spawn.health,
@@ -190,6 +190,3 @@ export const enterLevel = (state: GameState, level: LevelDefinition): void => {
   state.player.swinging = false;
   state.player.shieldUntil = 0;
 };
-
-export const livingEnemies = (state: GameState): EnemyState[] =>
-  state.enemies.filter((enemy) => enemy.health > 0);

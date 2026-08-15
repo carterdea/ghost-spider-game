@@ -9,7 +9,7 @@ import type Phaser from "phaser";
  * simulates: nothing here reimplements game logic.
  */
 
-export class FakeGameObject {
+class FakeGameObject {
   public x = 0;
   public y = 0;
   public depth = 0;
@@ -129,7 +129,7 @@ export class FakeTileSprite extends FakeGameObject {
 }
 
 /** Every draw call is a no-op; only `generateTexture` is worth recording. */
-export class FakeGraphics extends FakeGameObject {
+class FakeGraphics extends FakeGameObject {
   public constructor(private readonly scene: SceneDouble) {
     super("graphics");
   }
@@ -209,7 +209,7 @@ export class FakeGraphics extends FakeGameObject {
   }
 }
 
-export class FakeTween {
+class FakeTween {
   public removed = false;
 
   public constructor(
@@ -232,7 +232,7 @@ export class FakeTween {
  * — which makes it the body's top-left corner, the corner Arcade measures its
  * width and height from.
  */
-export class FakeBody {
+class FakeBody {
   public enable = true;
 
   public constructor(
@@ -254,7 +254,7 @@ export interface FakeTimer {
   fired: boolean;
 }
 
-export class FakeCollider {
+class FakeCollider {
   public destroyed = false;
 
   public destroy(): void {
@@ -262,7 +262,7 @@ export class FakeCollider {
   }
 }
 
-export class FakeStaticGroup {
+class FakeStaticGroup {
   public readonly children: FakeGameObject[] = [];
   public destroyed = false;
 
@@ -291,7 +291,7 @@ export class FakeStaticGroup {
 }
 
 /** The slice of the world a camera is showing, as the weather reads it. */
-export class FakeWorldView {
+class FakeWorldView {
   public x = 0;
   public y = 0;
   public width = 1280;
@@ -307,7 +307,7 @@ export class FakeWorldView {
 }
 
 /** The camera as the fx layer uses it: it records kicks instead of shaking. */
-export class FakeCamera {
+class FakeCamera {
   public readonly shakes: { duration: number; amount: number }[] = [];
   public shakeResets = 0;
   public readonly worldView = new FakeWorldView();
@@ -337,7 +337,7 @@ type SceneHandler = (...args: never[]) => void;
  * scene's update rather than being stepped by it have to give their listener
  * back when they are destroyed, and `count` is how a test proves they did.
  */
-export class FakeEvents {
+class FakeEvents {
   private readonly listeners = new Map<
     string,
     { handler: SceneHandler; once: boolean }[]

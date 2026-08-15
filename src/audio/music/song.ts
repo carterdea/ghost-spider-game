@@ -12,9 +12,9 @@ import { ARP, BASS, LEAD, PAD, PULSE, STAB } from "./instruments";
 import type { NoteName } from "./notes";
 import type { NoteEvent, Part, Song } from "./types";
 
-export const BPM = 104;
+const BPM = 104;
 export const BEATS_PER_BAR = 4;
-export const BARS = 8;
+const BARS = 8;
 export const LOOP_BEATS = BARS * BEATS_PER_BAR;
 
 /** One bar of harmony. Pitches are spelled out rather than derived, so the
@@ -65,7 +65,7 @@ const G_MAJOR: BarChord = {
 };
 
 /** Two passes of the same four bars. The lead is what makes them differ. */
-export const PROGRESSION: readonly BarChord[] = [
+const PROGRESSION: readonly BarChord[] = [
   A_MINOR,
   F_MAJOR,
   C_MAJOR,

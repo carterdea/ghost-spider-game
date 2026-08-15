@@ -10,7 +10,6 @@ import {
   canFire,
   catchInBurst,
   createArsenal,
-  gadgetAt,
   IMPACT_WEB,
   knockbackVelocity,
   nextGadget,
@@ -207,16 +206,6 @@ export class WeaponRack {
     const player = this.deps.state.player;
     player.gadget = nextGadget(player.gadget, step);
     player.message = `${ARSENAL[player.gadget].label} ready.`;
-  }
-
-  /** Selects a weapon by slot. Out-of-range slots leave the selection alone. */
-  public select(index: number): void {
-    const kind = gadgetAt(index);
-    if (!kind) {
-      return;
-    }
-    this.deps.state.player.gadget = kind;
-    this.deps.state.player.message = `${ARSENAL[kind].label} ready.`;
   }
 
   /**

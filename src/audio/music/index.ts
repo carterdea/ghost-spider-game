@@ -14,10 +14,6 @@ import type { MusicLayer, ScheduledNote } from "./types";
 import { noteLayers } from "./voices";
 
 export type { MusicCue } from "./cues";
-export { TICKS_PER_BEAT, toMidiFile } from "./midi";
-export { SONG } from "./song";
-export { DISTRICT_TIERS, IDLE_TIER, tierForDistrict } from "./tiers";
-export type { MusicLayer, Song } from "./types";
 
 /** The loop eases in rather than snapping on. */
 const START_FADE = 2.4;
@@ -198,8 +194,3 @@ export const createMusic = (
     },
   };
 };
-
-/** Stems in arrangement order, for tests and tooling. */
-export const LAYER_ORDER: readonly MusicLayer[] = SONG.parts.map(
-  (part) => part.layer,
-);

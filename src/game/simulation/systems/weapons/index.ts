@@ -1,20 +1,16 @@
 /** The hero's arsenal: what is carried, what a bomb catches, what a shot does. */
-export type { ArsenalState, GadgetSpec } from "./arsenal";
+export type { ArsenalState } from "./arsenal";
 export {
   ARSENAL,
   canFire,
   createArsenal,
-  GADGET_ORDER,
-  gadgetAt,
   nextGadget,
-  rechargeProgress,
   refillArsenal,
   spendCharge,
   tickArsenal,
 } from "./arsenal";
-export type { BurstHit, BurstTarget } from "./bomb";
+export type { BurstTarget } from "./bomb";
 export {
-  burstDamage,
   catchInBurst,
   fuseEndsAt,
   fuseProgress,

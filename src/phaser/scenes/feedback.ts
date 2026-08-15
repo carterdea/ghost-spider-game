@@ -186,6 +186,9 @@ export class RunFeedback {
    * sparks fly from — the enemy for a punch, the projectile for a web shot.
    * Returns whether it was the killing blow.
    */
+  // Called from `GameScene` as `this.requireFeedback().damage(...)`. Fallow does
+  // not resolve a member through a call's return value, so it reads as unused.
+  // fallow-ignore-next-line unused-class-member
   public damage(
     state: GameState,
     enemy: EnemyState,

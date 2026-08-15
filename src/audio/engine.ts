@@ -102,20 +102,15 @@ export class AudioEngine {
     this.master.connect(limiter);
   }
 
-  public get voiceCount(): number {
-    return this.live.size;
-  }
-
-  public get musicVoiceCount(): number {
-    return this.musicLive.size;
-  }
-
   /** The clock the music scheduler aligns its lookahead window to. */
   public get currentTime(): number {
     return this.context.currentTime;
   }
 
   /** `bend` multiplies every layer frequency; 1 is the recipe as written. */
+  // Called from `audio/index.ts` as `ensureEngine()?.play(...)`. Fallow does not
+  // resolve a member through a call's return value, so it reads as unused.
+  // fallow-ignore-next-line unused-class-member
   public play(layers: readonly Layer[], bend: number): void {
     if (this.destroyed || this.muted) {
       return;
@@ -183,6 +178,8 @@ export class AudioEngine {
   }
 
   /** `intensity` is 0–1: how hard the air is moving past the hero. */
+  // Called from `audio/index.ts` as `ensureEngine()?.setWind(...)`; see `play`.
+  // fallow-ignore-next-line unused-class-member
   public setWind(intensity: number): void {
     if (this.destroyed) {
       return;

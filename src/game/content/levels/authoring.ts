@@ -38,7 +38,7 @@ const BASE_STATS: Record<
 };
 
 /** Every platform deck is this deep, so the art and the body agree everywhere. */
-export const PLATFORM_DECK_HEIGHT = 26;
+const PLATFORM_DECK_HEIGHT = 26;
 
 /** A building authored as a footprint plus a roof height; it always meets the street. */
 export interface BuildingRow {

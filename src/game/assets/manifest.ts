@@ -38,7 +38,7 @@ const weapons = {
   webSplat: weaponFrames("web-splat", 3),
 } as const;
 
-export const art = {
+const art = {
   weapons,
   environments: [
     {

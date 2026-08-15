@@ -21,13 +21,13 @@ export const MIN_ANCHOR_CLEARANCE = DEFAULT_ATTACHMENT_TUNING.minClearance;
 export const ROOF_ANCHOR_SPACING = 180;
 
 /** Roof anchors sit just above the roof slab, on the ledge the roof art draws. */
-export const ROOF_LEDGE_LIFT = 12;
+const ROOF_LEDGE_LIFT = 12;
 
 /** Vertical spacing of facade anchors running down a building's two corners. */
-export const FACADE_ANCHOR_SPACING = 260;
+const FACADE_ANCHOR_SPACING = 260;
 
 /** Facade anchors stop this far above the building's base so they stay overhead. */
-export const FACADE_ANCHOR_FLOOR_MARGIN = 140;
+const FACADE_ANCHOR_FLOOR_MARGIN = 140;
 
 const anchorKey = (anchor: AnchorPoint): string =>
   `${Math.round(anchor.x)}:${Math.round(anchor.y)}`;
@@ -96,12 +96,12 @@ export const generateBuildingAnchors = (
 };
 
 /** Horizontal spacing between the clamps a strung cable hangs its anchors from. */
-export const CABLE_ANCHOR_SPACING = 170;
+const CABLE_ANCHOR_SPACING = 170;
 
 /** How far a cable dips at mid-span, as a fraction of its own length. */
-export const CABLE_SAG_RATIO = 0.08;
+const CABLE_SAG_RATIO = 0.08;
 
-export const cableSpan = (cable: Cable): number =>
+const cableSpan = (cable: Cable): number =>
   Math.hypot(cable.to.x - cable.from.x, cable.to.y - cable.from.y);
 
 /**

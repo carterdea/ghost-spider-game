@@ -174,10 +174,10 @@ export class PlayerController {
     sprite.setMaxVelocity(MAX_TRANSPORT_SPEED);
   }
 
-  public get isSwinging(): boolean {
-    return this.rope !== undefined;
-  }
-
+  // Read by `PlayerController.test.ts` as `harness.controller.currentRope`.
+  // Fallow does not resolve a member reached through another object's property,
+  // so it reads as unused.
+  // fallow-ignore-next-line unused-class-member
   public get currentRope(): Rope | undefined {
     return this.rope;
   }
@@ -247,6 +247,9 @@ export class PlayerController {
    * on. Writing `setVelocityY` on the body is not a way in at all: `commit`
    * overwrites the body every frame, so the lift survived a single Arcade step.
    */
+  // Called from `WeaponRack.vault` as `this.deps.controller.lift(...)`; see
+  // `currentRope`.
+  // fallow-ignore-next-line unused-class-member
   public lift(velocityY: number): void {
     this.velocity = { x: this.velocity.x, y: velocityY };
   }

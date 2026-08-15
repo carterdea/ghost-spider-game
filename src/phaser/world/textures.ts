@@ -475,7 +475,7 @@ const DRAWINGS = {
 
 export const PROP_TEXTURES = Object.keys(DRAWINGS) as readonly PropTextureKey[];
 
-export type PropTextureKey = keyof typeof DRAWINGS;
+type PropTextureKey = keyof typeof DRAWINGS;
 
 /**
  * Every texture the arsenal draws from, in one place. All but the net are
@@ -484,6 +484,8 @@ export type PropTextureKey = keyof typeof DRAWINGS;
  */
 export const WEAPON_TEXTURES = {
   bomb: artKeys.weapons.webBomb,
+  // Frame 0 is the texture a charge takes when it sticks; the `web-bomb-armed`
+  // animation plays the rest of the cycle over it while the fuse burns.
   bombArmed: artKeys.weapons.webBombArmed[0],
   mesh: artKeys.weapons.webMesh,
   impact: artKeys.weapons.impactWeb,
@@ -491,12 +493,6 @@ export const WEAPON_TEXTURES = {
   // No painted net yet, so this one is still the drawn placeholder.
   net: "webNet",
 } as const satisfies Record<string, string>;
-
-/**
- * The armed charge pulses while its fuse burns. Frame 0 is the texture a charge
- * takes when it sticks; the cycle plays over it.
- */
-export const ARMED_BOMB_FRAMES = artKeys.weapons.webBombArmed;
 
 /**
  * Generates the prop textures this scene is missing. Textures are game-global

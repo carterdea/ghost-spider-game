@@ -3,7 +3,21 @@
   "usedClassMembers": [
     {
       "extends": "Phaser.Scene",
-      "members": ["create", "update"]
+      // Phaser calls these; nothing in this codebase does.
+      "members": ["preload", "create", "update"]
+    }
+  ],
+  "overrides": [
+    {
+      // Test doubles. Every member here exists to be driven by the production
+      // code under test, which reaches it through a structural cast —
+      // `asContext` hands `FakeContext` over as an `AudioContext`, `asScene`
+      // hands `SceneDouble` over as a `Phaser.Scene`. Fallow resolves member
+      // access against the declared type, so it sees `context.createGain()` as
+      // a call on Web Audio and never on the class that answers it. Every
+      // member here is reachable; none of it is reachable by name.
+      "files": ["src/**/testing/**"],
+      "rules": { "unused-class-members": "off" }
     }
   ]
 }

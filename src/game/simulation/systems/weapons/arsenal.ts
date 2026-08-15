@@ -5,7 +5,7 @@ import type { GadgetKind } from "../../state";
  * the game cares about — how many the hero carries, how fast they come back,
  * what the HUD calls them — is a row here rather than a branch somewhere else.
  */
-export interface GadgetSpec {
+interface GadgetSpec {
   /** HUD chip label. */
   readonly label: string;
   /** Printed when the weapon is fired. */

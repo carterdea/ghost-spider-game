@@ -4,7 +4,7 @@
  * so tests exercise the engine's actual lifecycle rather than a stub of it.
  */
 
-export class FakeParam {
+class FakeParam {
   public value: number;
   public readonly schedule: Array<{ value: number; time: number }> = [];
 
@@ -64,7 +64,7 @@ export class FakeFilter extends FakeNode {
   public readonly Q = new FakeParam(1);
 }
 
-export class FakeCompressor extends FakeNode {
+class FakeCompressor extends FakeNode {
   public readonly threshold = new FakeParam(-24);
   public readonly ratio = new FakeParam(12);
 }

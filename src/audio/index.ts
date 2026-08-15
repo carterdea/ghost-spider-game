@@ -14,13 +14,12 @@ import {
 } from "./preference";
 
 export type { SoundEvent } from "./events";
-export type {
-  MusicControl,
-  MusicCue,
-  MusicLayer,
-  MusicOptions,
-} from "./music/index";
-export { DISTRICT_TIERS, SONG, toMidiFile } from "./music/index";
+export type { MusicControl, MusicOptions } from "./music/index";
+// Rendering the score to a MIDI file is a capability of this module, not of the
+// game: nothing in a run calls it, and `midi.test.ts` is what exercises it. Kept
+// on the facade so the arrangement can be exported without reaching inside.
+// fallow-ignore-next-line unused-export
+export { toMidiFile } from "./music/midi";
 
 /** Loud enough to hear over a laptop fan, quiet enough not to startle. */
 const DEFAULT_VOLUME = 0.32;

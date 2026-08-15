@@ -10,7 +10,7 @@
 import type { MusicLayer, ScheduledNote, Song } from "./types";
 
 export const DEFAULT_INTERVAL_MS = 25;
-export const DEFAULT_LOOKAHEAD_SECONDS = 0.1;
+const DEFAULT_LOOKAHEAD_SECONDS = 0.1;
 
 /** Stems cross-fade over roughly a bar, so a district change is a swell. */
 const LAYER_FADE_SECONDS = 1.6;
