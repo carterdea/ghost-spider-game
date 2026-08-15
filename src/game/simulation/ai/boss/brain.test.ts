@@ -776,3 +776,61 @@ describe("stepping", () => {
     expect(step.intent.facing).toBe(-1);
   });
 });
+
+/**
+ * `BOSS_HEALTH` is divided by what one punish window pays, so these two numbers
+ * are the fight's tuning and were folklore in a comment until they were run.
+ * Measured here rather than asserted from the tuning table, because the window
+ * is an emergent product of wind-up, strike and recovery timers across four
+ * phases — see the sizing note on `BOSS_HEALTH` in `bossBinding`.
+ */
+describe("the punish window", () => {
+  const SAMPLE_SECONDS = 300;
+
+  const punishWindows = (healthFraction: number) => {
+    let memory = createBossMemory(-1);
+    const perception = perceptionFor({ healthFraction });
+    const lengths: number[] = [];
+    let openFor: number | null = null;
+
+    for (let elapsed = 0; elapsed < SAMPLE_SECONDS; elapsed += STEP) {
+      const step = stepBossBrain(memory, perception, BOSS_TUNING, STEP);
+      memory = step.memory;
+      if (step.intent.state === "recover") {
+        openFor = (openFor ?? 0) + STEP;
+        continue;
+      }
+      if (openFor !== null) {
+        lengths.push(openFor);
+        openFor = null;
+      }
+    }
+
+    return {
+      mean: lengths.reduce((total, each) => total + each, 0) / lengths.length,
+      cadence: SAMPLE_SECONDS / lengths.length,
+    };
+  };
+
+  test("stays open about three quarters of a second", () => {
+    // 0.73s measured. At the hero's 280ms swing that is three strikes, so a
+    // window taken in full is worth 102 — not the 40 the sizing note claimed.
+    expect(punishWindows(1).mean).toBeGreaterThan(0.6);
+    expect(punishWindows(1).mean).toBeLessThan(0.9);
+  });
+
+  test("comes round about every three seconds while the boss is fresh", () => {
+    expect(punishWindows(1).cadence).toBeGreaterThan(2.8);
+    expect(punishWindows(1).cadence).toBeLessThan(3.5);
+  });
+
+  test("comes round faster as the fight wears on, without opening wider", () => {
+    const fresh = punishWindows(1);
+    const failing = punishWindows(0.25);
+
+    // 3.16s against 2.10s: the phases tighten the loop rather than lengthening
+    // the opening, so late damage per window is flat and only the pace rises.
+    expect(failing.cadence).toBeLessThan(fresh.cadence * 0.8);
+    expect(failing.mean).toBeCloseTo(fresh.mean, 1);
+  });
+});

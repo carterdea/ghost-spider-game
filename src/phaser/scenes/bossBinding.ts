@@ -22,14 +22,21 @@ const HOVER_ABOVE_GOAL = 320;
 
 /**
  * Sized against what the fight actually pays out rather than how long it ought
- * to feel. The Weaver can only be hurt inside its punish window, which comes
- * round roughly every three seconds and is worth about forty damage to a player
- * who takes all of it — so every hundred health here is another eight windows
- * of reading tells, and 900 was a fight no measured attempt ever finished.
+ * to feel. The Weaver can only be hurt inside its punish window, so its health
+ * is a count of windows — and both halves of that count are now measured rather
+ * than guessed, in `the punish window` in `ai/boss/brain.test`.
  *
- * This is about twenty seconds of clean play, and the hero does not arrive with
- * a full bar: the health they bring is whatever the eight districts left them,
- * so the fight is sized for someone who spent some of it getting here.
+ * The window stays open 0.73s and comes round every 3.16s while the boss is
+ * fresh, tightening to 2.10s by a quarter health without ever opening wider.
+ * At the hero's 280ms swing, a window taken in full is three strikes — 102
+ * damage, not the forty an earlier note here claimed.
+ *
+ * So 260 is between two and a half windows of flawless melee (about 8 seconds)
+ * and eight windows for someone landing a single strike each time (about 21).
+ * Real play sits between the two, which is the twenty-second fight this was
+ * aiming at; 900 was a fight no measured attempt ever finished. The hero also
+ * does not arrive with a full bar — the health they bring is whatever the eight
+ * districts left them — so it is sized for someone who spent some getting here.
  */
 const BOSS_HEALTH = 260;
 
