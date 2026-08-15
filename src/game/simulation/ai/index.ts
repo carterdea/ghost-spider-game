@@ -10,7 +10,7 @@ export {
   createBossMemory,
   stepBossBrain,
 } from "./boss";
-export { stepEnemyBrain } from "./brain";
+export { contactDamage, stepEnemyBrain } from "./brain";
 export { AI_TUNING } from "./tuning";
 export {
   type AiIntent,

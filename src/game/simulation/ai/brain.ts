@@ -297,6 +297,16 @@ const snaredStep = (memory: AiMemory): AiStep => {
 };
 
 /**
+ * Contact only hurts while a lunge or dive is actually travelling, mirroring
+ * the rule the boss already follows. A patrol that has not committed cannot
+ * hurt you by standing in your way, and the recovery window after a strike is
+ * the punish, so it has to be safe to be in. Gunners never set `strike`: their
+ * damage arrives as bullets, and they stop body-checking entirely.
+ */
+export const contactDamage = (memory: AiMemory, authored: number): number =>
+  memory.strike > 0 ? authored : 0;
+
+/**
  * Pure per-frame AI step. Takes what the enemy can perceive, returns what it
  * wants to do; the caller applies the intent to a body and hands the memory back.
  */

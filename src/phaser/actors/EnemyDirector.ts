@@ -13,6 +13,7 @@ import {
   BOSS_TUNING,
   type BossAttack,
   type BossEvent,
+  contactDamage,
   createAiMemory,
   type EnemyAiState,
   stepBossBrain,
@@ -52,6 +53,12 @@ export interface EnemyView {
   brain: AiMemory;
   /** Last decision the brain reached — handy for HUD and debugging. */
   aiState: EnemyAiState;
+  /**
+   * Authored contact damage. `state.damage` is rewritten every frame from the
+   * brain's strike window, so the level's number has to be kept somewhere it
+   * cannot be overwritten by that.
+   */
+  contactDamage: number;
   snaredUntil: number;
   /**
    * While this stands, the brain's velocity is not applied: the body is flying
@@ -168,6 +175,7 @@ export class EnemyDirector {
       // A per-enemy phase offset keeps bobbing and strafing out of lockstep.
       brain: createAiMemory(1, spawn.position.x * 0.01),
       aiState: "patrol",
+      contactDamage: state.damage,
       snaredUntil: 0,
       launchedUntil: 0,
       hoverY: spawn.position.y,
@@ -195,6 +203,7 @@ export class EnemyDirector {
       direction: -1,
       brain: createAiMemory(-1),
       aiState: "patrol",
+      contactDamage: enemyState.damage,
       snaredUntil: 0,
       launchedUntil: 0,
       hoverY: sprite.y,
@@ -250,6 +259,10 @@ export class EnemyDirector {
     );
     view.brain = step.memory;
     view.aiState = step.intent.state;
+    // Same contract as the boss: combat reads `state.damage` at the moment of
+    // the hit, so gating it here makes an uncommitted patrol and the recovery
+    // window safe to touch without the overlap handler knowing anything.
+    view.state.damage = contactDamage(step.memory, view.contactDamage);
     this.applyIntent(view, step.intent, time);
     this.drawTelegraph(overlay, view, step.intent, player);
   }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { EnemyKind } from "../state";
-import { stepEnemyBrain } from "./brain";
+import { contactDamage, stepEnemyBrain } from "./brain";
 import { AI_TUNING } from "./tuning";
 import {
   type AiIntent,
@@ -700,5 +700,83 @@ describe("purity", () => {
     expect(step.memory.cooldown).toBe(0.4);
     expect(step.memory.windup).toBe(0.2);
     expect(step.memory.phase).toBe(0);
+  });
+});
+
+const AUTHORED = 11;
+
+/** Inside the robot's 170px strike range, so a lunge actually commits. */
+const inReach = { position: { x: 1120, y: 900 }, velocity: { x: 0, y: 0 } };
+
+/** Samples what touching this enemy would cost, frame by frame, for `seconds`. */
+const contactTrace = (
+  kind: EnemyKind,
+  perception: AiPerception,
+  seconds: number,
+): { damage: number; striking: boolean; state: string }[] => {
+  let memory = createAiMemory(1);
+  const trace: { damage: number; striking: boolean; state: string }[] = [];
+
+  for (let elapsed = 0; elapsed < seconds; elapsed += STEP) {
+    const step = stepEnemyBrain(
+      kind,
+      memory,
+      perception,
+      AI_TUNING[kind],
+      STEP,
+    );
+    memory = step.memory;
+    trace.push({
+      damage: contactDamage(memory, AUTHORED),
+      striking: memory.strike > 0,
+      state: step.intent.state,
+    });
+  }
+
+  return trace;
+};
+
+describe("contact damage", () => {
+  test("an unaware patrol cannot hurt the player by standing in the way", () => {
+    const trace = contactTrace("robot", perceptionFor({ player: far }), 1);
+
+    expect(trace.every((frame) => frame.state === "patrol")).toBe(true);
+    expect(trace.every((frame) => frame.damage === 0)).toBe(true);
+  });
+
+  test("the committed lunge is the only thing that hurts on contact", () => {
+    const trace = contactTrace("robot", perceptionFor({ player: inReach }), 3);
+
+    // The gate must not disarm the enemy outright: a lunge still lands.
+    expect(trace.some((frame) => frame.damage === AUTHORED)).toBe(true);
+    // ...and it is armed on exactly the frames the strike is travelling.
+    expect(trace.every((frame) => frame.damage > 0 === frame.striking)).toBe(
+      true,
+    );
+  });
+
+  test("the punish window after a strike is safe to stand in", () => {
+    const trace = contactTrace("robot", perceptionFor({ player: inReach }), 3);
+    const lastStrike = trace.reduce(
+      (last, frame, index) => (frame.striking ? index : last),
+      -1,
+    );
+    // The recoil the player is invited to punish: still engaged, no longer
+    // travelling. Reading it off the trace rather than off the tuning keeps
+    // the test honest if the timings are retuned.
+    const punish = trace
+      .slice(lastStrike + 1)
+      .filter((frame) => frame.state === "engage");
+
+    expect(lastStrike).toBeGreaterThan(-1);
+    expect(punish.length).toBeGreaterThan(0);
+    expect(punish.every((frame) => frame.damage === 0)).toBe(true);
+  });
+
+  test("a gunner never body-checks: its damage arrives as bullets", () => {
+    const trace = contactTrace("gunner", perceptionFor({ player: inReach }), 3);
+
+    expect(trace.some((frame) => frame.state === "engage")).toBe(true);
+    expect(trace.every((frame) => frame.damage === 0)).toBe(true);
   });
 });
