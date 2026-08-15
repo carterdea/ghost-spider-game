@@ -252,6 +252,8 @@ export interface FakeTimer {
   callback: () => void;
   removed: boolean;
   fired: boolean;
+  /** Phaser's clock skips a paused timer rather than advancing it. */
+  paused: boolean;
 }
 
 /** What Arcade hands a collision handler: the two bodies that touched. */
@@ -486,6 +488,7 @@ export class SceneDouble {
         callback,
         removed: false,
         fired: false,
+        paused: false,
       };
       this.timerLog.push(timer);
       return timer;
@@ -589,7 +592,7 @@ export class SceneDouble {
 
   /** Fires a pending timer the way Phaser's clock would. */
   public runTimer(timer: FakeTimer): void {
-    if (timer.removed || timer.fired) {
+    if (timer.removed || timer.fired || timer.paused) {
       return;
     }
     timer.fired = true;

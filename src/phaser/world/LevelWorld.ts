@@ -53,6 +53,20 @@ export class LevelWorld {
     return timer;
   }
 
+  /**
+   * Freezes the level's own timers with the run.
+   *
+   * A pause holds Arcade and the tweens, but not the scene clock, and every
+   * timer here is scheduled against that clock. Left running, a shot's lifetime
+   * burns down while it hangs motionless in the air and it is destroyed mid-
+   * pause — the charge spent on flight the player never got.
+   */
+  public hold(held: boolean): void {
+    for (const timer of this.timers) {
+      timer.paused = held;
+    }
+  }
+
   public collider(collider: Phaser.Physics.Arcade.Collider): void {
     this.colliders.add(collider);
   }

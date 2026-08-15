@@ -309,6 +309,8 @@ export class GameScene extends Phaser.Scene {
     // past. Arcade steps the world before the scene updates, so a hold written
     // here is the earliest one the next step can see.
     this.feedback?.holdWorld(!this.playing);
+    // The level's timers run on the scene clock, which a pause does not stop.
+    this.world?.hold(!this.playing);
 
     this.renderHud();
     this.previousActions = actions;
