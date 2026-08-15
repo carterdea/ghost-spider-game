@@ -5,9 +5,13 @@ import { LEVELS, type LevelDefinition } from "../../game/content/levels";
 import {
   type ActionState,
   createEmptyActions,
+  pressedSlot,
   readActions,
 } from "../../game/input/actions";
-import { createKeyboardBindings } from "../../game/input/bindings";
+import {
+  createKeyboardBindings,
+  createSlotBindings,
+} from "../../game/input/bindings";
 import type { Vec2 } from "../../game/simulation/physics/vector";
 import { clamp } from "../../game/simulation/physics/vector";
 import {
@@ -95,6 +99,9 @@ export class GameScene extends Phaser.Scene {
   private state: GameState = createInitialGameState(LEVELS[0], "title");
   private hud?: Hud;
   private keys?: ReturnType<typeof createKeyboardBindings>;
+  private slots?: ReturnType<typeof createSlotBindings>;
+  /** The slot held last frame, so holding a number key selects once. */
+  private previousSlot?: number;
   private previousActions: ActionState = createEmptyActions();
 
   private player?: Phaser.Physics.Arcade.Sprite;
@@ -199,6 +206,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.hud = new Hud(hudRoot);
     this.keys = createKeyboardBindings(this);
+    this.slots = createSlotBindings(this);
     // Seeded from the live keys rather than an empty set: a restart triggered
     // while R is still held would otherwise read as a fresh press next frame
     // and restart again on every frame the key stays down.
@@ -376,6 +384,14 @@ export class GameScene extends Phaser.Scene {
     );
 
     this.rack?.update(this.weaponClock(time));
+    // Read on the press edge, so holding a number key equips once rather than
+    // re-equipping — and saying "ready" — on every frame it stays down.
+    const slot = this.slots ? pressedSlot(this.slots) : undefined;
+    if (slot !== undefined && slot !== this.previousSlot) {
+      this.rack?.select(slot);
+      this.audio?.play("gadgetCycle");
+    }
+    this.previousSlot = slot;
     if (this.wasPressed(actions, "cycleGadget")) {
       this.rack?.cycle();
       this.audio?.play("gadgetCycle");

@@ -1,6 +1,19 @@
 import Phaser from "phaser";
 import type { ActionKeys, GameAction } from "./actions";
 
+/**
+ * One key per weapon, in the arsenal's own order. Reaching for wings by
+ * cycling costs five presses; reaching for it by name costs one.
+ */
+const SLOT_CODES: readonly number[] = [
+  Phaser.Input.Keyboard.KeyCodes.ONE,
+  Phaser.Input.Keyboard.KeyCodes.TWO,
+  Phaser.Input.Keyboard.KeyCodes.THREE,
+  Phaser.Input.Keyboard.KeyCodes.FOUR,
+  Phaser.Input.Keyboard.KeyCodes.FIVE,
+  Phaser.Input.Keyboard.KeyCodes.SIX,
+];
+
 const KEY_CODES: Record<GameAction, readonly number[]> = {
   moveLeft: [Phaser.Input.Keyboard.KeyCodes.A],
   moveRight: [Phaser.Input.Keyboard.KeyCodes.D],
@@ -39,4 +52,17 @@ export const createKeyboardBindings = (scene: Phaser.Scene): ActionKeys => {
     bound[action] = KEY_CODES[action].map((code) => keyboard.addKey(code));
   }
   return bound;
+};
+
+/** The number keys, in slot order. Bound so Phaser swallows the auto-repeat. */
+export const createSlotBindings = (
+  scene: Phaser.Scene,
+): readonly Phaser.Input.Keyboard.Key[] => {
+  const keyboard = scene.input.keyboard;
+
+  if (!keyboard) {
+    throw new Error("Keyboard input is required for Ghost Spider Swing.");
+  }
+
+  return SLOT_CODES.map((code) => keyboard.addKey(code));
 };

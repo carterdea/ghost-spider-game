@@ -21,6 +21,7 @@ import {
   WEB_LINE,
   yankVelocity,
 } from "../../game/simulation/systems/weapons";
+import { gadgetAt } from "../../game/simulation/systems/weapons/arsenal";
 import type { RunFeedback } from "../scenes/feedback";
 import { spawnWebBurst } from "../scenes/webBurst";
 import type { LevelWorld } from "../world/LevelWorld";
@@ -203,9 +204,21 @@ export class WeaponRack {
   }
 
   public cycle(step: 1 | -1 = 1): void {
+    this.equip(nextGadget(this.deps.state.player.gadget, step));
+  }
+
+  /** Selects by slot. An index past the rack leaves the selection alone. */
+  public select(slot: number): void {
+    const kind = gadgetAt(slot);
+    if (kind) {
+      this.equip(kind);
+    }
+  }
+
+  private equip(kind: GadgetKind): void {
     const player = this.deps.state.player;
-    player.gadget = nextGadget(player.gadget, step);
-    player.message = `${ARSENAL[player.gadget].label} ready.`;
+    player.gadget = kind;
+    player.message = `${ARSENAL[kind].label} ready.`;
   }
 
   /**

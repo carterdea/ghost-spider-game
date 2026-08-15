@@ -18,6 +18,7 @@ export const HINTS: ReadonlyArray<readonly [string, string]> = [
   ["E", "hold to swing"],
   ["J", "strike"],
   ["Q/K", "cycle / fire"],
+  ["1-6", "pick weapon"],
   ["Shift", "glide"],
   ["Esc/P", "pause"],
   ["M", "mute"],

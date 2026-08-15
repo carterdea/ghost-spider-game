@@ -44,7 +44,7 @@ bun test
 - `E`: hold to swing; the web catches the best arc ahead of you and lets go at
   the top so you keep your momentum
 - `J`: web-glob strike, or a close-range kick near enemies
-- `Q`: cycle weapon · `K`: fire it
+- `Q`: cycle weapon · `1`-`6`: pick one directly · `K`: fire it
 - `Shift`: slow the fall with web-wings
 - `Space` / `Enter`: start the run from the title
 - `Esc` / `P`: pause · `M`: mute · `R`: restart

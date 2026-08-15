@@ -53,3 +53,16 @@ export const readActions = (keys: ActionKeys): ActionState => {
 
   return actions;
 };
+
+/**
+ * The weapon a number key selects, or `undefined` if none is held.
+ *
+ * Slots sit outside `ActionState` on purpose: an action is a thing that is held
+ * or not, and six of them would say six times what one index says once. Cycling
+ * with Q still works — it is the faster answer when the weapon you want is the
+ * next one, and the slower one when it is five presses away.
+ */
+export const pressedSlot = (slots: readonly KeyLike[]): number | undefined => {
+  const index = slots.findIndex((key) => key.isDown);
+  return index === -1 ? undefined : index;
+};

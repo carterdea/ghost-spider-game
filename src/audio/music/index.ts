@@ -10,7 +10,7 @@ import { CUES, type MusicCue } from "./cues";
 import { DEFAULT_INTERVAL_MS, Sequencer } from "./sequencer";
 import { SONG } from "./song";
 import { IDLE_TIER, tierForDistrict } from "./tiers";
-import type { MusicLayer, ScheduledNote } from "./types";
+import type { ScheduledNote } from "./types";
 import { noteLayers } from "./voices";
 
 export type { MusicCue } from "./cues";
