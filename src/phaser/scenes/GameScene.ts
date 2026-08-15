@@ -393,9 +393,9 @@ export class GameScene extends Phaser.Scene {
     }
     if (
       this.wasPressed(actions, "attack") &&
-      time >= this.attackCooldownUntil
+      this.state.progression.elapsedMs >= this.attackCooldownUntil
     ) {
-      this.attack(player, time);
+      this.attack(player, this.state.progression.elapsedMs);
     }
     if (this.wasPressed(actions, "gadget")) {
       // The rack owns its own ammo and shared cooldown, so the scene no longer
@@ -683,6 +683,12 @@ export class GameScene extends Phaser.Scene {
     );
   };
 
+  /**
+   * `time` is the run clock, not the scene's. Held on wall time the swing
+   * recharged through a pause, and the boss fight came apart: strike inside a
+   * punish window, pause out the 280ms, resume and strike again, over and over
+   * without ever spending the window the whole fight is measured in.
+   */
   private attack(player: Phaser.Physics.Arcade.Sprite, time: number): void {
     this.attackCooldownUntil = time + ATTACK_COOLDOWN;
     const facing = player.flipX ? -1 : 1;
