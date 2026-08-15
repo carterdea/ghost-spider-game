@@ -203,8 +203,19 @@ export class RunFeedback {
     at: Vec2,
   ): boolean {
     const chain = this.combo.count;
-    const defeated = damageEnemy(state, enemy, amount, this.combo);
+    const outcome = damageEnemy(state, enemy, amount, this.combo);
 
+    if (outcome === "deflected") {
+      // Nothing landed, so nothing reacts as though it had. The hit-stop is
+      // the sharp end of this: freezing the world for a beat is how the game
+      // rewards a blow that connected, and handing it out for one that bounced
+      // both lies about the hit and lets a player slow the boss down from
+      // outside its punish window by swinging at it.
+      this.audio?.play("shieldBlock");
+      return false;
+    }
+
+    const defeated = outcome === "defeated";
     this.impact.strike(weigh(IMPACT_WEIGHT[kind], defeated), victim);
     this.particles.spark(at.x, at.y, weigh(SPARK_WEIGHT[kind], defeated));
     this.audio?.play(defeated ? "enemyDefeated" : "enemyHit");

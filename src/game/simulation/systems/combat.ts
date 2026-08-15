@@ -116,29 +116,39 @@ export const damagePlayer = (
 };
 
 /**
- * Applies damage and returns whether it was the killing blow. Pass `combo` to
- * score the takedown as part of a chain; without it the takedown pays flat, so
- * a caller that does not track chains still works.
+ * What a blow did.
+ *
+ * `deflected` is the one that is not a weaker `staggered`: nothing landed at
+ * all, so nothing downstream should react as though something had. Presenting
+ * them as one boolean is what let a bounced blow flash the boss and freeze the
+ * world for a beat it had not earned.
+ */
+export type StrikeOutcome = "deflected" | "staggered" | "defeated";
+
+/**
+ * Applies damage and reports what it did. Pass `combo` to score the takedown as
+ * part of a chain; without it the takedown pays flat, so a caller that does not
+ * track chains still works.
  */
 export const damageEnemy = (
   state: GameState,
   enemy: EnemyState,
   amount: number,
   combo?: ComboState,
-): boolean => {
+): StrikeOutcome => {
   // The Weaver's fight is measured in punish windows: the health it carries is
   // sized as a count of them, so a blow landed outside one has to bounce or the
   // whole tuning is a fiction — see `BOSS_HEALTH` in `bossBinding`.
   if (enemy.invulnerable) {
     state.player.message = DEFLECT_MESSAGE[enemy.kind];
-    return false;
+    return "deflected";
   }
 
   enemy.health = Math.max(0, enemy.health - amount);
 
   if (enemy.health > 0) {
     state.player.message = STAGGER_MESSAGE[enemy.kind];
-    return false;
+    return "staggered";
   }
 
   const chain = combo ? extendCombo(combo) : 1;
@@ -152,7 +162,7 @@ export const damageEnemy = (
     chain > 1
       ? `${TAKEDOWN_MESSAGE[enemy.kind]} ${chain} chain!`
       : TAKEDOWN_MESSAGE[enemy.kind];
-  return true;
+  return "defeated";
 };
 
 /**

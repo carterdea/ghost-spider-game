@@ -196,6 +196,29 @@ describe("a blow the hero lands", () => {
     expect(audio.played.map((entry) => entry.event)).toContain("enemyHit");
   });
 
+  test("a deflected blow reports nothing landing", () => {
+    const { audio, feedback, scene } = harness();
+    const closed: EnemyState = { ...enemy(100), invulnerable: true };
+
+    const defeated = feedback.damage(
+      state(),
+      closed,
+      20,
+      "melee",
+      asHero(new HeroStub()),
+      { x: 0, y: 0 },
+    );
+
+    expect(defeated).toBe(false);
+    expect(closed.health).toBe(100);
+    // The freeze is the sharp one: it is how the game rewards a blow that
+    // connected, so handing it out for one that bounced lets a player slow
+    // the boss down from outside the window they were meant to wait for.
+    expect(scene.physics.world.isPaused).toBe(false);
+    expect(scene.cameras.main.shakes).toHaveLength(0);
+    expect(audio.played.map((entry) => entry.event)).not.toContain("enemyHit");
+  });
+
   test("a fist lands heavier than a web shot", () => {
     const punch = harness();
     const shot = harness();

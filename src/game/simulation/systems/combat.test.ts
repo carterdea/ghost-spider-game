@@ -43,7 +43,7 @@ describe("damageEnemy", () => {
   test("a blow that does not kill scores nothing and reports a stagger", () => {
     const state = stateWith(["robot"]);
 
-    expect(damageEnemy(state, state.enemies[0], 10)).toBe(false);
+    expect(damageEnemy(state, state.enemies[0], 10)).toBe("staggered");
     expect(state.enemies[0].health).toBe(20);
     expect(state.player.score).toBe(0);
     expect(state.player.message).toBe("Robot armor cracked.");
@@ -52,7 +52,7 @@ describe("damageEnemy", () => {
   test("a takedown without a chain pays the flat value", () => {
     const state = stateWith(["gunner"]);
 
-    expect(damageEnemy(state, state.enemies[0], 60)).toBe(true);
+    expect(damageEnemy(state, state.enemies[0], 60)).toBe("defeated");
     expect(state.player.score).toBe(250);
     expect(state.player.message).toBe("Gunner disarmed.");
   });
@@ -65,7 +65,7 @@ describe("damageEnemy", () => {
     // The Weaver is the only thing that ever sets this, and its health is sized
     // as a count of punish windows — a hit landing outside one makes that
     // number a fiction.
-    expect(damageEnemy(state, target, 60)).toBe(false);
+    expect(damageEnemy(state, target, 60)).toBe("deflected");
     expect(target.health).toBe(30);
     expect(state.player.score).toBe(0);
   });
@@ -78,7 +78,7 @@ describe("damageEnemy", () => {
     damageEnemy(state, target, 60);
     target.invulnerable = false;
 
-    expect(damageEnemy(state, target, 60)).toBe(true);
+    expect(damageEnemy(state, target, 60)).toBe("defeated");
   });
 
   test("a closed target cannot be chained through", () => {
