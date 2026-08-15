@@ -4,7 +4,7 @@ import { engageDiver, engageMelee, engageRanged } from "./behaviours";
 import { leashed, type Motion, seek, still } from "./motion";
 import type { AiTuning } from "./tuning";
 import type { AiIntent, AiMemory, AiPerception } from "./types";
-import { hasLineOfSight, withinCone } from "./vision";
+import { hasLineOfSight, watchingBelow, withinCone } from "./vision";
 
 export interface AiStep {
   memory: AiMemory;
@@ -43,17 +43,22 @@ const canSee = (
   perception: AiPerception,
   tuning: AiTuning,
   gap: number,
+  overLedge: boolean,
 ): boolean => {
   const tracking = memory.state === "alert" || memory.state === "engage";
-  const range = tracking
-    ? tuning.visionRange * tuning.keepRangeFactor
-    : tuning.visionRange;
+  // The downward look carries its own reach, so covering the street costs the
+  // lane nothing sideways.
+  const range = Math.max(
+    tracking ? tuning.visionRange * tuning.keepRangeFactor : tuning.visionRange,
+    overLedge ? tuning.ledgeRange : 0,
+  );
   if (gap > range) {
     return false;
   }
 
   const noticed =
     tracking ||
+    overLedge ||
     gap <= tuning.awarenessRadius ||
     withinCone(
       perception.position,
@@ -211,10 +216,15 @@ interface MotionContext {
   visible: boolean;
   windupFinished: boolean;
   gap: number;
+  /** How far this frame's shot may reach. The ledge look lengthens it. */
+  reach: number;
+  /** True when the hero is down off the lane rather than along it. */
+  overLedge: boolean;
 }
 
 const engageMotion = (memory: AiMemory, context: MotionContext): Motion => {
-  const { perception, tuning, visible, windupFinished, gap } = context;
+  const { perception, tuning, visible, windupFinished, gap, reach, overLedge } =
+    context;
   switch (context.kind) {
     case "robot":
       return engageMelee(memory, perception, tuning, visible, windupFinished);
@@ -226,6 +236,8 @@ const engageMotion = (memory: AiMemory, context: MotionContext): Motion => {
         visible,
         windupFinished,
         gap,
+        reach,
+        overLedge,
       );
     case "drone":
       return engageDiver(
@@ -305,7 +317,13 @@ export const stepEnemyBrain = (
 
   const windupFinished = memory.windup > 0 && next.windup <= 0;
   const gap = distance(perception.position, perception.player.position);
-  const visible = canSee(next, perception, tuning, gap);
+  const overLedge = watchingBelow(
+    perception.position,
+    perception.player.position,
+    tuning.ledgeDrop,
+    tuning.ledgeSpread,
+  );
+  const visible = canSee(next, perception, tuning, gap, overLedge);
 
   if (visible) {
     next.blind = 0;
@@ -324,6 +342,12 @@ export const stepEnemyBrain = (
     visible,
     windupFinished,
     gap,
+    // Shooting at what it can see: a gunner leaning over a parapet fires at the
+    // street it just spotted the hero on, not only inside its rooftop reach.
+    reach: overLedge
+      ? Math.max(tuning.strikeRange, tuning.ledgeRange)
+      : tuning.strikeRange,
+    overLedge,
   });
 
   return {

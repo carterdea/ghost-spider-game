@@ -23,6 +23,46 @@ export const hover = (memory: BossMemory, tuning: BossTuning): BossMotion => ({
   telegraph: 0,
 });
 
+/**
+ * The punish window, as motion: the hull sinks onto the hero rather than
+ * hanging where it fired from.
+ *
+ * A window the player cannot reach is not a window. Stalking holds a stand-off
+ * of hundreds of pixels and sits a hundred more overhead, and the hero's reach
+ * is a 96px swing — so a boss that only stops still while it recovers is open
+ * to nothing, which is exactly how a 900HP fight ended with the boss on 900.
+ * Coming down is also the read: the hull dropping to eye level is the clearest
+ * possible "hit me now".
+ */
+export const sag = (
+  perception: BossPerception,
+  tuning: BossTuning,
+): BossMotion => {
+  const player = perception.player.position;
+  const side = perception.position.x >= player.x ? 1 : -1;
+
+  return {
+    velocityX: drop(
+      player.x + side * tuning.openReach - perception.position.x,
+      tuning.openSpeed,
+    ),
+    velocityY: drop(
+      player.y + tuning.openLift - perception.position.y,
+      tuning.openSpeed,
+    ),
+    telegraph: 0,
+  };
+};
+
+/**
+ * Seek with the easing taken out. `seek` is paced for a stand-off the boss has
+ * all fight to settle into; the punish window is under a second long, and a
+ * hull still gliding to a stop when it closes was measured arriving 100px short
+ * — just outside the hero's swing — every single time.
+ */
+const drop = (delta: number, speed: number): number =>
+  Math.max(-speed, Math.min(speed, delta * 8));
+
 /** Climbing. Reads as "something just changed" for both wake and phase shift. */
 export const rise = (tuning: BossTuning): BossMotion => ({
   velocityX: 0,

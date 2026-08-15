@@ -94,6 +94,10 @@ export const engageRanged = (
   visible: boolean,
   windupFinished: boolean,
   gap: number,
+  /** Furthest this shot may be taken. Longer than `strikeRange` over a ledge. */
+  reach: number = tuning.strikeRange,
+  /** True when the target is down off the lane rather than along it. */
+  overLedge = false,
 ): Motion => {
   if (windupFinished) {
     memory.shotsLeft = tuning.burstSize;
@@ -108,11 +112,16 @@ export const engageRanged = (
     return { ...still(), telegraph: telegraphAmount(memory, tuning) };
   }
 
-  if (visible && gap <= tuning.strikeRange && memory.cooldown <= 0) {
+  if (visible && gap <= reach && memory.cooldown <= 0) {
     return beginWindup(memory, tuning);
   }
 
-  return { ...still(), velocityX: reposition(memory, perception, tuning, gap) };
+  // Closing on someone below means walking off the roof — the stand-off logic
+  // only knows about the gap, not the drop, and a gunner that steps off cannot
+  // get back. Over a ledge it plants and fires instead.
+  return overLedge
+    ? still()
+    : { ...still(), velocityX: reposition(memory, perception, tuning, gap) };
 };
 
 const fireBurst = (
@@ -206,20 +215,32 @@ export const engageDiver = (
   }
 
   if (memory.windup > 0) {
-    return rearUp(tuning, telegraphAmount(memory, tuning));
+    return rearUp(perception, tuning, telegraphAmount(memory, tuning));
   }
 
   if (visible && gap <= tuning.strikeRange && memory.cooldown <= 0) {
     memory.windup = tuning.windupTime;
-    return rearUp(tuning, 0);
+    return rearUp(perception, tuning, 0);
   }
 
   return orbit(memory, perception, tuning);
 };
 
-/** Climbing as it coils for a dive — the tell that reads at a glance. */
-const rearUp = (tuning: AiTuning, telegraph: number): Motion => ({
-  velocityX: 0,
+/**
+ * Climbing as it coils for a dive — the tell that reads at a glance — while
+ * still tracking whoever it is coiling at. Stopping dead to rear up handed a
+ * running hero the whole wind-up: they were 190px further away by the time the
+ * dive committed, which is further than the dive can travel.
+ */
+const rearUp = (
+  perception: AiPerception,
+  tuning: AiTuning,
+  telegraph: number,
+): Motion => ({
+  velocityX: seek(
+    perception.player.position.x - perception.position.x,
+    engageSpeed(perception, tuning),
+  ),
   velocityY: -tuning.lift,
   telegraph,
   attack: null,

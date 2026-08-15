@@ -237,7 +237,7 @@ describe("attack rhythm", () => {
     expect(cycleFor(1).attacks).toHaveLength(1);
   });
 
-  test("the recovery window is open and stationary", () => {
+  test("the recovery window is open and sinks onto the hero", () => {
     const { intent } = run(
       perceptionFor(),
       BOSS_TUNING.phases[1].windupTime + BOSS_ATTACK_SHAPE.volley.strike + 0.1,
@@ -245,7 +245,36 @@ describe("attack rhythm", () => {
     );
     expect(intent.state).toBe("recover");
     expect(intent.vulnerable).toBe(true);
-    expect(intent.velocityX).toBe(0);
+    // The player stands right of and below the boss, so an open hull comes
+    // down and across rather than hanging where it fired from.
+    expect(intent.velocityX).toBeGreaterThan(0);
+    expect(intent.velocityY).toBeGreaterThan(0);
+  });
+
+  test("an open boss already in reach holds where it is", () => {
+    const settled = perceptionFor({
+      position: {
+        x: 2300 - BOSS_TUNING.openReach,
+        y: 800 + BOSS_TUNING.openLift,
+      },
+    });
+    const { intent } = run(
+      settled,
+      BOSS_TUNING.phases[1].windupTime + BOSS_ATTACK_SHAPE.volley.strike + 0.1,
+      engaged(1),
+    );
+    expect(intent.state).toBe("recover");
+    expect(Math.abs(intent.velocityX)).toBeLessThan(1);
+    expect(Math.abs(intent.velocityY)).toBeLessThan(1);
+  });
+
+  /**
+   * The hero's close strike reaches 96px from a point 56px in front of them.
+   * A punish window that settles further out than that pays nothing, which is
+   * how a 900HP boss survived every measured attempt untouched.
+   */
+  test("the punish window settles inside the hero's own swing", () => {
+    expect(BOSS_TUNING.openReach).toBeLessThanOrEqual(96);
   });
 
   test("the boss is never open while it is threatening", () => {
@@ -557,10 +586,13 @@ describe("web nets", () => {
     expect(events).toContain("stagger");
   });
 
-  test("a staggered boss is planted and open", () => {
+  test("a staggered boss goes limp and sinks into reach", () => {
     const { intent } = run(perceptionFor({ snared: true }), 0.2, windingUp());
-    expect(intent.velocityX).toBe(0);
     expect(intent.vulnerable).toBe(true);
+    expect(intent.attack).toBeNull();
+    // Limp, not planted: a net earns the same opening a punish window does.
+    expect(intent.velocityX).toBeGreaterThan(0);
+    expect(intent.velocityY).toBeGreaterThan(0);
   });
 
   test("it shakes the net off and returns to the fight", () => {

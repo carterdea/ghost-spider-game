@@ -6,6 +6,7 @@ import {
   contain,
   hover,
   rise,
+  sag,
   stalk,
   strike,
   windup,
@@ -248,9 +249,12 @@ const resolveMotion = (
 ): BossMotion => {
   switch (memory.state) {
     case "dormant":
+      return hover(memory, tuning);
+    // Both open states sink into reach: a netted boss goes limp, and a
+    // recovering one is the punish window the whole fight is built around.
     case "recover":
     case "stagger":
-      return hover(memory, tuning);
+      return sag(perception, tuning);
     case "wake":
     case "shift":
       return rise(tuning);
@@ -349,7 +353,7 @@ export const stepBossBrain = (
       beginStagger(next, tuning);
     }
     updateFacing(next, perception);
-    return present(next, hover(next, tuning), {
+    return present(next, sag(perception, tuning), {
       event: fresh ? "stagger" : null,
       attack: null,
     });

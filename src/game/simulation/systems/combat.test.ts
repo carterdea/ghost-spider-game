@@ -9,6 +9,7 @@ import {
   createCombo,
   damageEnemy,
   damagePlayer,
+  healPlayer,
 } from "./combat";
 
 const stateWith = (kinds: readonly ("robot" | "gunner" | "drone")[]) => {
@@ -54,6 +55,48 @@ describe("damageEnemy", () => {
     expect(damageEnemy(state, state.enemies[0], 60)).toBe(true);
     expect(state.player.score).toBe(250);
     expect(state.player.message).toBe("Gunner disarmed.");
+  });
+});
+
+describe("takedowns return health", () => {
+  test("a lone takedown pays less than a single contact hit costs", () => {
+    const state = stateWith(["robot"]);
+    state.player.health = 50;
+
+    damageEnemy(state, state.enemies[0], 60);
+
+    expect(state.player.health).toBe(54);
+  });
+
+  test("a chain pays health on the same curve as score", () => {
+    const state = stateWith(["robot", "robot", "robot"]);
+    const combo = createCombo();
+    state.player.health = 40;
+
+    for (const enemy of state.enemies) {
+      damageEnemy(state, enemy, 60, combo);
+    }
+
+    // 4 + 6 + 8: the third link of a chain is worth double the first.
+    expect(state.player.health).toBe(58);
+  });
+
+  test("a blow that does not kill returns nothing", () => {
+    const state = stateWith(["gunner"]);
+    state.player.health = 50;
+
+    damageEnemy(state, state.enemies[0], 10);
+
+    expect(state.player.health).toBe(50);
+  });
+
+  test("healing never passes full", () => {
+    const state = stateWith(["robot"]);
+    state.player.health = state.player.maxHealth - 1;
+
+    healPlayer(state, 40);
+
+    expect(state.player.health).toBe(state.player.maxHealth);
   });
 });
 

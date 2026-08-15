@@ -73,6 +73,31 @@ export const hasLineOfSight = (
       segmentHitsRect(from, to, rect),
   );
 
+/**
+ * True when `target` sits steeply enough below `from` to be caught by a glance
+ * over the ledge — outside the forward cone, which is aimed along the roof.
+ *
+ * Without it the street is a free corridor: every patrol looks sideways along
+ * its own lane, so a hero who drops to the pavement walks the length of a
+ * district untouched and at full health, and every fight in the game is
+ * optional. `drop` is the height at which a lane stops being level ground and
+ * starts being a ledge; `spread` widens the downward look with the distance
+ * fallen, and zero switches the whole thing off for anything that could not act
+ * on what it saw anyway.
+ */
+export const watchingBelow = (
+  from: Vec2,
+  target: Vec2,
+  drop: number,
+  spread: number,
+): boolean => {
+  if (spread <= 0) {
+    return false;
+  }
+  const fallen = target.y - from.y;
+  return fallen >= drop && Math.abs(target.x - from.x) <= fallen * spread;
+};
+
 /** True when `target` falls inside the forward cone of something facing ±x. */
 export const withinCone = (
   from: Vec2,

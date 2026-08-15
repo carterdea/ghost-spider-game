@@ -176,6 +176,40 @@ describe("noticing the player", () => {
   });
 });
 
+/**
+ * A rooftop lane sits some 700px above the pavement — further than any forward
+ * cone reaches, and behind the enemy as often as not. Without a look over the
+ * ledge the street is a free corridor the length of every district.
+ */
+describe("the street below", () => {
+  /** On a roof at 700, with the hero on the pavement 690px down. */
+  const street = (playerX: number): AiPerception =>
+    perceptionFor({
+      position: { x: 1000, y: 700 },
+      player: { position: { x: playerX, y: 1390 }, velocity: { x: 0, y: 0 } },
+    });
+
+  test("a gunner leaning over the parapet spots the hero below", () => {
+    expect(run("gunner", street(1100), 0.7).intent.state).toBe("engage");
+  });
+
+  test("and fires down at them, well past its rooftop reach", () => {
+    // 690px down is further than the 620px a gunner shoots along its own roof.
+    const { attacks } = run("gunner", street(1100), 1.4);
+    expect(attacks.length).toBeGreaterThan(0);
+    expect(attacks[0]?.kind).toBe("shot");
+  });
+
+  test("a hero out to the side of the downward look is still missed", () => {
+    // 690px down allows 483px across; this is 700.
+    expect(run("gunner", street(1700), 0.7).intent.state).toBe("patrol");
+  });
+
+  test("a robot ignores the street: it could never follow anyone down", () => {
+    expect(run("robot", street(1020), 0.7).intent.state).toBe("patrol");
+  });
+});
+
 describe("alert", () => {
   test("holds still through the reaction delay", () => {
     const { intent } = run("gunner", perceptionFor({ speed: 55 }), 0.3);
@@ -523,6 +557,23 @@ describe("drone", () => {
     expect(winding.intent.velocityY).toBe(-AI_TUNING.drone.lift);
   });
 
+  test("keeps tracking sideways while it coils", () => {
+    // Standing still it has nothing to chase; a hero off to one side is
+    // followed through the wind-up rather than handed 0.45s of free ground.
+    const winding = run(
+      "drone",
+      perceptionFor({
+        speed: 120,
+        airborne: true,
+        homeY: 900,
+        player: { position: { x: 1300, y: 1150 }, velocity: { x: 0, y: 0 } },
+      }),
+      0.7,
+    );
+    expect(winding.intent.telegraph).toBeGreaterThan(0);
+    expect(winding.intent.velocityX).toBeGreaterThan(0);
+  });
+
   test("dives towards the player once the wind-up finishes", () => {
     const diving = run("drone", droneAt({ x: 1000, y: 1150 }), 1);
 
@@ -543,7 +594,9 @@ describe("drone", () => {
   test("only dives once per cooldown", () => {
     const perception = droneAt({ x: 1000, y: 1150 });
     expect(run("drone", perception, 1.4).attacks).toHaveLength(1);
-    expect(run("drone", perception, 3.6).attacks).toHaveLength(2);
+    // The dive itself counts against the cooldown, so the second one lands a
+    // full strike, cooldown and wind-up after the first.
+    expect(run("drone", perception, 4.2).attacks).toHaveLength(2);
   });
 });
 

@@ -37,6 +37,15 @@ export interface BossTuning {
   snareLockTime: number;
   /** Climb rate used by the wake, the phase shift, and the slam wind-up. */
   riseSpeed: number;
+  /**
+   * How close the hull settles beside the hero while it is open. Inside the
+   * hero's own 96px swing, or the punish window pays nothing.
+   */
+  openReach: number;
+  /** Where it settles against the hero's height. Negative sits above them. */
+  openLift: number;
+  /** How fast it sinks into the punish window. */
+  openSpeed: number;
   bulletSpeed: number;
   novaShots: number;
   novaBulletSpeed: number;
@@ -69,15 +78,21 @@ export interface BossTuning {
 export const BOSS_ATTACK_SHAPE: Readonly<
   Record<BossAttackKind, { strike: number; recover: number }>
 > = {
-  volley: { strike: 0.12, recover: 0.62 },
-  slam: { strike: 0.42, recover: 0.95 },
-  nova: { strike: 0.14, recover: 1.05 },
+  volley: { strike: 0.12, recover: 0.72 },
+  slam: { strike: 0.42, recover: 1 },
+  nova: { strike: 0.14, recover: 1.1 },
 };
 
 /**
  * Tuned against a hero who runs at 430px/s and swings up to 1600. The boss
  * cannot win a foot race, so its pressure comes from covering space with
  * bullets and from closing 1000px in under half a second when it slams.
+ *
+ * The bullet numbers are deliberately thinner than they read: a hero holding
+ * 100 health against fifteen a second has under seven seconds of standing in
+ * the wrong place, and the fight needs thirty. Fewer shots in a fan, slower,
+ * and under-led further, so the answer to a volley stays "move" rather than
+ * "have more health than it".
  */
 export const BOSS_TUNING: BossTuning = {
   phaseThresholds: [0.66, 0.33],
@@ -87,10 +102,13 @@ export const BOSS_TUNING: BossTuning = {
   staggerTime: 0.85,
   snareLockTime: 3.6,
   riseSpeed: 190,
-  bulletSpeed: 470,
-  novaShots: 12,
+  openReach: 60,
+  openLift: -20,
+  openSpeed: 520,
+  bulletSpeed: 390,
+  novaShots: 10,
   novaBulletSpeed: 320,
-  leadFactor: 0.55,
+  leadFactor: 0.4,
   maxLeadTime: 0.7,
   reachFactor: 1.5,
   patience: 2.4,
@@ -112,7 +130,7 @@ export const BOSS_TUNING: BossTuning = {
       speedFactor: 1,
       standoff: 430,
       orbitHeight: 150,
-      volleyShots: 3,
+      volleyShots: 2,
       volleySpread: 0.42,
       slamSpeed: 900,
     },
@@ -126,7 +144,7 @@ export const BOSS_TUNING: BossTuning = {
       speedFactor: 1.45,
       standoff: 330,
       orbitHeight: 120,
-      volleyShots: 4,
+      volleyShots: 3,
       volleySpread: 0.52,
       slamSpeed: 940,
     },
@@ -140,7 +158,7 @@ export const BOSS_TUNING: BossTuning = {
       speedFactor: 1.9,
       standoff: 250,
       orbitHeight: 90,
-      volleyShots: 5,
+      volleyShots: 4,
       volleySpread: 0.64,
       slamSpeed: 1060,
     },

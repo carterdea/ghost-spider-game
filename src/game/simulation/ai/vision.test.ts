@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { Rect } from "../physics/vector";
-import { hasLineOfSight, segmentHitsRect, withinCone } from "./vision";
+import {
+  hasLineOfSight,
+  segmentHitsRect,
+  watchingBelow,
+  withinCone,
+} from "./vision";
 
 /** A block whose roof line sits at y=1000 and which meets the street at 1450. */
 const building: Rect = { x: 800, y: 1000, width: 520, height: 450 };
@@ -113,5 +118,33 @@ describe("withinCone", () => {
 
   test("treats a target on top of the viewer as visible", () => {
     expect(withinCone(eye, 1, eye, halfAngle)).toBe(true);
+  });
+});
+
+describe("watchingBelow", () => {
+  const perch = { x: 1000, y: 700 };
+  const drop = 140;
+  const spread = 0.7;
+
+  test("catches a hero on the street far below", () => {
+    expect(watchingBelow(perch, { x: 1100, y: 1380 }, drop, spread)).toBe(true);
+  });
+
+  test("ignores anything level with the lane", () => {
+    expect(watchingBelow(perch, { x: 1400, y: 700 }, drop, spread)).toBe(false);
+  });
+
+  test("ignores anything above", () => {
+    expect(watchingBelow(perch, { x: 1020, y: 300 }, drop, spread)).toBe(false);
+  });
+
+  test("widens with the drop rather than reaching sideways", () => {
+    // 200px down allows 140px across; 700px down allows 490px.
+    expect(watchingBelow(perch, { x: 1300, y: 900 }, drop, spread)).toBe(false);
+    expect(watchingBelow(perch, { x: 1300, y: 1400 }, drop, spread)).toBe(true);
+  });
+
+  test("a zero spread switches the downward look off entirely", () => {
+    expect(watchingBelow(perch, { x: 1000, y: 1400 }, drop, 0)).toBe(false);
   });
 });

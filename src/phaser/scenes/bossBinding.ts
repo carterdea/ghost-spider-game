@@ -20,10 +20,27 @@ const ARENA_TOP = 150;
 /** The Weaver hangs this far above the beacon it is guarding. */
 const HOVER_ABOVE_GOAL = 320;
 
-const BOSS_HEALTH = 900;
+/**
+ * Sized against what the fight actually pays out rather than how long it ought
+ * to feel. The Weaver can only be hurt inside its punish window, which comes
+ * round roughly every three seconds and is worth about forty damage to a player
+ * who takes all of it — so every hundred health here is another eight windows
+ * of reading tells, and 900 was a fight no measured attempt ever finished.
+ *
+ * This is about twenty seconds of clean play, and the hero does not arrive with
+ * a full bar: the health they bring is whatever the eight districts left them,
+ * so the fight is sized for someone who spent some of it getting here.
+ */
+const BOSS_HEALTH = 260;
 
-/** Contact damage. Its projectiles use the scene's own bullet damage. */
-const BOSS_CONTACT_DAMAGE = 14;
+/**
+ * Contact damage. Its projectiles use the scene's own bullet damage.
+ *
+ * Lower than it was because the punish window now brings the hull down onto the
+ * hero: they end every window inside its reach, and the fight has to be
+ * survivable by someone who takes that trade a dozen times.
+ */
+const BOSS_CONTACT_DAMAGE = 10;
 
 /**
  * The boss, placed from the level it guards.

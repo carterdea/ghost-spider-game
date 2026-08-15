@@ -60,6 +60,30 @@ const TAKEDOWN_MESSAGE: Record<ActorKind, string> = {
   boss: "The Weaver falls.",
 };
 
+/**
+ * Health returned by a takedown, before the chain multiplies it.
+ *
+ * The run carries one health bar across eight districts into a boss, and
+ * nothing anywhere refilled it: a hero who took a beating in the first district
+ * arrived at the Weaver already half spent, with no way back. Paying it out of
+ * takedowns rather than out of pickups keeps the answer inside the fighting —
+ * every district can be crossed without throwing a punch, so the reason to
+ * throw one has to be that fighting pays for itself.
+ *
+ * It is deliberately small against what a mistake costs: a robot's tackle is
+ * 10 to 16 depending on the district, so a lone takedown does not pay for the
+ * hit it took to line up. A chain does.
+ */
+const TAKEDOWN_HEAL = 4;
+
+/** Silk spun back in. Never past full: a chain cannot bank health for later. */
+export const healPlayer = (state: GameState, amount: number): void => {
+  state.player.health = Math.min(
+    state.player.maxHealth,
+    state.player.health + amount,
+  );
+};
+
 export const damagePlayer = (
   state: GameState,
   amount: number,
@@ -94,9 +118,9 @@ export const damageEnemy = (
   // Published to the run so the end-of-run panel has it: the chain itself is
   // gone by then, broken by the landing that followed it.
   state.progression.bestChain = Math.max(state.progression.bestChain, chain);
-  state.player.score += Math.round(
-    TAKEDOWN_SCORE[enemy.kind] * comboMultiplier(chain),
-  );
+  const multiplier = comboMultiplier(chain);
+  state.player.score += Math.round(TAKEDOWN_SCORE[enemy.kind] * multiplier);
+  healPlayer(state, Math.round(TAKEDOWN_HEAL * multiplier));
   state.player.message =
     chain > 1
       ? `${TAKEDOWN_MESSAGE[enemy.kind]} ${chain} chain!`
