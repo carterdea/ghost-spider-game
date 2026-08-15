@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { LEVELS } from "../../content/levels";
 import { createInitialGameState } from "../state";
 import {
+  districtClearScore,
   getCurrentLevel,
   getLevelByIndex,
   isFinalLevelIndex,
   isGoalReached,
+  RUN_CLEAR_SCORE,
   syncLevelProgress,
   tickRunClock,
 } from "./progression";
@@ -170,6 +172,50 @@ describe("syncLevelProgress", () => {
     // A cleared run touching the goal again must not keep counting.
     syncLevelProgress(state, goalPosition(LEVELS.length - 1));
     expect(state.progression.districtsCleared).toBe(LEVELS.length);
+  });
+
+  /**
+   * Clearing a district used to pay nothing at all: a run that swung through
+   * seven of the eight and took no fights finished on a flat zero.
+   */
+  test("clearing a district is worth something on its own", () => {
+    const state = createInitialGameState(LEVELS[0]);
+
+    expect(state.player.score).toBe(0);
+    syncLevelProgress(state, goalPosition(0));
+    expect(state.player.score).toBe(districtClearScore(0));
+
+    syncLevelProgress(state, goalPosition(1));
+    expect(state.player.score).toBe(
+      districtClearScore(0) + districtClearScore(1),
+    );
+  });
+
+  test("a later district pays more than an early one", () => {
+    expect(districtClearScore(LEVELS.length - 1)).toBeGreaterThan(
+      districtClearScore(0),
+    );
+    expect(districtClearScore(0)).toBeGreaterThan(0);
+  });
+
+  test("the final goal pays its district and the run on top of it", () => {
+    const state = createInitialGameState(LEVELS[0]);
+    const finalIndex = LEVELS.length - 1;
+    state.progression.levelIndex = finalIndex;
+
+    syncLevelProgress(state, goalPosition(finalIndex));
+
+    expect(state.player.score).toBe(
+      districtClearScore(finalIndex) + RUN_CLEAR_SCORE,
+    );
+  });
+
+  test("a run that never reaches a goal is paid nothing", () => {
+    const state = createInitialGameState(LEVELS[0]);
+
+    syncLevelProgress(state, LEVELS[0].playerSpawn);
+
+    expect(state.player.score).toBe(0);
   });
 
   test("does not advance past the final level", () => {

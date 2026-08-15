@@ -37,7 +37,7 @@ import {
   type PlayerStep,
 } from "../actors/PlayerController";
 import { applyBodyBox, BODY_BOXES } from "../actors/placement";
-import { WeaponRack } from "../actors/WeaponRack";
+import { type WeaponClock, WeaponRack } from "../actors/WeaponRack";
 import { WebRenderer } from "../fx/WebRenderer";
 import { LevelBuilder } from "../world/LevelBuilder";
 import type { LevelWorld } from "../world/LevelWorld";
@@ -316,7 +316,7 @@ export class GameScene extends Phaser.Scene {
       1 - clamp(player.y / level.height, 0, 1),
     );
 
-    this.rack?.update(time);
+    this.rack?.update(this.weaponClock(time));
     if (this.wasPressed(actions, "cycleGadget")) {
       this.rack?.cycle();
       this.audio?.play("gadgetCycle");
@@ -330,7 +330,7 @@ export class GameScene extends Phaser.Scene {
     if (this.wasPressed(actions, "gadget")) {
       // The rack owns its own ammo and shared cooldown, so the scene no longer
       // gates this: an empty slot has to reach `use` to say it is empty.
-      this.rack?.use(player, time);
+      this.rack?.use(player, this.weaponClock(time));
     }
 
     this.enemies?.update(time, player);
@@ -343,6 +343,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.checkProgress(player);
+  }
+
+  /**
+   * The clocks the arsenal is timed against. The scene's own keeps running
+   * through a pause — only the run clock is stopped by one — so anything the
+   * hero has to wait for reads that instead. `tickRunClock` has already banked
+   * this frame by the time anything asks.
+   */
+  private weaponClock(sceneNow: number): WeaponClock {
+    return { scene: sceneNow, run: this.state.progression.elapsedMs };
   }
 
   /**
@@ -405,8 +415,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (transition.kind === "won") {
-      // `syncLevelProgress` already marked the run cleared.
-      this.state.player.score += 1000;
+      // `syncLevelProgress` already marked the run cleared and paid for it.
       this.audio?.play("levelCleared");
       this.audio?.music.cue("levelCleared");
       this.audio?.setWind(0);

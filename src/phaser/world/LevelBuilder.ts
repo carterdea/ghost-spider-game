@@ -627,7 +627,9 @@ export class LevelBuilder {
     const period = motionPeriod(motion);
     const driver = { t: 0 };
     const half = platform.bounds.width / 2;
-    let previousX = home.x;
+    // The deck's own last frame, so the carry hands riders exactly the travel
+    // the deck just made rather than an estimate of it.
+    let previous: Vec2 = { x: home.x, y: platform.bounds.y };
 
     world.tween({
       targets: driver,
@@ -647,9 +649,9 @@ export class LevelBuilder {
         carryRiders(
           arcadeRiders(this.scene),
           { left: x - half, right: x + half, top: surfaceY },
-          x - previousX,
+          { x: x - previous.x, y: surfaceY - previous.y },
         );
-        previousX = x;
+        previous = { x, y: surfaceY };
       },
     });
   }
@@ -800,8 +802,9 @@ const arcadeRiders = function* (scene: Phaser.Scene): Generator<Rider> {
         right: body.position.x + body.width,
         bottom: body.position.y + body.height,
       },
-      moveBy: (dx: number) => {
-        rider.x += dx;
+      moveBy: (delta: Vec2) => {
+        rider.x += delta.x;
+        rider.y += delta.y;
       },
     };
   }

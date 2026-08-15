@@ -7,6 +7,7 @@ import {
   SceneDouble,
 } from "../testing/sceneDouble";
 import { LevelBuilder } from "./LevelBuilder";
+import { platformOffsetAt } from "./movers";
 import { MAX_VIEW } from "./viewport";
 
 const buildOn = (scene: SceneDouble, level: LevelDefinition) =>
@@ -299,6 +300,106 @@ describe("cables and platforms", () => {
 
     world.destroy();
     expect(drivers.every((tween) => tween.removed)).toBe(true);
+  });
+});
+
+describe("moving decks", () => {
+  /** The tween driving a mover: its target is a bare schedule, never a sprite. */
+  const driverOf = (scene: SceneDouble) => {
+    const driver = scene
+      .liveTweens()
+      .find(
+        (tween) =>
+          typeof tween.targets === "object" &&
+          tween.targets !== null &&
+          "t" in (tween.targets as Record<string, unknown>),
+      );
+    if (!driver?.onUpdate) {
+      throw new Error("No mover is being driven.");
+    }
+    return { schedule: driver.targets as { t: number }, step: driver.onUpdate };
+  };
+
+  /** A shipped hoist, on a level with nothing else moving on it. */
+  const hoistOnly = (): LevelDefinition => {
+    const hoist = LEVELS.flatMap((level) => level.platforms).find(
+      (platform) => platform.motion !== undefined && platform.motion.dy < 0,
+    );
+    if (!hoist) {
+      throw new Error("No district ships a rising platform.");
+    }
+    return { ...LEVELS[0], platforms: [hoist] };
+  };
+
+  /**
+   * The named mechanic of Drydock Hoists. Arcade will not carry a rider
+   * upwards on its own — it separates overlaps, and a deck climbing faster than
+   * the hero's own weight builds one it discards as tunnelling — so the driver
+   * has to hand over both axes of its travel. It used to hand over only x, and
+   * the lift climbed clean through the hero and left them falling to the street.
+   */
+  test("a rising deck carries the body standing on it", () => {
+    const scene = new SceneDouble();
+    const level = hoistOnly();
+    const platform = level.platforms[0];
+    const motion = platform.motion;
+    if (!motion) {
+      throw new Error("The hoist lost its motion.");
+    }
+
+    buildOn(scene, level);
+    const { schedule, step } = driverOf(scene);
+
+    // A body the width of the hero, feet on the deck's home line, mid-span.
+    const feet = 96;
+    const rider = scene.addBody(
+      platform.bounds.x + platform.bounds.width / 2 - 30,
+      platform.bounds.y - feet,
+      60,
+      feet,
+    );
+
+    const period = 2 * (motion.travelMs + motion.holdMs);
+    let drift = 0;
+    let peak = rider.position.y;
+    for (let frame = 0; frame * (1000 / 60) <= period; frame += 1) {
+      schedule.t = (frame * (1000 / 60)) / period;
+      step();
+      const deckTop = platformOffsetAt(motion, schedule.t * period).y;
+      drift = Math.max(
+        drift,
+        Math.abs(rider.position.y + feet - (platform.bounds.y + deckTop)),
+      );
+      peak = Math.min(peak, rider.position.y);
+    }
+
+    // Its feet stay on the deck for the whole run out and the whole run back.
+    expect(drift).toBeLessThan(1);
+    // And it was taken the full height of the hoist, so this cannot pass on a
+    // lift that never moved.
+    expect(peak).toBeLessThan(platform.bounds.y - feet + motion.dy + 1);
+  });
+
+  test("a body in the air above the deck is left alone", () => {
+    const scene = new SceneDouble();
+    const level = hoistOnly();
+    const platform = level.platforms[0];
+
+    buildOn(scene, level);
+    const { schedule, step } = driverOf(scene);
+
+    const flying = scene.addBody(
+      platform.bounds.x + 40,
+      platform.bounds.y - 400,
+      60,
+      96,
+    );
+    const restingY = flying.position.y;
+
+    schedule.t = 0.5;
+    step();
+
+    expect(flying.position.y).toBe(restingY);
   });
 });
 

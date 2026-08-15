@@ -41,6 +41,21 @@ import { WebBombs } from "./WebBombs";
  * class only turns the answers into sprites, bodies and noise.
  */
 
+/**
+ * The two clocks a weapon reads.
+ *
+ * `scene` is wall time, which anything already loose in the world runs on: a
+ * fuse burning, a tether fading, a shield that is up. `run` is the run clock,
+ * which stops the moment the game is held — and everything the hero is *owed*
+ * is measured against it, because time the player is not playing must not buy
+ * them ammunition. Recharging off the scene clock made a twelve-second pause a
+ * free reload of the whole arsenal, charged against nothing.
+ */
+export interface WeaponClock {
+  readonly scene: number;
+  readonly run: number;
+}
+
 /** How a weapon is fired, once its charge has been paid for. */
 type Fire = (
   player: Phaser.Physics.Arcade.Sprite,
@@ -170,15 +185,15 @@ export class WeaponRack {
     }
   }
 
-  /** Recharges and burns fuses. Run once a frame with the scene's clock. */
-  public update(time: number): void {
-    tickArsenal(this.ammo, time);
-    this.bombs.update(time);
+  /** Recharges and burns fuses. Run once a frame; each reads its own clock. */
+  public update(clock: WeaponClock): void {
+    tickArsenal(this.ammo, clock.run);
+    this.bombs.update(clock.scene);
   }
 
   /** Whether the selected weapon could be fired right now. */
-  public ready(time: number): boolean {
-    return canFire(this.ammo, this.deps.state.player.gadget, time);
+  public ready(clock: WeaponClock): boolean {
+    return canFire(this.ammo, this.deps.state.player.gadget, clock.run);
   }
 
   public cycle(step: 1 | -1 = 1): void {
@@ -202,21 +217,22 @@ export class WeaponRack {
    * says nothing; an empty one says so, because the player needs to know why
    * nothing happened.
    */
-  public use(player: Phaser.Physics.Arcade.Sprite, time: number): void {
+  public use(player: Phaser.Physics.Arcade.Sprite, clock: WeaponClock): void {
     const kind = this.deps.state.player.gadget;
-    tickArsenal(this.ammo, time);
+    tickArsenal(this.ammo, clock.run);
 
-    if (time < this.ammo.readyAt) {
+    if (clock.run < this.ammo.readyAt) {
       return;
     }
-    if (!spendCharge(this.ammo, kind, time)) {
+    if (!spendCharge(this.ammo, kind, clock.run)) {
       this.deps.state.player.message = ARSENAL[kind].emptyMessage;
       this.deps.play(WEAPON_SOUND.empty);
       return;
     }
 
     this.deps.state.player.message = ARSENAL[kind].firedMessage;
-    this.dispatch[kind](player, player.flipX ? -1 : 1, time);
+    // What the weapon then puts into the world is the scene's to time.
+    this.dispatch[kind](player, player.flipX ? -1 : 1, clock.scene);
   }
 
   private throwBomb(

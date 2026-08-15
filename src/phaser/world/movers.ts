@@ -115,7 +115,7 @@ export interface RiderBounds {
 /** Something a moving deck can carry: its footprint, and a way to shift it. */
 export interface Rider {
   bounds: RiderBounds;
-  moveBy(dx: number): void;
+  moveBy(delta: Vec2): void;
 }
 
 /** How far off the deck a body's feet may be and still be counted as riding. */
@@ -128,19 +128,28 @@ export const isRiding = (rider: RiderBounds, deck: DeckSpan): boolean =>
   rider.bottom <= deck.top + RIDER_GRIP;
 
 /**
- * Hands a deck's horizontal travel to whatever is standing on it. Arcade
- * separation already carries a rider vertically — a static body rising into a
- * body pushes it up — but nothing moves a rider sideways, so a trolley would
- * otherwise slide out from under the hero's feet.
+ * Hands a deck's travel — both axes of it — to whatever is standing on it.
  *
- * Returns how many riders were carried, which is what the tests assert on.
+ * Nothing in Arcade does this for us. Sideways is obvious: a trolley would
+ * simply slide out from under the hero's feet. Upwards looks like it should be
+ * free, because a static body rising into a dynamic one is separated back out
+ * of it, but separation is not a carry: Arcade only resolves an overlap smaller
+ * than `deltaAbsY + bias`, and a dynamic body held on its floor barely moves, so
+ * the whole allowance is the ~4px of bias. A hoist doing 235px/s at the middle
+ * of its run covers that in a single 60Hz step, and the first frame it covers
+ * more the overlap is discarded as a tunnelling artefact rather than resolved:
+ * contact drops, and the deck climbs away leaving the hero to fall to the street.
+ *
+ * So the rider is moved with the deck and Arcade is left with nothing to
+ * separate but the hero's own weight. Returns how many riders were carried,
+ * which is what the tests assert on.
  */
 export const carryRiders = (
   riders: Iterable<Rider>,
   deck: DeckSpan,
-  dx: number,
+  delta: Vec2,
 ): number => {
-  if (dx === 0) {
+  if (delta.x === 0 && delta.y === 0) {
     return 0;
   }
 
@@ -149,7 +158,7 @@ export const carryRiders = (
     if (!isRiding(rider.bounds, deck)) {
       continue;
     }
-    rider.moveBy(dx);
+    rider.moveBy(delta);
     carried += 1;
   }
   return carried;

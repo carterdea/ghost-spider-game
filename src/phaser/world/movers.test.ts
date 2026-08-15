@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { PlatformCycle, PlatformMotion } from "../../game/content/levels";
+import type { Vec2 } from "../../game/simulation/physics/vector";
 import {
   carryRiders,
   cyclePeriod,
@@ -31,13 +32,29 @@ const CYCLE: PlatformCycle = {
 
 const DECK: DeckSpan = { left: 100, right: 300, top: 500 };
 
-const riderAt = (left: number, bottom: number): Rider & { moved: number[] } => {
-  const moved: number[] = [];
+/** The Drydock hoist, exactly as the district authors it. */
+const HOIST: PlatformMotion = {
+  dx: 0,
+  dy: -330,
+  travelMs: 2200,
+  holdMs: 900,
+};
+
+/** Arcade steps at a fixed 60Hz, so this is one collision check's worth of run. */
+const STEP_MS = 1000 / 60;
+
+/** A rider that actually moves, so a carry can be simulated across frames. */
+const riderAt = (left: number, bottom: number): Rider & { moved: Vec2[] } => {
+  const moved: Vec2[] = [];
+  const bounds = { left, right: left + 50, bottom };
   return {
     moved,
-    bounds: { left, right: left + 50, bottom },
-    moveBy: (dx) => {
-      moved.push(dx);
+    bounds,
+    moveBy: (delta) => {
+      moved.push(delta);
+      bounds.left += delta.x;
+      bounds.right += delta.x;
+      bounds.bottom += delta.y;
     },
   };
 };
@@ -181,23 +198,79 @@ describe("riding a deck", () => {
     const flying = riderAt(150, 200);
     const beside = riderAt(400, 500);
 
-    const carried = carryRiders([standing, flying, beside], DECK, 12);
+    const carried = carryRiders([standing, flying, beside], DECK, {
+      x: 12,
+      y: 0,
+    });
 
     expect(carried).toBe(1);
-    expect(standing.moved).toEqual([12]);
+    expect(standing.moved).toEqual([{ x: 12, y: 0 }]);
     expect(flying.moved).toEqual([]);
     expect(beside.moved).toEqual([]);
   });
 
   test("a stationary deck carries nobody", () => {
     const standing = riderAt(150, 500);
-    expect(carryRiders([standing], DECK, 0)).toBe(0);
+    expect(carryRiders([standing], DECK, { x: 0, y: 0 })).toBe(0);
     expect(standing.moved).toEqual([]);
   });
 
   test("carries backwards on the return leg", () => {
     const standing = riderAt(150, 500);
-    carryRiders([standing], DECK, -9.5);
-    expect(standing.moved).toEqual([-9.5]);
+    carryRiders([standing], DECK, { x: -9.5, y: 0 });
+    expect(standing.moved).toEqual([{ x: -9.5, y: 0 }]);
+  });
+
+  /**
+   * A hoist travels straight up. Nothing else moves a rider vertically —
+   * Arcade separation only unpicks an overlap it believes in, and a deck faster
+   * than the hero's own weight builds one bigger than that in a single step.
+   */
+  test("hands over vertical travel as well as horizontal", () => {
+    const standing = riderAt(150, 500);
+
+    expect(carryRiders([standing], DECK, { x: 0, y: -3.9 })).toBe(1);
+    expect(standing.moved).toEqual([{ x: 0, y: -3.9 }]);
+    expect(standing.bounds.bottom).toBe(496.1);
+  });
+
+  test("a descending deck takes its rider down with it", () => {
+    const standing = riderAt(150, 500);
+
+    carryRiders([standing], DECK, { x: 0, y: 3.9 });
+
+    expect(standing.bounds.bottom).toBe(503.9);
+  });
+
+  /**
+   * The whole of the hoist bug, at the scale it happened: the deck climbs 330px
+   * in 2.2 seconds and the hero has to still be standing on it at the top.
+   * Before the vertical carry the deck simply left them behind — within a
+   * couple of frames of leaving its rest the feet were outside the grip band,
+   * contact was gone, and the hero fell to the street.
+   */
+  test("a rising hoist cannot outrun the rider standing on it", () => {
+    const home = 980;
+    const rider = riderAt(600, home);
+    let deckTop = home;
+    let drift = 0;
+
+    for (let elapsed = 0; elapsed <= motionPeriod(HOIST); elapsed += STEP_MS) {
+      const top = home + platformOffsetAt(HOIST, elapsed).y;
+      carryRiders(
+        [rider],
+        { left: 560, right: 760, top },
+        { x: 0, y: top - deckTop },
+      );
+      deckTop = top;
+      drift = Math.max(drift, Math.abs(rider.bounds.bottom - deckTop));
+    }
+
+    // Never so much as a pixel adrift, at any point of the run or the way back.
+    expect(drift).toBeLessThan(1);
+    // And the deck really did make its climb, so this cannot pass on a mover
+    // that never moved.
+    expect(rider.moved.length).toBeGreaterThan(100);
+    expect(Math.min(...rider.moved.map((step) => step.y))).toBeLessThan(-3.5);
   });
 });

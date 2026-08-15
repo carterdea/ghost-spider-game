@@ -54,6 +54,25 @@ export const isGoalReached = (
 ): boolean =>
   distanceToSegment(level.goal, previous, position) <= level.goal.radius;
 
+/** Flat rate for crossing any district, and what each one further in adds. */
+const DISTRICT_CLEAR_BASE = 400;
+const DISTRICT_CLEAR_STEP = 100;
+
+/**
+ * What reaching the goal of the district at `index` pays.
+ *
+ * Getting across a district has to be worth something on its own: only
+ * takedowns scored, so a run that swung cleanly through seven of the eight and
+ * picked no fights finished on a flat zero. A district's patrol is worth
+ * roughly a thousand between them, and the step keeps the late districts —
+ * longer, and defended harder — worth crossing rather than merely surviving.
+ */
+export const districtClearScore = (index: number): number =>
+  DISTRICT_CLEAR_BASE + DISTRICT_CLEAR_STEP * Math.max(0, index);
+
+/** On top of the last district's own bonus, once, for finishing the run. */
+export const RUN_CLEAR_SCORE = 1000;
+
 const markVisited = (state: GameState, levelId: string): void => {
   if (!state.progression.visitedLevelIds.includes(levelId)) {
     state.progression.visitedLevelIds.push(levelId);
@@ -83,8 +102,10 @@ export const syncLevelProgress = (
   }
 
   state.progression.districtsCleared += 1;
+  state.player.score += districtClearScore(state.progression.levelIndex);
 
   if (isFinalLevelIndex(state.progression.levelIndex)) {
+    state.player.score += RUN_CLEAR_SCORE;
     state.progression.status = "cleared";
     state.player.message = `${level.name} cleared. The skyline is yours.`;
     return { kind: "won", level };
