@@ -544,11 +544,53 @@ describe("drone", () => {
     });
 
   test("climbs to sit above the player while circling", () => {
-    // Beyond the 380px dive range, so it orbits rather than winding up.
     const orbiting = run("drone", droneAt({ x: 1450, y: 1000 }), 0.6);
     expect(orbiting.intent.state).toBe("engage");
     expect(orbiting.intent.velocityY).toBeLessThan(0);
     expect(orbiting.attacks).toHaveLength(0);
+  });
+
+  /**
+   * The circling half of the behaviour, held long past the wind-up so it is the
+   * range that keeps the dive back and not the clock. The distance is derived
+   * from the tuning: written out as a number, this test quietly stopped
+   * covering anything the moment the dive's reach grew past it.
+   */
+  test("holds off rather than diving from beyond the plunge's reach", () => {
+    const outOfReach = {
+      x: 1000,
+      y: 900 + AI_TUNING.drone.strikeRange + 120,
+    };
+    const orbiting = run("drone", droneAt(outOfReach), 1.5);
+
+    expect(orbiting.intent.state).toBe("engage");
+    expect(orbiting.intent.telegraph).toBe(0);
+    expect(orbiting.attacks).toHaveLength(0);
+    // Closing on the station it wants to hold above them, not on them.
+    expect(orbiting.intent.velocityY).toBeGreaterThan(0);
+  });
+
+  /**
+   * The plunge is the one strike in the game that is not leashed, and the whole
+   * of the drone's answer to a hero crossing the street below its lane: the
+   * pavement is further from a rooftop lane than any patrol band is wide, so a
+   * dive clamped to the band the way a robot's lunge is would never arrive.
+   */
+  test("carries the dive past the patrol band rather than stopping at it", () => {
+    const belowAndAhead = perceptionFor({
+      speed: 120,
+      airborne: true,
+      homeY: 900,
+      // Committed from the far edge of the band, heading further out still.
+      position: { x: 1100, y: 900 },
+      patrol: { minX: 900, maxX: 1100 },
+      player: { position: { x: 1400, y: 1300 }, velocity: { x: 430, y: 0 } },
+    });
+    const diving = run("drone", belowAndAhead, 1);
+
+    expect(diving.attacks[0]?.kind).toBe("dive");
+    expect(diving.intent.velocityX).toBeGreaterThan(0);
+    expect(diving.intent.velocityY).toBeGreaterThan(0);
   });
 
   test("rears up while telegraphing a dive", () => {
