@@ -168,6 +168,19 @@ export class WeaponRack {
     this.bombs.beginLevel(world);
     refillArsenal(this.ammo);
 
+    // Cover cuts both ways. A bomb already stops at a building and so does an
+    // enemy shot, so an impact web or net has to as well — otherwise the
+    // safest way to clear a rooftop is to stand behind it and fire through.
+    world.collider(
+      this.deps.scene.physics.add.collider(
+        this.shots,
+        world.platforms,
+        (shot) => {
+          (shot as Phaser.Physics.Arcade.Sprite).destroy();
+        },
+      ),
+    );
+
     for (const view of this.deps.enemies.all) {
       // Sprite first, group second: Arcade hands the lone sprite to the
       // callback before the group member, and the other order would treat the

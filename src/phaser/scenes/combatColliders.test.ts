@@ -182,6 +182,22 @@ describe("enemy bullets", () => {
     expect(collision.kind).toBe("collider");
   });
 
+  test("the hero's own webs stop at a building too", () => {
+    const harness = setUp([]);
+    const collision = collisionBetween(
+      harness.scene,
+      harness.projectiles,
+      harness.world.platforms,
+    );
+    const glob = new Body(0, 0, { power: "glob" });
+
+    collision.fire(glob);
+
+    // Cover has to cut both ways, or standing behind a wall is the safest way
+    // to clear the roof on top of it.
+    expect(glob.destroyCount).toBe(1);
+  });
+
   test("are caught by the web shield without costing health", () => {
     const harness = setUp([]);
     harness.state.player.shieldUntil = 500;
@@ -333,9 +349,9 @@ describe("level teardown", () => {
   test("every collision registered is handed to the world to destroy", () => {
     const harness = setUp([enemyState(), enemyState()]);
 
-    // Two per enemy plus the two world-wide ones. If a registration escapes
+    // Two per enemy plus the three world-wide ones. If a registration escapes
     // this list it outlives its level and fires against a torn-down world.
-    expect(harness.scene.colliderLog).toHaveLength(6);
+    expect(harness.scene.colliderLog).toHaveLength(7);
 
     harness.world.destroy();
 

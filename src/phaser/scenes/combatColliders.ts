@@ -105,6 +105,18 @@ export const registerCombat = (deps: CombatDeps): void => {
     ),
   );
 
+  // The same rule for the hero's own globs and nets: they are thrown through
+  // the world, not over it.
+  world.collider(
+    scene.physics.add.collider(
+      deps.projectiles,
+      world.platforms,
+      (projectileObject) => {
+        (projectileObject as Phaser.Physics.Arcade.Sprite).destroy();
+      },
+    ),
+  );
+
   for (const enemy of enemies.all) {
     // Sprite first, group second: Arcade hands the callback the lone sprite
     // before the group member, so the other order would treat the enemy as
