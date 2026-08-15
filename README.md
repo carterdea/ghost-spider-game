@@ -1,6 +1,7 @@
 # Ghost Spider Swing
 
-A tiny Phaser 3 tracer-bullet prototype for a keyboard side-scroller about a ballerina spider hero swinging through NYC.
+A Phaser 3 side-scroller about an original masked rooftop dancer web-swinging
+through a painted, eight-district New York night, ending in a boss.
 
 ## Stack
 
@@ -25,26 +26,123 @@ bun run dev
 
 Open the local URL Vite prints, usually `http://localhost:5173/`.
 
-Check TypeScript:
+Run the checks:
 
 ```bash
 bun run typecheck
 ```
 
+```bash
+bun test
+```
+
 ## Controls
 
-- `A` / `D`: move across the level
-- `W` / `S`: move up and down the street plane when on foot
-- `Space`: jump
-- `E`: hold to attach up to two swing webs; old web-lines release as new ones catch
-- `J`: web-glob strike on foot or close-range kick near enemies
-- `Q`: cycle gadget
-- `K`: use gadget
-- `Shift`: slow fall with web-wings
-- `R`: restart
+- `A` / `D`: run, and pump the swing along your direction of travel
+- `W` / `S`: reel the web-line in / let it out while swinging
+- `Space`: jump — tap for a short hop, hold for full height
+- `E`: hold to swing; the web catches the best arc ahead of you and lets go at
+  the top so you keep your momentum
+- `J`: web-glob strike, or a close-range kick near enemies
+- `Q`: cycle weapon · `1`-`6`: pick one directly · `K`: fire it
+- `Shift`: slow the fall with web-wings
+- `Space` / `Enter`: start the run from the title
+- `Esc` / `P`: pause · `M`: mute · `R`: restart
 
-## Prototype Loop
+A run opens on a title screen listing all of the above, and every control is
+repeated on the pause panel. Clearing the skyline or being knocked out ends the
+run on a summary: final score, districts cleared, best chain and time taken.
 
-Swing between rooftops or drop to street level, avoid robot and hooded gunner attacks, and clear enemies for score while protecting health.
+## Game Loop
 
-Gadgets are based on Ghost-Spider / Gwen Stacy's Janet Van Dyne web-shooters: web-lines, globs, nets, shield-like web shapes, and web-wings.
+Each district is a discrete level with its own skyline, patrols, and a goal
+beacon at the far end. Swing the rooftops, drop to the street, clear the patrol
+robots, tech enforcers and survey drones, and touch the beacon to move on:
+
+1. Midtown After Dark — traversal warm-up, no patrols
+2. Park-Side Pursuit — the first patrol
+3. Switchyard Skywire — chasms too wide for roofs; catenary cables carry the
+   only web targets across them
+4. Drydock Hoists — freight hoists and a trolley over a void with no roof in
+   it. Ride the rig, or web the gantry overhead and skip the wait
+5. Glasshouse Terraces — the roof line only climbs, and the glass panels hold
+   for a beat, strobe, then drop
+6. Spire Ascent
+7. Harbor Crane Run
+8. Bridge-Line Finale
+
+The last district is a boss: The Weaver holds the bridge, and the beacon will
+not clear the run until it is down. Three phases gated on its health, each
+winding up faster than the last. The shape of a tell says which attack is
+coming, and every attack leaves a window where the boss cannot hurt you —
+that is the punish, so take it.
+
+Chaining takedowns without touching the ground pays a score multiplier, and a
+takedown is the only thing that gives health back — a little, more inside a
+chain. One health bar carries across all eight districts, so the fighting you
+choose to do is what pays for the boss.
+
+## The Arsenal
+
+Six weapons on one shared cooldown, each with its own charges and its own
+recharge. Scarcity is the balance, not damage: a bomb clears a rooftop, so you
+carry two and wait for them, while the mobility gadgets come back fastest.
+
+| | What it is for |
+|---|---|
+| Web bomb | Sticks, telegraphs, bursts into a mesh. Least damage at the edge |
+| Impact web | Staggers and knocks back — the answer to a wind-up |
+| Web line | Yanks a target toward you |
+| Web net | Snares. Cancels a boss wind-up, once |
+| Web shield | Catches shots for a moment |
+| Web wings | A vault, and a slower fall on `Shift` |
+
+Enemies have to actually see you — range, a forward cone and a clear line —
+and every attack is telegraphed and followed by a recovery window, so fights
+are meant to be read and played around rather than absorbed. Robots close and
+lunge, gunners hold a stand-off and draw a sight line before firing, drones
+orbit above and dive. Gunners and drones also look over the ledge: the street
+is a real route, but it is not a free one, and a drone will leave its lane to
+chase you down it.
+
+## Architecture
+
+Game rules are pure and framework-free; Phaser is only the presentation and
+collision layer. That split is what makes the physics testable.
+
+- `src/game/simulation/physics/` — pure, deterministic solvers with unit tests:
+  `swing.ts` (rope as a hard distance constraint, not a spring), `locomotion.ts`
+  (coyote time, jump buffering, variable jump height, apex float),
+  `attachment.ts` (which anchor a web should catch and how long the line runs).
+- `src/game/content/levels/` — data-driven level definitions. Buildings are
+  authored as geometry; **web anchors are generated from that geometry**, so a
+  web always attaches to something real. `levels.test.ts` asserts each level is
+  actually playable: no unspannable gaps, no anchor dead zones, patrols that
+  stand on real roofs.
+- `src/game/simulation/ai/` — enemy decision making, same shape as the physics:
+  a perception snapshot goes in, an intent comes out, and the Phaser layer only
+  senses and applies.
+- `src/game/simulation/systems/` — combat and level progression.
+- `src/phaser/` — the engine layer. `actors/PlayerController.ts` bridges the
+  pure solvers to an Arcade body, `world/LevelBuilder.ts` turns level data into
+  scene geometry, `scenes/GameScene.ts` orchestrates.
+- `src/ui/hud/` — DOM HUD that diffs against the last rendered values instead of
+  rebuilding itself every frame.
+
+## Sound
+
+There are no audio files. Every sound is synthesised at runtime with the Web
+Audio API, so the whole palette is editable in code — `src/audio/events.ts` is
+a declarative table of oscillator and noise layers, one entry per game event.
+
+The score lives in `src/audio/music/`, composed as note data rather than
+waveforms: A natural minor, 104 BPM, an 18.5 second loop whose stems layer up
+across the run in two waves so it escalates as you go. `toMidiFile()`
+exports it as a real MIDI file if you want to edit the song in a DAW.
+
+## Art
+
+The raster cast and panoramas use a repeatable chroma-key, shared-scale sprite
+pipeline. Source art lives in `artwork/source`, normalized runtime frames in
+`public/assets/characters`, and backdrops in `public/assets/environments`.
+Props and UI shapes are drawn at runtime in `src/phaser/world/textures.ts`.

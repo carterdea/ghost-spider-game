@@ -24,5 +24,8 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Test
+        run: bun test
+
       - name: Fallow
         run: bunx fallow --skip health --fail-on-issues

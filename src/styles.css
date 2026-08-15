@@ -7,6 +7,7 @@
   --violet: #7c5cff;
   --teal: #26d6cf;
   --danger: #ff4d6d;
+  --gold: #f6cf72;
 }
 
 * {
@@ -24,11 +25,11 @@ body {
   background: #080a13;
 }
 
+/* The canvas fills this box, and the HUD is laid out over the same box — so
+   every corner the HUD pins to is a corner of the game, not of the window. */
 #app {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
 }
 
 #game {
@@ -42,10 +43,12 @@ body {
 
 #hud {
   pointer-events: none;
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 3;
   color: var(--ink);
+  /* Overwritten per level so each district tints its own HUD. */
+  --level-accent: var(--teal);
 }
 
 .hud-top {
@@ -60,17 +63,79 @@ body {
 }
 
 .status-cluster,
+.level-cluster,
 .hint-chip {
   border: 1px solid var(--panel-edge);
-  background: var(--panel);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.055), transparent 42%),
+    var(--panel);
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.3),
+    inset 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .status-cluster {
-  width: min(360px, calc(100vw - 28px));
+  width: min(360px, calc(100% - 28px));
   border-radius: 8px;
   padding: 12px;
+}
+
+.level-cluster {
+  display: grid;
+  min-width: 250px;
+  max-width: 320px;
+  border-radius: 8px;
+  padding: 11px 13px;
+  text-align: right;
+}
+
+.level-kicker {
+  color: var(--level-accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.level-name {
+  margin-top: 2px;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.level-subtitle {
+  margin-top: 2px;
+  color: #cfd4ff;
+  font-size: 11px;
+}
+
+.level-dots {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.level-dot {
+  width: 20px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  transition:
+    width 200ms ease,
+    background 200ms ease;
+}
+
+.level-dot.is-active {
+  background: linear-gradient(90deg, var(--level-accent), var(--pink));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--level-accent) 55%, transparent);
+}
+
+.level-dot.is-current {
+  width: 30px;
+  background: var(--level-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--level-accent) 75%, transparent);
 }
 
 .hero-row {
@@ -88,9 +153,169 @@ body {
   font-weight: 800;
 }
 
+.hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Takedowns chained without touching the ground. `--chain` is the streak. */
+.combo {
+  --chain: 2;
+  --heat: calc((var(--chain) - 2) / 5);
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: linear-gradient(
+    120deg,
+    var(--level-accent),
+    color-mix(
+      in srgb,
+      var(--pink) calc(var(--heat) * 100%),
+      var(--level-accent)
+    )
+  );
+  box-shadow: 0 0 calc(6px + var(--heat) * 14px)
+    color-mix(in srgb, var(--pink) 60%, transparent);
+  color: #0a0d18;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: combo-pop 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.combo[hidden] {
+  display: none;
+}
+
+@keyframes combo-pop {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+}
+
+/* Sound state. Drawn as paths so there is no icon font or image to ship. */
+.mute {
+  display: flex;
+  width: 16px;
+  height: 16px;
+  color: var(--level-accent);
+}
+
+.mute svg {
+  width: 100%;
+  height: 100%;
+}
+
+.mute-cone {
+  fill: currentcolor;
+}
+
+.mute-wave {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  transition: opacity 140ms ease;
+}
+
+.mute-slash {
+  stroke: var(--danger);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.mute.is-muted {
+  color: #7a819f;
+}
+
+.mute.is-muted .mute-wave {
+  opacity: 0;
+}
+
+.mute.is-muted .mute-slash {
+  opacity: 1;
+}
+
 .objective {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
   color: #cfd4ff;
   font-size: 12px;
+}
+
+.objective-threats {
+  color: var(--level-accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gadget-row {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 10px;
+}
+
+.gadget-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 4px 0 5px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #9aa3c7;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-transform: uppercase;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.gadget-chip.is-active {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--level-accent), var(--pink));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--level-accent) 45%, transparent);
+  color: #0a0d18;
+}
+
+/* Out of charges: still legible, clearly unavailable. */
+.gadget-chip.is-empty {
+  opacity: 0.42;
+}
+
+.gadget-pips {
+  display: flex;
+  gap: 3px;
+  height: 4px;
+}
+
+.gadget-pip {
+  width: 9px;
+  border-radius: 999px;
+  background: currentcolor;
+  transition:
+    opacity 200ms ease,
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A spent charge leaves its slot behind, so the magazine size stays readable. */
+.gadget-pip.is-spent {
+  opacity: 0.22;
+  transform: scaleX(0.55);
 }
 
 .bar {
@@ -104,26 +329,50 @@ body {
 .bar-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--teal), var(--pink));
-  transition: width 120ms ease;
+  background: linear-gradient(90deg, var(--level-accent), var(--pink));
+  transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Ten bindings do not fit on one line in a narrow window, and a strip that runs
+   off the edge of the screen teaches nothing. It wraps instead — right-aligned,
+   so it grows up and inward from its own corner. */
 .hint-chip {
-  max-width: min(460px, calc(100vw - 28px));
+  position: absolute;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px 14px;
+  max-width: min(560px, calc(100% - 28px));
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 8px 11px;
   color: #dce2ff;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
+/* A key and the verb it fires are one unit and never break apart; the gap
+   between units does the separating a middot used to, and survives a wrap. */
+.hint {
+  white-space: nowrap;
+}
+
+.hint-key {
+  margin-right: 4px;
+  color: var(--gold);
+  font-weight: 800;
+}
+
+/* Cleared of the wrapped hint strip below it: the two are centred and corner-
+   pinned respectively, and on a mid-width window their boxes cross. */
 .message {
   position: absolute;
   left: 50%;
-  bottom: max(18px, env(safe-area-inset-bottom));
+  bottom: max(88px, calc(env(safe-area-inset-bottom) + 78px));
   transform: translateX(-50%);
-  max-width: min(560px, calc(100vw - 28px));
-  border: 1px solid rgba(38, 214, 207, 0.34);
+  max-width: min(560px, calc(100% - 28px));
+  border: 1px solid color-mix(in srgb, var(--level-accent) 40%, transparent);
   border-radius: 8px;
   padding: 10px 12px;
   background: rgba(9, 14, 22, 0.78);
@@ -132,8 +381,284 @@ body {
   text-align: center;
 }
 
+.message:empty {
+  display: none;
+}
+
+/* Dims the city behind a held world: the title, a pause, the end of a run. */
+.curtain {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 40%, transparent, rgba(4, 6, 14, 0.82) 78%),
+    rgba(6, 8, 18, 0.55);
+  animation: curtain-in 260ms ease;
+}
+
+.curtain[hidden] {
+  display: none;
+}
+
+/* The title hides the skyline almost entirely, so the name carries the frame. */
+.curtain.is-title {
+  background:
+    radial-gradient(120% 90% at 50% 42%, rgba(124, 92, 255, 0.14), transparent),
+    rgba(6, 8, 18, 0.88);
+}
+
+.curtain.is-paused {
+  backdrop-filter: blur(3px) saturate(0.75);
+}
+
+@keyframes curtain-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A held run pulls its in-play furniture back: nothing competes with the panel. */
+[data-run="title"] .hud-top,
+[data-run="title"] .hint-chip,
+[data-run="title"] .message {
+  opacity: 0;
+  visibility: hidden;
+}
+
+[data-run="paused"] .hud-top,
+[data-run="paused"] .hint-chip,
+[data-run="paused"] .message,
+[data-run="cleared"] .hint-chip,
+[data-run="knockedOut"] .hint-chip {
+  opacity: 0.28;
+}
+
+.hud-top,
+.hint-chip,
+.message {
+  transition:
+    opacity 220ms ease,
+    visibility 220ms ease;
+}
+
+.run-banner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  max-width: min(520px, calc(100% - 32px));
+  transform: translate(-50%, -50%);
+  border: 1px solid color-mix(in srgb, var(--level-accent) 55%, transparent);
+  border-radius: 12px;
+  padding: 20px 28px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.07), transparent 55%),
+    rgba(9, 12, 22, 0.9);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  text-align: center;
+  animation: banner-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.run-banner[hidden] {
+  display: none;
+}
+
+.run-banner-kicker {
+  color: var(--level-accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.run-banner-kicker:empty {
+  display: none;
+}
+
+.run-banner-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.run-banner-hint {
+  color: #cfd4ff;
+  font-size: 13px;
+}
+
+/* The title screen is the one place the game says its own name. */
+.run-banner.is-title {
+  max-width: min(620px, calc(100% - 32px));
+  padding: 30px 34px 26px;
+}
+
+.run-banner.is-title .run-banner-title {
+  background: linear-gradient(96deg, var(--teal), var(--pink) 62%, var(--gold));
+  background-clip: text;
+  color: transparent;
+  font-size: clamp(30px, 6vw, 46px);
+  letter-spacing: 0.08em;
+  line-height: 1.05;
+  text-shadow: 0 0 40px rgba(255, 121, 198, 0.25);
+}
+
+.run-banner.is-paused {
+  border-color: color-mix(in srgb, var(--violet) 60%, transparent);
+}
+
+/* Read back what the run amounted to, four numbers wide. */
+.run-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.run-summary[hidden] {
+  display: none;
+}
+
+.run-stat {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+}
+
+.run-stat-label {
+  color: #9aa3c7;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.run-stat-value {
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.run-controls {
+  display: grid;
+  gap: 5px 34px;
+  /* Hugging columns rather than stretched ones: a key and its verb read as a
+     pair, and a full-width row would strand them at opposite edges. */
+  grid-template-columns: repeat(2, max-content);
+  justify-content: center;
+  width: 100%;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+}
+
+.run-controls[hidden] {
+  display: none;
+}
+
+.run-control {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.run-control-key {
+  min-width: 52px;
+  border: 1px solid rgba(246, 207, 114, 0.35);
+  border-radius: 5px;
+  padding: 1px 6px;
+  background: rgba(246, 207, 114, 0.08);
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.run-control-action {
+  color: #cfd4ff;
+}
+
+.run-banner.is-cleared .run-banner-title {
+  background: linear-gradient(90deg, var(--gold), var(--level-accent));
+  background-clip: text;
+  color: transparent;
+}
+
+.run-banner.is-knockedOut {
+  border-color: rgba(255, 77, 109, 0.55);
+}
+
+.run-banner.is-knockedOut .run-banner-title {
+  color: var(--danger);
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px)) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar-fill,
+  .gadget-chip,
+  .gadget-pip,
+  .level-dot,
+  .mute-wave,
+  .mute-slash {
+    transition: none;
+  }
+
+  .run-banner,
+  .combo,
+  .curtain {
+    animation: none;
+  }
+
+  .hud-top,
+  .hint-chip,
+  .message {
+    transition: none;
+  }
+}
+
 @media (max-width: 720px) {
   .hud-top {
-    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .status-cluster {
+    width: min(54vw, 320px);
+  }
+
+  .level-cluster {
+    min-width: 0;
+    max-width: 42vw;
+  }
+
+  .level-subtitle,
+  .hint-chip {
+    display: none;
+  }
+
+  .message {
+    top: calc(50% + min(31vw, 150px));
+    bottom: auto;
+  }
+
+  .run-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .run-controls {
+    grid-template-columns: 1fr;
   }
 }
