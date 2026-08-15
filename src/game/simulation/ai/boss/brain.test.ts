@@ -614,6 +614,34 @@ describe("web nets", () => {
     expect(memory.snareLock).toBeGreaterThan(0);
   });
 
+  test("a net held on it stops pinning it once the stagger is spent", () => {
+    const held = perceptionFor({ snared: true });
+    const { intent, states } = run(held, BOSS_TUNING.staggerTime + 2.4, {
+      ...engaged(1),
+    });
+
+    // The immunity has to hold the boss's behaviour, not merely stop the
+    // stagger being announced twice: a player who kept a net on it could
+    // otherwise suppress the hull and every wind-up for as long as they had
+    // charges to spend.
+    expect(intent.state).not.toBe("stagger");
+    expect(states).toContain("stalk");
+  });
+
+  test("a second net inside the lock does not cancel the wind-up it is reading", () => {
+    const locked = run(perceptionFor({ snared: true }), 0.05, {
+      ...engaged(1),
+    }).memory;
+    // Out of the stagger, still inside the 3.6s lock, and netted again.
+    const { intent } = run(
+      perceptionFor({ snared: true }),
+      BOSS_TUNING.staggerTime + 1.2,
+      locked,
+    );
+
+    expect(intent.state).not.toBe("stagger");
+  });
+
   test("a dormant boss ignores nets entirely", () => {
     const { intent, events } = run(
       perceptionFor({ player: far, snared: true }),

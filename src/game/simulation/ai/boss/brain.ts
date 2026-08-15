@@ -347,14 +347,19 @@ export const stepBossBrain = (
 
   // A net beats any wind-up, once. After that the boss shrugs them off for a
   // while, so the gadget stays a read rather than a lock.
-  if (perception.snared && next.state !== "dormant") {
-    const fresh = next.state !== "stagger" && next.snareLock <= 0;
-    if (fresh) {
-      beginStagger(next, tuning);
-    }
+  // The lock gates the whole branch, not just the announcement. It used to gate
+  // only whether a stagger began, while every later net still returned the limp
+  // `sag` with no attack — so a player with charges could pin the hull and
+  // cancel every wind-up indefinitely, which is exactly the chain-lock the
+  // immunity exists to rule out.
+  //
+  // Once past here the stagger is an ordinary state: `advance` runs its timer
+  // down and `resolveMotion` keeps it limp until it does.
+  if (perception.snared && next.state !== "dormant" && next.snareLock <= 0) {
+    beginStagger(next, tuning);
     updateFacing(next, perception);
     return present(next, sag(perception, tuning), {
-      event: fresh ? "stagger" : null,
+      event: "stagger",
       attack: null,
     });
   }
