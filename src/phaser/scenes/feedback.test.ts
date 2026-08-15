@@ -77,6 +77,7 @@ const enemy = (health: number): EnemyState => ({
   health,
   damage: 8,
   speed: 120,
+  invulnerable: false,
   patrolMinX: 0,
   patrolMaxX: 400,
 });

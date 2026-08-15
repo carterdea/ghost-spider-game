@@ -55,6 +55,7 @@ const enemyState = (overrides: Partial<EnemyState> = {}): EnemyState => ({
   speed: 90,
   patrolMinX: 0,
   patrolMaxX: 200,
+  invulnerable: false,
   ...overrides,
 });
 

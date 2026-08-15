@@ -296,6 +296,10 @@ export class EnemyDirector {
     // Combat reads `state.damage` at the moment of the hit, so the open window
     // becomes safe to dive into without any change to the caller.
     view.state.damage = bossContactDamage(boss);
+    // The other half of the same trade: the window that is safe to dive into is
+    // the only one that pays. Written here so every weapon path is covered by
+    // the one rule rather than each remembering it.
+    view.state.invulnerable = !boss.intent.vulnerable;
 
     if (step.intent.attack) {
       this.launchBossAttack(step.intent.attack);

@@ -53,6 +53,14 @@ const STAGGER_MESSAGE: Record<ActorKind, string> = {
   boss: "The Weaver's plating splits.",
 };
 
+/** Only the boss ever turns a blow aside, but the table keeps the shape. */
+const DEFLECT_MESSAGE: Record<ActorKind, string> = {
+  gunner: "The shot glances off.",
+  drone: "The shot glances off.",
+  robot: "The shot glances off.",
+  boss: "The Weaver's hull turns it aside.",
+};
+
 const TAKEDOWN_MESSAGE: Record<ActorKind, string> = {
   gunner: "Gunner disarmed.",
   drone: "Drone clipped.",
@@ -107,6 +115,14 @@ export const damageEnemy = (
   amount: number,
   combo?: ComboState,
 ): boolean => {
+  // The Weaver's fight is measured in punish windows: the health it carries is
+  // sized as a count of them, so a blow landed outside one has to bounce or the
+  // whole tuning is a fiction — see `BOSS_HEALTH` in `bossBinding`.
+  if (enemy.invulnerable) {
+    state.player.message = DEFLECT_MESSAGE[enemy.kind];
+    return false;
+  }
+
   enemy.health = Math.max(0, enemy.health - amount);
 
   if (enemy.health > 0) {

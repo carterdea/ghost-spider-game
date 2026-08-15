@@ -53,6 +53,12 @@ export interface EnemyState {
   speed: number;
   patrolMinX: number;
   patrolMaxX: number;
+  /**
+   * Whether blows currently bounce off. Rewritten every frame for the boss from
+   * its punish window, the same way `damage` is rewritten from its strike, and
+   * left false for everything else.
+   */
+  invulnerable: boolean;
 }
 
 /**
@@ -107,6 +113,7 @@ const createEnemyState = (spawn: EnemySpawn): EnemyState => ({
   speed: spawn.speed,
   patrolMinX: spawn.patrolMinX,
   patrolMaxX: spawn.patrolMaxX,
+  invulnerable: false,
 });
 
 /** The boss carries the same state shape as a patrol, so combat treats it alike. */
@@ -118,6 +125,7 @@ export const createBossState = (spawn: BossSpawn): EnemyState => ({
   speed: spawn.speed,
   patrolMinX: spawn.arena.x,
   patrolMaxX: spawn.arena.x + spawn.arena.width,
+  invulnerable: false,
 });
 
 /**

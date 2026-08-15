@@ -56,6 +56,43 @@ describe("damageEnemy", () => {
     expect(state.player.score).toBe(250);
     expect(state.player.message).toBe("Gunner disarmed.");
   });
+
+  test("a blow lands nothing while the target is closed", () => {
+    const state = stateWith(["robot"]);
+    const target = state.enemies[0];
+    target.invulnerable = true;
+
+    // The Weaver is the only thing that ever sets this, and its health is sized
+    // as a count of punish windows — a hit landing outside one makes that
+    // number a fiction.
+    expect(damageEnemy(state, target, 60)).toBe(false);
+    expect(target.health).toBe(30);
+    expect(state.player.score).toBe(0);
+  });
+
+  test("the same blow lands once the window opens", () => {
+    const state = stateWith(["robot"]);
+    const target = state.enemies[0];
+
+    target.invulnerable = true;
+    damageEnemy(state, target, 60);
+    target.invulnerable = false;
+
+    expect(damageEnemy(state, target, 60)).toBe(true);
+  });
+
+  test("a closed target cannot be chained through", () => {
+    const state = stateWith(["robot", "robot"]);
+    const combo = { count: 0, best: 0 };
+
+    state.enemies[0].invulnerable = true;
+    damageEnemy(state, state.enemies[0], 60, combo);
+    damageEnemy(state, state.enemies[1], 60, combo);
+
+    // The deflected blow must not count as a link, or a chain could be built
+    // out of hits that never landed.
+    expect(combo.count).toBe(1);
+  });
 });
 
 describe("takedowns return health", () => {
