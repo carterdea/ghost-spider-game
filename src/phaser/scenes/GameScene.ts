@@ -231,8 +231,20 @@ export class GameScene extends Phaser.Scene {
     }
 
     // A context only runs once the page has been touched, so the score waits
-    // for the first keypress rather than starting with the scene.
-    this.input.keyboard?.once("keydown", () => this.audio?.music.start());
+    // for a keypress rather than starting with the scene.
+    //
+    // The listener stays until audio is actually live rather than firing once.
+    // A run that starts on a saved mute builds no context at all, so a single
+    // shot was spent on a keypress that could not open one; unmuting later is
+    // read on the frame clock, where a browser enforcing autoplay refuses to
+    // start one, and the session stayed silent.
+    const unlock = (): void => {
+      this.audio?.music.start();
+      if (this.audio?.unlock() !== false) {
+        this.input.keyboard?.off("keydown", unlock);
+      }
+    };
+    this.input.keyboard?.on("keydown", unlock);
   }
 
   /**

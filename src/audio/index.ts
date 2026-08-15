@@ -31,6 +31,15 @@ export interface GameAudio {
   setWind(intensity: number): void;
   setMuted(muted: boolean): void;
   isMuted(): boolean;
+  /**
+   * Call from a real input event. Builds and resumes the context when sound is
+   * on, and reports whether audio is live — a caller holding a gesture listener
+   * open keeps it until this says yes.
+   *
+   * False while muted: a silent game builds nothing, so the gesture that
+   * matters is the one after the player turns sound back on.
+   */
+  unlock(): boolean;
   /** The score. Shares this object's mute, master volume and limiter. */
   readonly music: MusicControl;
   destroy(): void;
@@ -120,6 +129,15 @@ export const createAudio = (options: AudioOptions = {}): GameAudio => {
     },
 
     isMuted: (): boolean => muted,
+
+    unlock(): boolean {
+      if (muted) {
+        return false;
+      }
+      // No Web Audio at all: nothing will ever come of another gesture, so the
+      // caller is told to stop waiting for one.
+      return ensureEngine()?.unlock() ?? true;
+    },
 
     music,
 

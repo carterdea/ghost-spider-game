@@ -264,6 +264,46 @@ describe("node lifetime", () => {
   });
 });
 
+describe("unlocking from a gesture", () => {
+  /** A preference that says the player left the game muted last time. */
+  const savedMuted: MuteStorage = {
+    getItem: () => "1",
+    setItem: () => undefined,
+  };
+
+  test("a muted game builds nothing and asks to be called again", () => {
+    const audio = build({ storage: savedMuted });
+
+    expect(audio.unlock()).toBe(false);
+    // Silence stays free: no context is opened for a game making no sound.
+    expect(contextCalls).toBe(0);
+  });
+
+  test("the gesture after unmuting is the one that opens the context", () => {
+    const audio = build({ storage: savedMuted });
+    audio.unlock();
+
+    audio.setMuted(false);
+    audio.unlock();
+
+    // Without this the context was first built from the frame clock, where a
+    // browser enforcing autoplay refuses to start one and the run stays
+    // silent for the session.
+    expect(contextCalls).toBe(1);
+    expect(context.resumeCalls).toBeGreaterThan(0);
+  });
+
+  test("it reports live once the context is running, so the caller can let go", () => {
+    const audio = build();
+
+    // Asynchronous under a real browser, so the first answer is usually no
+    // and the listener survives to the next key.
+    audio.unlock();
+
+    expect(audio.unlock()).toBe(true);
+  });
+});
+
 describe("mute", () => {
   test("builds no voices while muted and resumes after unmuting", () => {
     const audio = build();

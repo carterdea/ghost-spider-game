@@ -238,6 +238,22 @@ export class AudioEngine {
   }
 
   /**
+   * Resumes from a real input event, and reports whether the context is live.
+   *
+   * A caller holding a gesture listener open uses the answer to decide whether
+   * it still needs it. `resume` is asynchronous, so the first call usually
+   * answers false and the listener survives to the next key — which is the
+   * safe way round.
+   */
+  // Reached as `ensureEngine()?.unlock()`. Fallow does not resolve a member
+  // through a call's return value, so it reads as unused — see `play`.
+  // fallow-ignore-next-line unused-class-member
+  public unlock(): boolean {
+    this.resume();
+    return this.context.state === "running";
+  }
+
+  /**
    * Browsers hold new contexts suspended until a user gesture. Resuming
    * outside one is simply refused, so the rejection is expected and ignored.
    */
