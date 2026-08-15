@@ -518,6 +518,13 @@ export class EnemyDirector {
    * gadget can talk its way into a longer lock than the fight allows.
    */
   public snare(view: EnemyView, durationMs = SNARE_DURATION): void {
+    // A shrugged-off net leaves no mark at all. The brain already ignores one
+    // thrown inside the lock, but stamping the deadline anyway only queued it:
+    // the physical snare outlived the immunity, and the frame the lock reached
+    // zero the brain saw `snared` and staggered on a net thrown seconds ago.
+    if (view.boss && view.boss.memory.snareLock > 0) {
+      return;
+    }
     view.snaredUntil =
       this.simClock + (view.boss ? BOSS_SNARE_DURATION : durationMs);
     view.sprite.setVelocity(0, 0);

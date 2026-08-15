@@ -149,6 +149,64 @@ describe("the brains", () => {
   });
 });
 
+describe("a net on the boss", () => {
+  /** The Weaver, dropped into a harness that already has a level loaded. */
+  const withBoss = () => {
+    const harness = setUp(1);
+    const state = createInitialGameState(LEVELS[1], "playing");
+    const boss = harness.director.spawnBoss(
+      {
+        id: "the-weaver",
+        position: { x: 800, y: 400 },
+        arena: { x: 0, y: 150, width: 3000, height: 900 },
+        health: 260,
+        damage: 10,
+        speed: 260,
+      },
+      state,
+    );
+    return { harness, boss };
+  };
+
+  test("lands the first time", () => {
+    const { harness, boss } = withBoss();
+
+    harness.director.snare(boss);
+
+    expect(boss.snaredUntil).toBeGreaterThan(harness.director.now);
+  });
+
+  test("thrown inside the lock leaves no mark to cash in later", () => {
+    const { harness, boss } = withBoss();
+    if (!boss.boss) {
+      throw new Error("the boss view has no runtime");
+    }
+
+    // The immunity is up: the brain already ignores a net here. Stamping the
+    // deadline anyway only queued it — the physical snare outlived the lock,
+    // and the frame the lock hit zero the brain staggered on a net thrown
+    // seconds earlier.
+    boss.boss.memory.snareLock = 3.6;
+    harness.director.snare(boss);
+
+    expect(boss.snaredUntil).toBe(0);
+  });
+
+  test("lands again once the lock has run out", () => {
+    const { harness, boss } = withBoss();
+    if (!boss.boss) {
+      throw new Error("the boss view has no runtime");
+    }
+
+    boss.boss.memory.snareLock = 3.6;
+    harness.director.snare(boss);
+    boss.boss.memory.snareLock = 0;
+    harness.director.snare(boss);
+
+    expect(boss.snaredUntil).toBeGreaterThan(harness.director.now);
+  });
+});
+
 describe("a gunner's shot", () => {
   /** Stands the hero where the gunner can see them and lets it open fire. */
   const openFire = (levelIndex: number) => {
