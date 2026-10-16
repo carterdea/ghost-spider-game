@@ -6,7 +6,7 @@ import {
   rectTop,
   type Vec2,
 } from "../../simulation/physics/vector";
-import type { AnchorPoint, Building, Cable } from "./types";
+import type { AnchorPoint, Beacon, Building, Cable } from "./types";
 
 /**
  * Reach and clearance come from the attachment solver the running game uses,
@@ -147,6 +147,17 @@ export const generateCableAnchors = (
 
   return anchors;
 };
+
+/** One anchor per lamp, carrying the lamp's blink so the scene can dim it. */
+export const generateBeaconAnchors = (
+  beacons: readonly Beacon[],
+): AnchorPoint[] =>
+  beacons.map(({ tip, blink }) => ({
+    x: tip.x,
+    y: tip.y,
+    source: "beacon",
+    blink,
+  }));
 
 /** Anchors the hero at `from` could actually catch, nearest first. */
 export const anchorsInReach = (

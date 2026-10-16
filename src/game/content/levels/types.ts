@@ -1,9 +1,10 @@
 import type { Rect, Vec2 } from "../../simulation/physics/vector";
 import type { EnemyKind } from "../../simulation/state";
+import type { BeaconBlink } from "../../simulation/systems/beacons";
 
 export type BuildingKind = "tower" | "block" | "lowrise";
 export type EnemyLane = "roof" | "street" | "air";
-export type AnchorSource = "building" | "cable" | "authored";
+export type AnchorSource = "building" | "cable" | "beacon" | "authored";
 
 /** A solid, collidable volume. `bounds` is top-left anchored; `bounds.y` is the roof line. */
 export interface Building {
@@ -18,6 +19,18 @@ export interface Building {
 export interface Cable {
   from: Vec2;
   to: Vec2;
+}
+
+/**
+ * An antenna mast standing on a roof with a warning lamp at its tip. The lamp
+ * is a web anchor, but only while it is lit.
+ */
+export interface Beacon {
+  /** The lamp, and the anchor. */
+  tip: Vec2;
+  /** The roof line the mast stands on. */
+  baseY: number;
+  blink: BeaconBlink;
 }
 
 /** A hoist deck, a trolley, or a glass panel — geometry that is not a building. */
@@ -64,6 +77,8 @@ export interface AnchorPoint {
   x: number;
   y: number;
   source: AnchorSource;
+  /** Set on beacon anchors: the schedule that decides when a web can bite. */
+  blink?: BeaconBlink;
 }
 
 export interface EnemySpawn {
@@ -102,6 +117,7 @@ export interface LevelDefinition {
   buildings: Building[];
   cables: Cable[];
   platforms: Platform[];
+  beacons: Beacon[];
   anchors: AnchorPoint[];
   enemies: EnemySpawn[];
 }

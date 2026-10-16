@@ -14,6 +14,7 @@ export {
   cablePointAt,
   cablePoints,
   cableSegments,
+  generateBeaconAnchors,
   generateBuildingAnchors,
   generateCableAnchors,
   MIN_ANCHOR_CLEARANCE,
@@ -23,6 +24,7 @@ export {
 export { roofYAt } from "./levels/authoring";
 export type {
   AnchorPoint,
+  Beacon,
   Building,
   Cable,
   EnemyLane,
