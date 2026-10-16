@@ -80,6 +80,9 @@ export class LevelWorld {
   }
 
   /** The anchors a web can bite right now: everything but a dark lamp. */
+  // Called from `GameScene.updateRun` through `requireWorld()`, which Fallow
+  // does not resolve.
+  // fallow-ignore-next-line unused-class-member
   public catchable(anchors: readonly AnchorPoint[]): readonly AnchorPoint[] {
     if (this.darkLamps.size === 0) {
       return anchors;
