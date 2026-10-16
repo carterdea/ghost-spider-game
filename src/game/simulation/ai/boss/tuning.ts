@@ -176,3 +176,20 @@ export const phaseFor = (fraction: number, tuning: BossTuning): BossPhase => {
 
 /** Default authored move speed. Phase factors take it from 260 to 494px/s. */
 export const BOSS_BASE_SPEED = 260;
+
+/**
+ * Sized against the live finale, played by bot through the dev handle. The
+ * Weaver can only be hurt while open, and it opens two ways: the punish window
+ * after each attack (0.73s on the brain's clock, three or four blows once the
+ * hit-stop stretches it, 102 to 136) and the phase shift (1.1s, four or five
+ * blows, 136 to 170). The shift is the bigger opening, and at 260 health it
+ * carried the hero straight through the next band: a flawless fight was three
+ * windows and five seconds, a quick one three windows and eight, and phase two
+ * was never seen.
+ *
+ * At 900, measured live: a flawless hero takes 3 / 2 / 2 punish windows per
+ * phase over 20s, a quick one 5 / 2 / 3 over 29s, and a slow one landing a glob
+ * or a blow most windows 11 / 7 / 9 over 75s. Every phase gets read at least
+ * twice. See `the fight` in `brain.test`, which holds it to that shape.
+ */
+export const BOSS_HEALTH = 900;

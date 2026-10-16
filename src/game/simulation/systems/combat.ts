@@ -138,7 +138,7 @@ export const damageEnemy = (
 ): StrikeOutcome => {
   // The Weaver's fight is measured in punish windows: the health it carries is
   // sized as a count of them, so a blow landed outside one has to bounce or the
-  // whole tuning is a fiction — see `BOSS_HEALTH` in `bossBinding`.
+  // whole tuning is a fiction — see `BOSS_HEALTH` in `ai/boss/tuning`.
   if (enemy.invulnerable) {
     state.player.message = DEFLECT_MESSAGE[enemy.kind];
     return "deflected";
