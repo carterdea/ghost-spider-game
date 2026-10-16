@@ -1,4 +1,5 @@
 import { clamp } from "../game/simulation/physics/vector";
+import { detectStorage } from "../storage";
 import { AudioEngine, detectAudioContext } from "./engine";
 import { RECIPES, type SoundEvent } from "./events";
 import {
@@ -6,12 +7,7 @@ import {
   type MusicControl,
   type MusicOptions,
 } from "./music/index";
-import {
-  detectStorage,
-  type MuteStorage,
-  readMuted,
-  writeMuted,
-} from "./preference";
+import { type MuteStorage, readMuted, writeMuted } from "./preference";
 
 export type { SoundEvent } from "./events";
 export type { MusicControl, MusicOptions } from "./music/index";
