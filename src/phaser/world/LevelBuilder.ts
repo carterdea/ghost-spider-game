@@ -706,7 +706,7 @@ export class LevelBuilder {
     world.track(
       this.scene.add
         .tileSprite(tip.x, tip.y + height / 2, 24, height, "antennaMast")
-        .setDepth(DEPTH.cable - 0.5),
+        .setDepth(DEPTH.roofDecor - 0.5),
     );
     const glow = world.track(
       this.scene.add
