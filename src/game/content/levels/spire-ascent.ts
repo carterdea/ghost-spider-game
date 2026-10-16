@@ -1,13 +1,9 @@
-import type { BeaconBlink } from "../../simulation/systems/beacons";
-import { type LevelBlueprint, STREET_Y, WORLD_HEIGHT } from "./authoring";
-
-/** Lit long enough to line up a throw; the flicker is the warning. */
-const blinkFrom = (offsetMs: number): BeaconBlink => ({
-  litMs: 2200,
-  flickerMs: 700,
-  darkMs: 1500,
-  offsetMs,
-});
+import {
+  type LevelBlueprint,
+  lampBlink,
+  STREET_Y,
+  WORLD_HEIGHT,
+} from "./authoring";
 
 /**
  * District 6 — vertical whiplash. Narrow spires alternate with low blocks, so
@@ -23,7 +19,7 @@ const blinkFrom = (offsetMs: number): BeaconBlink => ({
 export const spireAscent = {
   id: "spire-ascent",
   name: "Spire Ascent",
-  subtitle: "Ride the saw-tooth skyline up to the antenna line.",
+  subtitle: "Catch the mast lamps while they burn.",
   accent: "#c9a6ff",
   backdropKey: "environment-midtown",
   width: 4400,
@@ -42,9 +38,9 @@ export const spireAscent = {
     { x: 3960, width: 440, roofY: 860, kind: "block" },
   ],
   beaconRows: [
-    { x: 1510, height: 380, blink: blinkFrom(0) },
-    { x: 2170, height: 240, blink: blinkFrom(1450) },
-    { x: 2820, height: 380, blink: blinkFrom(2900) },
+    { x: 1510, height: 380, blink: lampBlink(0) },
+    { x: 2170, height: 240, blink: lampBlink(1450) },
+    { x: 2820, height: 380, blink: lampBlink(2900) },
   ],
   enemyRows: [
     {

@@ -1,4 +1,9 @@
-import { type LevelBlueprint, STREET_Y, WORLD_HEIGHT } from "./authoring";
+import {
+  type LevelBlueprint,
+  lampBlink,
+  STREET_Y,
+  WORLD_HEIGHT,
+} from "./authoring";
 
 /**
  * Level 7 — the long haul. Gaps stretch to 400px and every crossing swaps roof
@@ -8,6 +13,9 @@ import { type LevelBlueprint, STREET_Y, WORLD_HEIGHT } from "./authoring";
  * One cargo hoist works the deepest inlet, three districts after Drydock taught
  * them: the 320px climb out of the low block is the one place on the route
  * where a rebuilt swing costs more than a ride.
+ *
+ * A radio mast on the low warehouse is the Spire Ascent lamp again: lit, it
+ * lifts the hero over the 380px climb to the far tower in one swing.
  */
 export const harborCraneRun = {
   id: "harbor-crane-run",
@@ -38,6 +46,7 @@ export const harborCraneRun = {
       motion: { dx: 0, dy: -380, travelMs: 2600, holdMs: 1000 },
     },
   ],
+  beaconRows: [{ x: 3000, height: 400, blink: lampBlink(0) }],
   enemyRows: [
     {
       id: "harbor-gunner-dock",

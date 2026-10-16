@@ -62,6 +62,14 @@ export interface CableRow {
   toY: number;
 }
 
+/** The lamp timing every district shares: lit long enough to line up a throw, the flicker is the warning. */
+export const lampBlink = (offsetMs: number): BeaconBlink => ({
+  litMs: 2200,
+  flickerMs: 700,
+  darkMs: 1500,
+  offsetMs,
+});
+
 /** A mast authored by where it stands and how tall it is; it always stands on a roof. */
 export interface BeaconRow {
   x: number;

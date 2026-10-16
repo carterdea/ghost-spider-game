@@ -226,6 +226,16 @@ describe("level table", () => {
     }
   });
 
+  test("beacons come back after Spire Ascent introduces them", () => {
+    const spire = LEVELS.findIndex((level) => level.id === "spire-ascent");
+    const introduced = LEVELS.findIndex((level) => level.beacons.length > 0);
+    const later = LEVELS.slice(spire + 1).some(
+      (level) => level.beacons.length > 0,
+    );
+
+    expect({ introduced, later }).toEqual({ introduced: spire, later: true });
+  });
+
   test("enemy ids are unique across the whole game", () => {
     const ids = LEVELS.flatMap((level) =>
       level.enemies.map((enemy) => enemy.id),
