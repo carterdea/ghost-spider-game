@@ -8,6 +8,7 @@ import {
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { LEVELS } from "../../game/content/levels";
+import { createRunRecords } from "../../game/records/bests";
 import {
   createInitialGameState,
   type GameState,
@@ -16,8 +17,8 @@ import {
   ARSENAL,
   GADGET_ORDER,
 } from "../../game/simulation/systems/weapons/arsenal";
-import { formatDuration } from "./banner";
 import { HINTS } from "./controls";
+import { formatDuration } from "./format";
 import { Hud } from "./hud";
 
 /**
@@ -397,7 +398,7 @@ describe("pause panel", () => {
 
 describe("run summary", () => {
   const stats = (): string[] =>
-    Array.from(root.querySelectorAll(".run-stat-value")).map(
+    Array.from(root.querySelectorAll(".run-summary .run-stat-value")).map(
       (value) => value.textContent ?? "",
     );
 
@@ -415,7 +416,7 @@ describe("run summary", () => {
 
     expect(query(root, ".run-summary").hidden).toBe(false);
     expect(
-      Array.from(root.querySelectorAll(".run-stat-label")).map(
+      Array.from(root.querySelectorAll(".run-summary .run-stat-label")).map(
         (label) => label.textContent,
       ),
     ).toEqual(["Score", "Districts", "Best chain", "Time"]);
@@ -450,6 +451,80 @@ describe("run summary", () => {
     expect(formatDuration(4_000)).toBe("0:04");
     expect(formatDuration(244_000)).toBe("4:04");
     expect(formatDuration(-50)).toBe("0:00");
+  });
+});
+
+describe("personal bests", () => {
+  const savedBests = (bests: object) => {
+    const values = new Map([["ghost-spider:bests", JSON.stringify(bests)]]);
+    return createRunRecords({
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => {
+        values.set(key, value);
+      },
+    });
+  };
+
+  const bestCells = () =>
+    Array.from(root.querySelectorAll<HTMLElement>(".run-bests .run-stat")).map(
+      (cell) => ({
+        value: cell.querySelector(".run-stat-value")?.textContent,
+        isNew: cell.classList.contains("is-new"),
+      }),
+    );
+
+  const saved = {
+    score: 5000,
+    bestChain: 4,
+    fastestClearMs: 300_000,
+    furthestDistrict: 7,
+  };
+
+  test("stay off the title until there is a run to remember", () => {
+    hud.render(makeState({ status: "title" }));
+
+    expect(query(root, ".run-bests").hidden).toBe(true);
+  });
+
+  test("greet the player on the title", () => {
+    const titled = new Hud(root, savedBests(saved));
+    titled.render(makeState({ status: "title" }));
+
+    expect(query(root, ".run-bests").hidden).toBe(false);
+    expect(bestCells()).toEqual([
+      { value: "5000", isNew: false },
+      { value: "4×", isNew: false },
+      { value: "5:00", isNew: false },
+      { value: `7 / ${LEVELS.length}`, isNew: false },
+    ]);
+  });
+
+  test("flag only the records a finished run beat", () => {
+    const finished = new Hud(root, savedBests(saved));
+    finished.render(
+      makeState({
+        status: "cleared",
+        levelIndex: LEVELS.length - 1,
+        score: 6200,
+        districtsCleared: LEVELS.length,
+        bestChain: 3,
+        elapsedMs: 280_000,
+      }),
+    );
+
+    expect(bestCells()).toEqual([
+      { value: "6200", isNew: true },
+      { value: "4×", isNew: false },
+      { value: "4:40", isNew: true },
+      { value: `${LEVELS.length} / ${LEVELS.length}`, isNew: true },
+    ]);
+  });
+
+  test("leave the pause panel alone", () => {
+    const paused = new Hud(root, savedBests(saved));
+    paused.render(makeState({ status: "paused" }));
+
+    expect(query(root, ".run-bests").hidden).toBe(true);
   });
 });
 

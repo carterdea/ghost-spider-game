@@ -1,4 +1,4 @@
-import { detectStorage, type KeyValueStorage } from "../../storage";
+import type { KeyValueStorage } from "../../storage";
 import { LEVELS } from "../content/levels";
 import type { RunSummary } from "../simulation/state";
 
@@ -28,7 +28,7 @@ export const NO_BESTS: PersonalBests = {
   furthestDistrict: 0,
 };
 
-const BEST_KEYS = [
+export const BEST_KEYS = [
   "score",
   "bestChain",
   "fastestClearMs",
@@ -118,7 +118,7 @@ export const recordRun = (
 };
 
 export const createRunRecords = (
-  storage: KeyValueStorage | undefined = detectStorage(),
+  storage: KeyValueStorage | undefined,
 ): RunRecords => {
   let bests = readBests(storage);
   return {
