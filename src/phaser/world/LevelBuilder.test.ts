@@ -445,3 +445,50 @@ describe("geometry validation", () => {
     }
   });
 });
+
+describe("antenna beacons", () => {
+  const beaconLevel = (): LevelDefinition => {
+    const level = LEVELS.find((candidate) => candidate.beacons.length > 0);
+    if (!level) {
+      throw new Error("No district ships a beacon.");
+    }
+    return { ...level, platforms: [], beacons: [level.beacons[0]] };
+  };
+
+  test("a web cannot bite a lamp while it is dark, and can once it relights", () => {
+    const scene = new SceneDouble();
+    const level = beaconLevel();
+    const { tip, blink } = level.beacons[0];
+    const world = buildOn(scene, level);
+    const driver = scene
+      .liveTweens()
+      .find(
+        (tween) =>
+          typeof tween.targets === "object" &&
+          tween.targets !== null &&
+          "t" in (tween.targets as Record<string, unknown>),
+      );
+    if (!driver?.onUpdate) {
+      throw new Error("The beacon is not being driven.");
+    }
+    const schedule = driver.targets as { t: number };
+    const period = blink.litMs + blink.flickerMs + blink.darkMs;
+    const hasLamp = (): boolean =>
+      world
+        .catchable(level.anchors)
+        .some((anchor) => anchor.x === tip.x && anchor.y === tip.y);
+    const stepTo = (elapsedMs: number): void => {
+      schedule.t = (elapsedMs - blink.offsetMs) / period;
+      driver.onUpdate?.();
+    };
+
+    stepTo(blink.litMs + blink.flickerMs + 1);
+    expect(hasLamp()).toBe(false);
+    expect(world.catchable(level.anchors)).toHaveLength(
+      level.anchors.length - 1,
+    );
+
+    stepTo(blink.litMs + 1);
+    expect(hasLamp()).toBe(true);
+  });
+});
