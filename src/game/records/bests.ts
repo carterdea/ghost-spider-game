@@ -80,7 +80,7 @@ export const readBests = (
   }
 };
 
-export const writeBests = (
+const writeBests = (
   storage: KeyValueStorage | undefined,
   bests: PersonalBests,
 ): void => {
