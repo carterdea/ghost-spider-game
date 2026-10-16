@@ -328,6 +328,48 @@ const drawGlassLedge: Draw = (graphics) => {
   graphics.generateTexture("glassLedge", 64, 26);
 };
 
+/**
+ * One storey of a lattice antenna: two rails and an X brace. Tiled up the
+ * height of a mast, so every mast reads as the same steelwork however tall.
+ */
+const drawAntennaMast: Draw = (graphics) => {
+  graphics.lineStyle(5, 0x0b1120, 0.9);
+  graphics.lineBetween(5, 0, 5, 48);
+  graphics.lineBetween(19, 0, 19, 48);
+  graphics.lineStyle(2, 0x8397bd, 0.95);
+  graphics.lineBetween(5, 0, 5, 48);
+  graphics.lineBetween(19, 0, 19, 48);
+  graphics.lineStyle(1.5, 0x5d6f96, 0.9);
+  graphics.lineBetween(5, 2, 19, 22);
+  graphics.lineBetween(19, 2, 5, 22);
+  graphics.lineBetween(5, 26, 19, 46);
+  graphics.lineBetween(19, 26, 5, 46);
+  graphics.lineBetween(5, 24, 19, 24);
+  graphics.generateTexture("antennaMast", 24, 48);
+};
+
+/** The lamp housing on a mast tip: a dark cap over a red dome. */
+const drawBeaconLamp: Draw = (graphics) => {
+  graphics.fillStyle(0x0b1120, 1);
+  graphics.fillRoundedRect(4, 14, 20, 10, 3);
+  graphics.fillStyle(0xff3b4f, 1);
+  graphics.fillCircle(14, 13, 8);
+  graphics.fillStyle(0xffd2d7, 0.9);
+  graphics.fillCircle(11, 10, 2.5);
+  graphics.lineStyle(2, 0x2a3450, 1);
+  graphics.lineBetween(4, 22, 24, 22);
+  graphics.generateTexture("beaconLamp", 28, 28);
+};
+
+/** The light a lit lamp throws: soft rings fading out, drawn additively. */
+const drawBeaconGlow: Draw = (graphics) => {
+  for (let ring = 12; ring >= 1; ring -= 1) {
+    graphics.fillStyle(0xff3b4f, 0.05 + 0.03 * (12 - ring) ** 0.6);
+    graphics.fillCircle(48, 48, ring * 4);
+  }
+  graphics.generateTexture("beaconGlow", 96, 96);
+};
+
 const drawBat: Draw = (graphics) => {
   graphics.fillStyle(0x070911, 1);
   graphics.fillEllipse(22, 16, 12, 9);
@@ -464,6 +506,9 @@ const DRAWINGS = {
   parkBench: drawParkBench,
   platformDeck: drawPlatformDeck,
   glassLedge: drawGlassLedge,
+  antennaMast: drawAntennaMast,
+  beaconLamp: drawBeaconLamp,
+  beaconGlow: drawBeaconGlow,
   bat: drawBat,
   rainFar: rainTile("rainFar", 34, 8, 18, 1, 0.3),
   rainMid: rainTile("rainMid", 20, 22, 46, 1.3, 0.34),
