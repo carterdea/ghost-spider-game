@@ -51,10 +51,8 @@ const DEPTH = {
   platform: 6,
 } as const;
 
-/** Aircraft-warning red, so a lamp never reads as a district accent. */
-const BEACON_LAMP = 0xff3b4f;
-/** A dark lamp stays faintly visible, so the player can see where it will relight. */
-const BEACON_DARK_ALPHA = 0.18;
+/** A dark lamp is still drawn, dimmed, so the player can see where it will relight. */
+const BEACON_DARK_TINT = 0x4a2a33;
 const BEACON_FLICKER_MS = 90;
 
 /** Deck tint while a glass panel is failing: the same red as the district accent. */
@@ -697,41 +695,46 @@ export class LevelBuilder {
   }
 
   /**
-   * A lattice mast up from the roof and a warning lamp on its tip. The lamp is
-   * driven like a failing ledge: one tween reads the blink rule and both dims
-   * the lamp and tells the world whether a web can bite it.
+   * A lattice mast up from the roof, a lamp on its tip and the glow it throws.
+   * Driven like a failing ledge: one tween reads the blink rule, dims the glow
+   * and tells the world whether a web can bite. It runs once at build too, so a
+   * mast that starts dark is never catchable for the frame before the first tick.
    */
   private buildBeacon(beacon: Beacon, world: LevelWorld): void {
     const { tip, baseY, blink } = beacon;
-    const mast = world.track(
-      this.scene.add.graphics().setDepth(DEPTH.cable - 0.5),
+    const height = baseY - tip.y;
+    world.track(
+      this.scene.add
+        .tileSprite(tip.x, tip.y + height / 2, 24, height, "antennaMast")
+        .setDepth(DEPTH.cable - 0.5),
     );
-    mast.lineStyle(6, 0x0b1120, 0.85);
-    mast.lineBetween(tip.x, baseY, tip.x, tip.y);
-    mast.lineStyle(2, 0x8397bd, 0.9);
-    mast.lineBetween(tip.x - 3, baseY, tip.x, tip.y);
-    mast.lineBetween(tip.x + 3, baseY, tip.x, tip.y);
-
-    const lamp = world.track(this.scene.add.graphics().setDepth(DEPTH.cable));
-    lamp.fillStyle(BEACON_LAMP, 0.28);
-    lamp.fillCircle(tip.x, tip.y, 16);
-    lamp.fillStyle(BEACON_LAMP, 1);
-    lamp.fillCircle(tip.x, tip.y, 7);
+    const glow = world.track(
+      this.scene.add
+        .image(tip.x, tip.y, "beaconGlow")
+        .setBlendMode("ADD")
+        .setDepth(DEPTH.cable),
+    );
+    const lamp = world.track(
+      this.scene.add.image(tip.x, tip.y, "beaconLamp").setDepth(DEPTH.cable),
+    );
 
     const period = blinkPeriod(blink);
     const driver = { t: 0 };
+    const show = (): void => {
+      const elapsedMs = driver.t * period;
+      const state = beaconStateAt(blink, elapsedMs);
+      glow.setAlpha(glowAlpha(state, elapsedMs));
+      lamp.setTint(state === "dark" ? BEACON_DARK_TINT : 0xffffff);
+      world.setLampLit(blink, isBeaconCatchable(state));
+    };
+    show();
     world.tween({
       targets: driver,
       t: 1,
       duration: period,
       repeat: -1,
       ease: "Linear",
-      onUpdate: () => {
-        const elapsedMs = driver.t * period;
-        const state = beaconStateAt(blink, elapsedMs);
-        lamp.setAlpha(lampAlpha(state, elapsedMs));
-        world.setLampLit(tip, isBeaconCatchable(state));
-      },
+      onUpdate: show,
     });
   }
 
@@ -809,14 +812,14 @@ const accentColor = (accent: string): number => {
   return Number.isFinite(parsed) ? parsed : 0x55e8f0;
 };
 
-const lampAlpha = (state: BeaconState, elapsedMs: number): number => {
+const glowAlpha = (state: BeaconState, elapsedMs: number): number => {
   if (state === "lit") {
     return 1;
   }
   if (state === "dark") {
-    return BEACON_DARK_ALPHA;
+    return 0;
   }
-  return Math.floor(elapsedMs / BEACON_FLICKER_MS) % 2 === 0 ? 1 : 0.35;
+  return Math.floor(elapsedMs / BEACON_FLICKER_MS) % 2 === 0 ? 1 : 0.2;
 };
 
 /** One open polyline through `points`, so a sagging cable draws as one stroke. */

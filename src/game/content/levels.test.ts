@@ -105,7 +105,7 @@ const spawnThrowPoint = (level: LevelDefinition): { x: number; y: number } => ({
  * every playability probe has to pass with every lamp dark.
  */
 const steadyAnchors = (level: LevelDefinition): AnchorPoint[] =>
-  level.anchors.filter((anchor) => anchor.blink === undefined);
+  level.anchors.filter((anchor) => anchor.source !== "beacon");
 
 const describeLevel = (level: LevelDefinition): string =>
   `${level.id} (${LEVELS.indexOf(level) + 1}/${LEVELS.length})`;
@@ -480,7 +480,6 @@ describe.each(
     expect(level.anchors).toHaveLength(derived.length);
     for (const anchor of level.anchors) {
       expect(["building", "cable", "beacon"]).toContain(anchor.source);
-      expect(anchor.blink !== undefined).toBe(anchor.source === "beacon");
     }
   });
 

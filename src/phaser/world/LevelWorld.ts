@@ -1,6 +1,6 @@
 import type Phaser from "phaser";
 import type { AnchorPoint } from "../../game/content/levels";
-import type { Vec2 } from "../../game/simulation/physics/vector";
+import type { BeaconBlink } from "../../game/simulation/systems/beacons";
 
 /** Anything with its own teardown that should end when the level does. */
 export interface Owned {
@@ -25,7 +25,7 @@ export class LevelWorld {
   private readonly timers = new Set<Phaser.Time.TimerEvent>();
   private readonly colliders = new Set<Phaser.Physics.Arcade.Collider>();
   private readonly owned = new Set<Owned>();
-  private readonly darkLamps = new Set<string>();
+  private readonly darkLamps = new Set<BeaconBlink>();
   private destroyed = false;
 
   public constructor(scene: Phaser.Scene) {
@@ -71,11 +71,11 @@ export class LevelWorld {
   }
 
   /** Written by the beacon driver each frame, the way a ledge toggles its body. */
-  public setLampLit(tip: Vec2, lit: boolean): void {
+  public setLampLit(blink: BeaconBlink, lit: boolean): void {
     if (lit) {
-      this.darkLamps.delete(lampKey(tip));
+      this.darkLamps.delete(blink);
     } else {
-      this.darkLamps.add(lampKey(tip));
+      this.darkLamps.add(blink);
     }
   }
 
@@ -88,7 +88,8 @@ export class LevelWorld {
       return anchors;
     }
     return anchors.filter(
-      (anchor) => !anchor.blink || !this.darkLamps.has(lampKey(anchor)),
+      (anchor) =>
+        anchor.source !== "beacon" || !this.darkLamps.has(anchor.blink),
     );
   }
 
@@ -148,5 +149,3 @@ export class LevelWorld {
     this.platforms.destroy();
   }
 }
-
-const lampKey = (point: Vec2): string => `${point.x}:${point.y}`;

@@ -155,7 +155,7 @@ export const generateBeaconAnchors = (
   beacons.map(({ tip, blink }) => ({
     x: tip.x,
     y: tip.y,
-    source: "beacon",
+    source: "beacon" as const,
     blink,
   }));
 

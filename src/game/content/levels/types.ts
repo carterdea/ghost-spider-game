@@ -4,7 +4,7 @@ import type { BeaconBlink } from "../../simulation/systems/beacons";
 
 export type BuildingKind = "tower" | "block" | "lowrise";
 export type EnemyLane = "roof" | "street" | "air";
-export type AnchorSource = "building" | "cable" | "beacon" | "authored";
+export type AnchorSource = "building" | "cable" | "authored";
 
 /** A solid, collidable volume. `bounds` is top-left anchored; `bounds.y` is the roof line. */
 export interface Building {
@@ -72,14 +72,15 @@ export interface Platform {
   cycle?: PlatformCycle;
 }
 
-/** A point a web-line can attach to. Generated anchors always sit on real geometry. */
-export interface AnchorPoint {
-  x: number;
-  y: number;
-  source: AnchorSource;
-  /** Set on beacon anchors: the schedule that decides when a web can bite. */
-  blink?: BeaconBlink;
-}
+/**
+ * A point a web-line can attach to. Generated anchors always sit on real
+ * geometry. A beacon anchor carries its lamp's blink, which decides when a web
+ * can bite it.
+ */
+export type AnchorPoint = { x: number; y: number } & (
+  | { source: AnchorSource }
+  | { source: "beacon"; blink: BeaconBlink }
+);
 
 export interface EnemySpawn {
   id: string;

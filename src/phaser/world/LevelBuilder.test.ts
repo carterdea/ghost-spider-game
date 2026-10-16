@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { LEVELS, type LevelDefinition } from "../../game/content/levels";
 import {
+  beaconStateAt,
+  blinkPeriod,
+} from "../../game/simulation/systems/beacons";
+import {
   asCollider,
   asGameObject,
   asScene,
@@ -12,6 +16,22 @@ import { MAX_VIEW } from "./viewport";
 
 const buildOn = (scene: SceneDouble, level: LevelDefinition) =>
   new LevelBuilder(asScene(scene)).build(level);
+
+/** The first schedule-driven tween: its target is a bare schedule, never a sprite. */
+const driverOf = (scene: SceneDouble) => {
+  const driver = scene
+    .liveTweens()
+    .find(
+      (tween) =>
+        typeof tween.targets === "object" &&
+        tween.targets !== null &&
+        "t" in (tween.targets as Record<string, unknown>),
+    );
+  if (!driver?.onUpdate) {
+    throw new Error("Nothing is being driven.");
+  }
+  return { schedule: driver.targets as { t: number }, step: driver.onUpdate };
+};
 
 const expectBaseline = (scene: SceneDouble): void => {
   expect(scene.liveObjects()).toHaveLength(0);
@@ -304,22 +324,6 @@ describe("cables and platforms", () => {
 });
 
 describe("moving decks", () => {
-  /** The tween driving a mover: its target is a bare schedule, never a sprite. */
-  const driverOf = (scene: SceneDouble) => {
-    const driver = scene
-      .liveTweens()
-      .find(
-        (tween) =>
-          typeof tween.targets === "object" &&
-          tween.targets !== null &&
-          "t" in (tween.targets as Record<string, unknown>),
-      );
-    if (!driver?.onUpdate) {
-      throw new Error("No mover is being driven.");
-    }
-    return { schedule: driver.targets as { t: number }, step: driver.onUpdate };
-  };
-
   /** A shipped hoist, on a level with nothing else moving on it. */
   const hoistOnly = (): LevelDefinition => {
     const hoist = LEVELS.flatMap((level) => level.platforms).find(
@@ -447,48 +451,59 @@ describe("geometry validation", () => {
 });
 
 describe("antenna beacons", () => {
-  const beaconLevel = (): LevelDefinition => {
-    const level = LEVELS.find((candidate) => candidate.beacons.length > 0);
+  /** A shipped district with only the beacon at `index` left standing. */
+  const beaconLevel = (index: number): LevelDefinition => {
+    const level = LEVELS.find((candidate) => candidate.beacons.length > index);
     if (!level) {
-      throw new Error("No district ships a beacon.");
+      throw new Error("No district ships enough beacons.");
     }
-    return { ...level, platforms: [], beacons: [level.beacons[0]] };
+    return { ...level, platforms: [], beacons: [level.beacons[index]] };
   };
+
+  const lampIsCatchable = (
+    world: ReturnType<typeof buildOn>,
+    level: LevelDefinition,
+  ): boolean =>
+    world
+      .catchable(level.anchors)
+      .some(
+        (anchor) =>
+          anchor.source === "beacon" && anchor.blink === level.beacons[0].blink,
+      );
 
   test("a web cannot bite a lamp while it is dark, and can once it relights", () => {
     const scene = new SceneDouble();
-    const level = beaconLevel();
-    const { tip, blink } = level.beacons[0];
+    const level = beaconLevel(0);
+    const { blink } = level.beacons[0];
     const world = buildOn(scene, level);
-    const driver = scene
-      .liveTweens()
-      .find(
-        (tween) =>
-          typeof tween.targets === "object" &&
-          tween.targets !== null &&
-          "t" in (tween.targets as Record<string, unknown>),
-      );
-    if (!driver?.onUpdate) {
-      throw new Error("The beacon is not being driven.");
-    }
-    const schedule = driver.targets as { t: number };
-    const period = blink.litMs + blink.flickerMs + blink.darkMs;
-    const hasLamp = (): boolean =>
-      world
-        .catchable(level.anchors)
-        .some((anchor) => anchor.x === tip.x && anchor.y === tip.y);
+    const { schedule, step } = driverOf(scene);
     const stepTo = (elapsedMs: number): void => {
-      schedule.t = (elapsedMs - blink.offsetMs) / period;
-      driver.onUpdate?.();
+      schedule.t = (elapsedMs - blink.offsetMs) / blinkPeriod(blink);
+      step();
     };
 
     stepTo(blink.litMs + blink.flickerMs + 1);
-    expect(hasLamp()).toBe(false);
-    expect(world.catchable(level.anchors)).toHaveLength(
-      level.anchors.length - 1,
-    );
+    expect(lampIsCatchable(world, level)).toBe(false);
 
     stepTo(blink.litMs + 1);
-    expect(hasLamp()).toBe(true);
+    expect(lampIsCatchable(world, level)).toBe(true);
+  });
+
+  test("a lamp that starts dark is not catchable before the first tick", () => {
+    const level = LEVELS.flatMap((candidate) =>
+      candidate.beacons.map((beacon) => ({ candidate, beacon })),
+    ).find(({ beacon }) => beaconStateAt(beacon.blink, 0) === "dark");
+    if (!level) {
+      throw new Error("No district ships a lamp that starts dark.");
+    }
+    const darkFirst = {
+      ...level.candidate,
+      platforms: [],
+      beacons: [level.beacon],
+    };
+
+    const world = buildOn(new SceneDouble(), darkFirst);
+
+    expect(lampIsCatchable(world, darkFirst)).toBe(false);
   });
 });

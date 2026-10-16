@@ -69,7 +69,7 @@ robots, tech enforcers and survey drones, and touch the beacon to move on:
    for a beat, strobe, then drop
 6. Spire Ascent — a saw-tooth of spires and troughs. Antenna masts carry the
    highest web targets, but their warning lamps blink: a lit lamp whips you out
-   of the dip, a dark one won't hold a web
+   of the dip, a dark one won't catch a web
 7. Harbor Crane Run — 400px gaps that swap roof height on every crossing, so
    each landing rebuilds the swing; one cargo hoist works the deepest inlet
 8. Bridge-Line Finale
