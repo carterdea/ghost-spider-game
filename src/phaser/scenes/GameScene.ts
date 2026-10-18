@@ -12,6 +12,7 @@ import {
   createKeyboardBindings,
   createSlotBindings,
 } from "../../game/input/bindings";
+import { createRunRecords } from "../../game/records/bests";
 import type { Vec2 } from "../../game/simulation/physics/vector";
 import { clamp } from "../../game/simulation/physics/vector";
 import {
@@ -28,6 +29,7 @@ import {
   syncLevelProgress,
   tickRunClock,
 } from "../../game/simulation/systems/progression";
+import { detectStorage } from "../../storage";
 import { Hud } from "../../ui/hud/hud";
 import { createCharacterAnimations } from "../actors/animations";
 import { EnemyDirector } from "../actors/EnemyDirector";
@@ -197,7 +199,7 @@ export class GameScene extends Phaser.Scene {
     if (!hudRoot) {
       throw new Error("Missing HUD root.");
     }
-    this.hud = new Hud(hudRoot);
+    this.hud = new Hud(hudRoot, createRunRecords(detectStorage()));
     this.keys = createKeyboardBindings(this);
     this.slots = createSlotBindings(this);
     // Seeded from the live keys rather than an empty set: a restart triggered

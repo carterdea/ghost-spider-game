@@ -101,6 +101,7 @@ export interface GameState {
 export interface RunSummary {
   score: number;
   districtsCleared: number;
+  districtReached: number;
   bestChain: number;
   elapsedMs: number;
 }
@@ -188,6 +189,7 @@ export const togglePause = (state: GameState): RunStatus => {
 export const runSummary = (state: GameState): RunSummary => ({
   score: state.player.score,
   districtsCleared: state.progression.districtsCleared,
+  districtReached: state.progression.levelIndex + 1,
   bestChain: state.progression.bestChain,
   elapsedMs: state.progression.elapsedMs,
 });

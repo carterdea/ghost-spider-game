@@ -1,8 +1,14 @@
 import { LEVELS } from "../../game/content/levels";
 import {
+  createRunRecords,
+  type RecordedRun,
+  type RunRecords,
+} from "../../game/records/bests";
+import {
   type GadgetKind,
   type GameState,
   type RunStatus,
+  type RunSummary,
   runSummary,
 } from "../../game/simulation/state";
 import { getLevelByIndex } from "../../game/simulation/systems/progression";
@@ -100,7 +106,10 @@ export class Hud {
    */
   private readonly charges = new Map<GadgetKind, number>();
 
-  public constructor(root: HTMLElement) {
+  public constructor(
+    root: HTMLElement,
+    private readonly records: RunRecords = createRunRecords(undefined),
+  ) {
     this.root = root;
     this.nodes = buildHud(root);
     for (const kind of GADGET_ORDER) {
@@ -285,6 +294,25 @@ export class Hud {
    */
   private writeStatus(state: GameState, status: RunStatus): void {
     this.root.dataset.run = status;
-    writeBanner(this.nodes.banner, status, runSummary(state));
+    const summary = runSummary(state);
+    writeBanner(
+      this.nodes.banner,
+      status,
+      summary,
+      this.standing(status, summary),
+    );
+  }
+
+  private standing(status: RunStatus, summary: RunSummary): RecordedRun | null {
+    switch (status) {
+      case "title":
+        return { bests: this.records.bests, improved: new Set() };
+      case "cleared":
+      case "knockedOut":
+        return this.records.settle(summary);
+      case "playing":
+      case "paused":
+        return null;
+    }
   }
 }

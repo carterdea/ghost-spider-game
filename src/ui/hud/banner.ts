@@ -1,7 +1,10 @@
 import { LEVELS } from "../../game/content/levels";
+import type { RecordedRun } from "../../game/records/bests";
 import type { RunStatus, RunSummary } from "../../game/simulation/state";
+import { type BestsNodes, buildBests, writeBests } from "./bests";
 import { GAME_NAME, GAME_TAGLINE, HERO_NAME, HINTS } from "./controls";
 import type { Add } from "./elements";
+import { chainLabel, formatDuration } from "./format";
 
 /**
  * The full-screen panel: the title the run opens on, the pause it is held in,
@@ -62,18 +65,9 @@ export interface BannerNodes {
   readonly hint: HTMLElement;
   readonly summary: HTMLElement;
   readonly stats: ReadonlyMap<StatLabel, HTMLElement>;
+  readonly bests: BestsNodes;
   readonly controls: HTMLElement;
 }
-
-/** `12:04`, and never a bare `4` for four seconds. */
-export const formatDuration = (milliseconds: number): string => {
-  const total = Math.max(0, Math.round(milliseconds / 1000));
-  const seconds = total % 60;
-  return `${Math.floor(total / 60)}:${String(seconds).padStart(2, "0")}`;
-};
-
-/** A chain of one is not a chain, and reads better as a dash than as a 1. */
-const chainLabel = (best: number): string => (best > 1 ? `${best}×` : "—");
 
 const statValue = (summary: RunSummary, label: StatLabel): string => {
   switch (label) {
@@ -127,10 +121,21 @@ export const buildBanner = (add: Add, root: HTMLElement): BannerNodes => {
   const summary = add(banner, "div", "run-summary");
   summary.hidden = true;
   const stats = buildStats(add, summary);
+  const bests = buildBests(add, banner);
   const controls = buildControls(add, banner);
   controls.hidden = true;
 
-  return { curtain, banner, kicker, title, hint, summary, stats, controls };
+  return {
+    curtain,
+    banner,
+    kicker,
+    title,
+    hint,
+    summary,
+    stats,
+    bests,
+    controls,
+  };
 };
 
 /** Paints one status. Called only when the status actually turned over. */
@@ -138,8 +143,10 @@ export const writeBanner = (
   nodes: BannerNodes,
   status: RunStatus,
   summary: RunSummary,
+  recorded: RecordedRun | null,
 ): void => {
   const copy = BANNERS[status];
+  writeBests(nodes.bests, recorded);
 
   nodes.curtain.className = copy === null ? "curtain" : `curtain is-${status}`;
   nodes.curtain.hidden = copy === null;

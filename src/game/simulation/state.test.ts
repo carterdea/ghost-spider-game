@@ -20,6 +20,7 @@ describe("a fresh run", () => {
     expect(runSummary(world("title"))).toEqual({
       score: 0,
       districtsCleared: 0,
+      districtReached: 1,
       bestChain: 0,
       elapsedMs: 0,
     });
@@ -70,12 +71,14 @@ describe("runSummary", () => {
     const state = world();
     state.player.score = 4820;
     state.progression.districtsCleared = 5;
+    state.progression.levelIndex = 5;
     state.progression.bestChain = 4;
     state.progression.elapsedMs = 191_400;
 
     expect(runSummary(state)).toEqual({
       score: 4820,
       districtsCleared: 5,
+      districtReached: 6,
       bestChain: 4,
       elapsedMs: 191_400,
     });
