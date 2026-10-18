@@ -499,6 +499,17 @@ describe("personal bests", () => {
     ]);
   });
 
+  test("keep a surviving score when the saved district is unreadable", () => {
+    const titled = new Hud(
+      root,
+      savedBests({ ...saved, furthestDistrict: "seven" }),
+    );
+    titled.render(makeState({ status: "title" }));
+
+    expect(query(root, ".run-bests").hidden).toBe(false);
+    expect(bestCells()[0]?.value).toBe("5000");
+  });
+
   test("flag only the records a finished run beat", () => {
     const finished = new Hud(root, savedBests(saved));
     finished.render(
