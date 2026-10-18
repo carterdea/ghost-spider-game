@@ -1,4 +1,6 @@
 import type Phaser from "phaser";
+import type { AnchorPoint } from "../../game/content/levels";
+import type { BeaconBlink } from "../../game/simulation/systems/beacons";
 
 /** Anything with its own teardown that should end when the level does. */
 export interface Owned {
@@ -23,6 +25,7 @@ export class LevelWorld {
   private readonly timers = new Set<Phaser.Time.TimerEvent>();
   private readonly colliders = new Set<Phaser.Physics.Arcade.Collider>();
   private readonly owned = new Set<Owned>();
+  private readonly darkLamps = new Set<BeaconBlink>();
   private destroyed = false;
 
   public constructor(scene: Phaser.Scene) {
@@ -65,6 +68,29 @@ export class LevelWorld {
     for (const timer of this.timers) {
       timer.paused = held;
     }
+  }
+
+  /** Written by the beacon driver each frame, the way a ledge toggles its body. */
+  public setLampLit(blink: BeaconBlink, lit: boolean): void {
+    if (lit) {
+      this.darkLamps.delete(blink);
+    } else {
+      this.darkLamps.add(blink);
+    }
+  }
+
+  /** The anchors a web can bite right now: everything but a dark lamp. */
+  // Called from `GameScene.updateRun` through `requireWorld()`, which Fallow
+  // does not resolve.
+  // fallow-ignore-next-line unused-class-member
+  public catchable(anchors: readonly AnchorPoint[]): readonly AnchorPoint[] {
+    if (this.darkLamps.size === 0) {
+      return anchors;
+    }
+    return anchors.filter(
+      (anchor) =>
+        anchor.source !== "beacon" || !this.darkLamps.has(anchor.blink),
+    );
   }
 
   public collider(collider: Phaser.Physics.Arcade.Collider): void {
@@ -117,6 +143,7 @@ export class LevelWorld {
     this.colliders.clear();
     this.objects.clear();
     this.owned.clear();
+    this.darkLamps.clear();
 
     this.platforms.clear(true, true);
     this.platforms.destroy();

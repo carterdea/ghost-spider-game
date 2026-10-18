@@ -19,6 +19,7 @@ import {
   type Building,
   cablePointAt,
   cableSegments,
+  generateBeaconAnchors,
   generateBuildingAnchors,
   generateCableAnchors,
   LEVELS,
@@ -98,6 +99,13 @@ const spawnThrowPoint = (level: LevelDefinition): { x: number; y: number } => ({
   x: level.playerSpawn.x,
   y: level.playerSpawn.y - HERO_CENTRE_LIFT,
 });
+
+/**
+ * Anchors that are always there. A beacon lamp is a shortcut, never the route:
+ * every playability probe has to pass with every lamp dark.
+ */
+const steadyAnchors = (level: LevelDefinition): AnchorPoint[] =>
+  level.anchors.filter((anchor) => anchor.source !== "beacon");
 
 const describeLevel = (level: LevelDefinition): string =>
   `${level.id} (${LEVELS.indexOf(level) + 1}/${LEVELS.length})`;
@@ -218,6 +226,16 @@ describe("level table", () => {
     }
   });
 
+  test("beacons come back after Spire Ascent introduces them", () => {
+    const spire = LEVELS.findIndex((level) => level.id === "spire-ascent");
+    const introduced = LEVELS.findIndex((level) => level.beacons.length > 0);
+    const later = LEVELS.slice(spire + 1).some(
+      (level) => level.beacons.length > 0,
+    );
+
+    expect({ introduced, later }).toEqual({ introduced: spire, later: true });
+  });
+
   test("enemy ids are unique across the whole game", () => {
     const ids = LEVELS.flatMap((level) =>
       level.enemies.map((enemy) => enemy.id),
@@ -266,7 +284,7 @@ describe.each(
     const from = spawnThrowPoint(level);
     const heading = Math.sign(level.goal.x - level.playerSpawn.x);
     const attachment = chooseAttachment(
-      level.anchors,
+      steadyAnchors(level),
       from,
       heading,
       level.streetY,
@@ -299,7 +317,7 @@ describe.each(
 
     for (const facing of [1, -1]) {
       const attachment = chooseAttachment(
-        level.anchors,
+        steadyAnchors(level),
         from,
         facing,
         level.streetY,
@@ -350,7 +368,11 @@ describe.each(
         y: Math.max(rectTop(previous), rectTop(next)) + GAP_SAG,
       };
 
-      const reachable = anchorsInReach(level.anchors, probe, SWING_REACH);
+      const reachable = anchorsInReach(
+        steadyAnchors(level),
+        probe,
+        SWING_REACH,
+      );
       expect({ gapCenterX: probe.x, spannable: reachable.length > 0 }).toEqual({
         gapCenterX: probe.x,
         spannable: true,
@@ -363,7 +385,8 @@ describe.each(
       const probe = { x, y: level.streetY - CRUISE_HEIGHT };
       expect({
         x,
-        reachable: anchorsInReach(level.anchors, probe, SWING_REACH).length > 0,
+        reachable:
+          anchorsInReach(steadyAnchors(level), probe, SWING_REACH).length > 0,
       }).toEqual({ x, reachable: true });
     }
   });
@@ -371,7 +394,7 @@ describe.each(
   test("anchors are horizontally dense across the whole level", () => {
     for (const x of sampleXs(level)) {
       const nearest = Math.min(
-        ...level.anchors.map((anchor) => Math.abs(anchor.x - x)),
+        ...steadyAnchors(level).map((anchor) => Math.abs(anchor.x - x)),
       );
       expect({ x, nearest: nearest <= MAX_ANCHOR_SPACING }).toEqual({
         x,
@@ -455,19 +478,32 @@ describe.each(
 
   /**
    * The invariant the whole anchor design rests on: a web only ever catches
-   * something the renderer drew. Cables earn their anchors by being real
-   * strung geometry; platforms move or vanish, so they never get any.
+   * something the renderer drew. Cables and beacon masts earn their anchors by
+   * being real geometry; platforms move or vanish, so they never get any.
    */
-  test("anchors come only from buildings and cables, nothing else", () => {
+  test("anchors come only from buildings, cables and beacons", () => {
     const derived = [
       ...generateBuildingAnchors(level.buildings, level.streetY),
       ...generateCableAnchors(level.cables),
+      ...generateBeaconAnchors(level.beacons),
     ];
     expect(level.anchors).toHaveLength(derived.length);
     for (const anchor of level.anchors) {
-      expect(anchor.source === "building" || anchor.source === "cable").toBe(
-        true,
-      );
+      expect(["building", "cable", "beacon"]).toContain(anchor.source);
+    }
+  });
+
+  /**
+   * A lamp that died without warning would be a trap. It flickers first, is lit
+   * longer than it is dark, and its mast stands on a real roof.
+   */
+  test("beacons telegraph, stay lit longest, and stand on a roof", () => {
+    for (const { tip, baseY, blink } of level.beacons) {
+      expect(blink.flickerMs).toBeGreaterThanOrEqual(MIN_LEDGE_WARNING_MS);
+      expect(blink.litMs).toBeGreaterThan(blink.darkMs);
+      expect(roofYAt(level.buildings, tip.x)).toBe(baseY);
+      expect(tip.y).toBeLessThan(baseY - MIN_ANCHOR_CLEARANCE);
+      expect(tip.y).toBeGreaterThan(0);
     }
   });
 

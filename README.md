@@ -67,8 +67,12 @@ robots, tech enforcers and survey drones, and touch the beacon to move on:
    it. Ride the rig, or web the gantry overhead and skip the wait
 5. Glasshouse Terraces — the roof line only climbs, and the glass panels hold
    for a beat, strobe, then drop
-6. Spire Ascent
-7. Harbor Crane Run
+6. Spire Ascent — a saw-tooth of spires and troughs. Antenna masts carry the
+   highest web targets, but their warning lamps blink: a lit lamp whips you out
+   of the dip, a dark one won't catch a web
+7. Harbor Crane Run — 400px gaps that swap roof height on every crossing, so
+   each landing rebuilds the swing; one cargo hoist works the deepest inlet,
+   and a radio-mast lamp lifts you out of the low warehouse
 8. Bridge-Line Finale
 
 The last district is a boss: The Weaver holds the bridge, and the beacon will

@@ -374,7 +374,7 @@ export class GameScene extends Phaser.Scene {
       actions,
       this.wasPressed(actions, "jump"),
       actions.web,
-      level.anchors,
+      this.requireWorld().catchable(level.anchors),
       level.streetY,
       delta,
     );

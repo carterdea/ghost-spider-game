@@ -1,6 +1,7 @@
 import type Phaser from "phaser";
 import { artKeys } from "../../game/assets/manifest";
 import type {
+  Beacon,
   Building,
   Cable,
   LevelDefinition,
@@ -15,6 +16,12 @@ import {
   rectRight,
   type Vec2,
 } from "../../game/simulation/physics/vector";
+import {
+  type BeaconState,
+  beaconStateAt,
+  blinkPeriod,
+  isBeaconCatchable,
+} from "../../game/simulation/systems/beacons";
 import { RainCurtain, type RainSurface } from "../fx/RainCurtain";
 import { weatherFor } from "../fx/weather";
 import { LevelWorld } from "./LevelWorld";
@@ -43,6 +50,10 @@ const DEPTH = {
   cable: 1,
   platform: 6,
 } as const;
+
+/** A dark lamp is still drawn, dimmed, so the player can see where it will relight. */
+const BEACON_DARK_TINT = 0x4a2a33;
+const BEACON_FLICKER_MS = 90;
 
 /** Deck tint while a glass panel is failing: the same red as the district accent. */
 const LEDGE_WARN_TINT = 0xff5f6d;
@@ -164,6 +175,9 @@ export class LevelBuilder {
     }
     for (const platform of level.platforms) {
       this.buildPlatform(platform, world);
+    }
+    for (const beacon of level.beacons) {
+      this.buildBeacon(beacon, world);
     }
     this.buildAmbience(level, world);
     this.buildGoal(level, world);
@@ -680,6 +694,50 @@ export class LevelBuilder {
     });
   }
 
+  /**
+   * A lattice mast up from the roof, a lamp on its tip and the glow it throws.
+   * Driven like a failing ledge: one tween reads the blink rule, dims the glow
+   * and tells the world whether a web can bite. It runs once at build too, so a
+   * mast that starts dark is never catchable for the frame before the first tick.
+   */
+  private buildBeacon(beacon: Beacon, world: LevelWorld): void {
+    const { tip, baseY, blink } = beacon;
+    const height = baseY - tip.y;
+    world.track(
+      this.scene.add
+        .tileSprite(tip.x, tip.y + height / 2, 24, height, "antennaMast")
+        .setDepth(DEPTH.roofDecor - 0.5),
+    );
+    const glow = world.track(
+      this.scene.add
+        .image(tip.x, tip.y, "beaconGlow")
+        .setBlendMode("ADD")
+        .setDepth(DEPTH.cable),
+    );
+    const lamp = world.track(
+      this.scene.add.image(tip.x, tip.y, "beaconLamp").setDepth(DEPTH.cable),
+    );
+
+    const period = blinkPeriod(blink);
+    const driver = { t: 0 };
+    const show = (): void => {
+      const elapsedMs = driver.t * period;
+      const state = beaconStateAt(blink, elapsedMs);
+      glow.setAlpha(glowAlpha(state, elapsedMs));
+      lamp.setTint(state === "dark" ? BEACON_DARK_TINT : 0xffffff);
+      world.setLampLit(blink, isBeaconCatchable(state));
+    };
+    show();
+    world.tween({
+      targets: driver,
+      t: 1,
+      duration: period,
+      repeat: -1,
+      ease: "Linear",
+      onUpdate: show,
+    });
+  }
+
   private buildAmbience(level: LevelDefinition, world: LevelWorld): void {
     const flights = Math.max(2, Math.round(level.width / 1800));
     for (let index = 0; index < flights; index += 1) {
@@ -752,6 +810,16 @@ export class LevelBuilder {
 const accentColor = (accent: string): number => {
   const parsed = Number.parseInt(accent.replace("#", ""), 16);
   return Number.isFinite(parsed) ? parsed : 0x55e8f0;
+};
+
+const glowAlpha = (state: BeaconState, elapsedMs: number): number => {
+  if (state === "lit") {
+    return 1;
+  }
+  if (state === "dark") {
+    return 0;
+  }
+  return Math.floor(elapsedMs / BEACON_FLICKER_MS) % 2 === 0 ? 1 : 0.2;
 };
 
 /** One open polyline through `points`, so a sagging cable draws as one stroke. */

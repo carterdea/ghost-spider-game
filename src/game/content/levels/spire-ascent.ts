@@ -1,15 +1,25 @@
-import { type LevelBlueprint, STREET_Y, WORLD_HEIGHT } from "./authoring";
+import {
+  type LevelBlueprint,
+  lampBlink,
+  STREET_Y,
+  WORLD_HEIGHT,
+} from "./authoring";
 
 /**
- * Level 3 — vertical whiplash. Narrow spires alternate with low blocks, so the
- * route is a saw-tooth of 500px climbs and drops instead of a flat run. The
+ * District 6 — vertical whiplash. Narrow spires alternate with low blocks, so
+ * the route is a saw-tooth of 500px climbs and drops instead of a flat run. The
  * spawn sits at the far end of the opening block so the first spire's roof —
  * not just its facade — is already inside web reach.
+ *
+ * Antenna masts stand in the troughs and on the tallest spire. Their warning
+ * lamps are the highest web targets in the district, but only while lit: catch
+ * one and the swing whips you out of the dip; miss the window and you climb the
+ * long way, off the roof edges.
  */
 export const spireAscent = {
   id: "spire-ascent",
   name: "Spire Ascent",
-  subtitle: "Ride the saw-tooth skyline up to the antenna line.",
+  subtitle: "Catch the mast lamps while they burn.",
   accent: "#c9a6ff",
   backdropKey: "environment-midtown",
   width: 4400,
@@ -26,6 +36,11 @@ export const spireAscent = {
     { x: 2600, width: 440, roofY: 940, kind: "block" },
     { x: 3300, width: 400, roofY: 520, kind: "tower" },
     { x: 3960, width: 440, roofY: 860, kind: "block" },
+  ],
+  beaconRows: [
+    { x: 1510, height: 380, blink: lampBlink(0) },
+    { x: 2170, height: 240, blink: lampBlink(1450) },
+    { x: 2820, height: 380, blink: lampBlink(2900) },
   ],
   enemyRows: [
     {

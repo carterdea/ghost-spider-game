@@ -1,5 +1,6 @@
 import type { Rect, Vec2 } from "../../simulation/physics/vector";
 import type { EnemyKind } from "../../simulation/state";
+import type { BeaconBlink } from "../../simulation/systems/beacons";
 
 export type BuildingKind = "tower" | "block" | "lowrise";
 export type EnemyLane = "roof" | "street" | "air";
@@ -18,6 +19,18 @@ export interface Building {
 export interface Cable {
   from: Vec2;
   to: Vec2;
+}
+
+/**
+ * An antenna mast standing on a roof with a warning lamp at its tip. The lamp
+ * is a web anchor, but only while it is lit.
+ */
+export interface Beacon {
+  /** The lamp, and the anchor. */
+  tip: Vec2;
+  /** The roof line the mast stands on. */
+  baseY: number;
+  blink: BeaconBlink;
 }
 
 /** A hoist deck, a trolley, or a glass panel — geometry that is not a building. */
@@ -59,12 +72,15 @@ export interface Platform {
   cycle?: PlatformCycle;
 }
 
-/** A point a web-line can attach to. Generated anchors always sit on real geometry. */
-export interface AnchorPoint {
-  x: number;
-  y: number;
-  source: AnchorSource;
-}
+/**
+ * A point a web-line can attach to. Generated anchors always sit on real
+ * geometry. A beacon anchor carries its lamp's blink, which decides when a web
+ * can bite it.
+ */
+export type AnchorPoint = { x: number; y: number } & (
+  | { source: AnchorSource }
+  | { source: "beacon"; blink: BeaconBlink }
+);
 
 export interface EnemySpawn {
   id: string;
@@ -102,6 +118,7 @@ export interface LevelDefinition {
   buildings: Building[];
   cables: Cable[];
   platforms: Platform[];
+  beacons: Beacon[];
   anchors: AnchorPoint[];
   enemies: EnemySpawn[];
 }

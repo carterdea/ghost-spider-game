@@ -1,8 +1,14 @@
 import { rectLeft, rectRight, rectTop } from "../../simulation/physics/vector";
 import type { EnemyKind } from "../../simulation/state";
-import { generateBuildingAnchors, generateCableAnchors } from "./anchors";
+import type { BeaconBlink } from "../../simulation/systems/beacons";
+import {
+  generateBeaconAnchors,
+  generateBuildingAnchors,
+  generateCableAnchors,
+} from "./anchors";
 import type {
   AnchorPoint,
+  Beacon,
   Building,
   BuildingKind,
   Cable,
@@ -56,6 +62,21 @@ export interface CableRow {
   toY: number;
 }
 
+/** The lamp timing every district shares: lit long enough to line up a throw, the flicker is the warning. */
+export const lampBlink = (offsetMs: number): BeaconBlink => ({
+  litMs: 2200,
+  flickerMs: 700,
+  darkMs: 1500,
+  offsetMs,
+});
+
+/** A mast authored by where it stands and how tall it is; it always stands on a roof. */
+export interface BeaconRow {
+  x: number;
+  height: number;
+  blink: BeaconBlink;
+}
+
 /** A platform authored as a surface: `y` is what an actor stands on. */
 export interface PlatformRow {
   x: number;
@@ -95,6 +116,7 @@ export interface LevelBlueprint {
   enemyRows: readonly EnemyRow[];
   cableRows?: readonly CableRow[];
   platformRows?: readonly PlatformRow[];
+  beaconRows?: readonly BeaconRow[];
   authoredAnchors?: readonly { x: number; y: number }[];
 }
 
@@ -150,6 +172,15 @@ const standingY = (
   streetY: number,
 ): number => (roofYAt(buildings, x) ?? streetY) - lift;
 
+const toBeacon = (
+  row: BeaconRow,
+  buildings: readonly Building[],
+  streetY: number,
+): Beacon => {
+  const baseY = roofYAt(buildings, row.x) ?? streetY;
+  return { tip: { x: row.x, y: baseY - row.height }, baseY, blink: row.blink };
+};
+
 const toEnemySpawn = (
   row: EnemyRow,
   buildings: readonly Building[],
@@ -188,6 +219,9 @@ export const compileLevel = (blueprint: LevelBlueprint): LevelDefinition => {
   );
   const cables = (blueprint.cableRows ?? []).map(toCable);
   const platforms = (blueprint.platformRows ?? []).map(toPlatform);
+  const beacons = (blueprint.beaconRows ?? []).map((row) =>
+    toBeacon(row, buildings, blueprint.streetY),
+  );
   const authored: AnchorPoint[] = (blueprint.authoredAnchors ?? []).map(
     (point) => ({ x: point.x, y: point.y, source: "authored" }),
   );
@@ -213,9 +247,11 @@ export const compileLevel = (blueprint: LevelBlueprint): LevelDefinition => {
     buildings,
     cables,
     platforms,
+    beacons,
     anchors: [
       ...generateBuildingAnchors(buildings, blueprint.streetY),
       ...generateCableAnchors(cables),
+      ...generateBeaconAnchors(beacons),
       ...authored,
     ].sort((a, b) => a.x - b.x || a.y - b.y),
     enemies: blueprint.enemyRows.map((row) =>
