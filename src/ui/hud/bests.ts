@@ -2,6 +2,7 @@ import { LEVELS } from "../../game/content/levels";
 import {
   BEST_KEYS,
   type BestKey,
+  NO_BESTS,
   type PersonalBests,
   type RecordedRun,
 } from "../../game/records/bests";
@@ -58,7 +59,9 @@ export const writeBests = (
   nodes: BestsNodes,
   recorded: RecordedRun | null,
 ): void => {
-  nodes.root.hidden = !recorded || recorded.bests.furthestDistrict === 0;
+  nodes.root.hidden =
+    !recorded ||
+    BEST_KEYS.every((key) => recorded.bests[key] === NO_BESTS[key]);
   if (!recorded) {
     return;
   }
