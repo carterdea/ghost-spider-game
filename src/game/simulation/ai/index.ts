@@ -1,5 +1,6 @@
 export {
   BOSS_BASE_SPEED,
+  BOSS_HEALTH,
   BOSS_TUNING,
   type BossAttack,
   type BossEvent,

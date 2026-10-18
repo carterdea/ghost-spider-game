@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { Rect } from "../../physics/vector";
 import { stepBossBrain } from "./brain";
-import { BOSS_ATTACK_SHAPE, BOSS_TUNING, phaseFor } from "./tuning";
+import {
+  BOSS_ATTACK_SHAPE,
+  BOSS_HEALTH,
+  BOSS_TUNING,
+  phaseFor,
+} from "./tuning";
 import {
   type BossAiState,
   type BossAttack,
@@ -810,7 +815,7 @@ describe("stepping", () => {
  * are the fight's tuning and were folklore in a comment until they were run.
  * Measured here rather than asserted from the tuning table, because the window
  * is an emergent product of wind-up, strike and recovery timers across four
- * phases — see the sizing note on `BOSS_HEALTH` in `bossBinding`.
+ * phases — see the sizing note on `BOSS_HEALTH` in `./tuning`.
  */
 describe("the punish window", () => {
   const SAMPLE_SECONDS = 300;
@@ -842,7 +847,7 @@ describe("the punish window", () => {
 
   test("stays open about three quarters of a second", () => {
     // 0.73s measured. At the hero's 280ms swing that is three strikes, so a
-    // window taken in full is worth 102 — not the 40 the sizing note claimed.
+    // window taken in full is worth 102.
     expect(punishWindows(1).mean).toBeGreaterThan(0.6);
     expect(punishWindows(1).mean).toBeLessThan(0.9);
   });
@@ -860,5 +865,92 @@ describe("the punish window", () => {
     // the opening, so late damage per window is flat and only the pace rises.
     expect(failing.cadence).toBeLessThan(fresh.cadence * 0.8);
     expect(failing.mean).toBeCloseTo(fresh.mean, 1);
+  });
+});
+
+/**
+ * The hero's close strike, as `GameScene` deals it: 34 a blow, one per 280ms.
+ * Every open frame is spent in reach, so this is the fight as the brain paces
+ * it, without the hit-stop that stretches each opening a little in play. The
+ * live finale played by bot ran within a second of it for the quick hero.
+ */
+describe("the fight", () => {
+  const STRIKE = 34;
+  const SWING = 0.28;
+
+  interface Hero {
+    /** Seconds into an opening before the first blow lands. */
+    reaction: number;
+    /** Blows taken per opening; `Infinity` takes all of it. */
+    strikesPerOpening: number;
+  }
+
+  const fight = ({ reaction, strikesPerOpening }: Hero) => {
+    let memory = createBossMemory(-1);
+    let health = BOSS_HEALTH;
+    let seconds = 0;
+    let swingReady = 0;
+    let openFor: number | null = null;
+    let strikes = 0;
+    const windows: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
+
+    while (health > 0 && seconds < 600) {
+      const step = stepBossBrain(
+        memory,
+        perceptionFor({ healthFraction: health / BOSS_HEALTH }),
+        BOSS_TUNING,
+        STEP,
+      );
+      memory = step.memory;
+      seconds += STEP;
+
+      if (!step.intent.vulnerable) {
+        openFor = null;
+        continue;
+      }
+      if (openFor === null) {
+        openFor = 0;
+        strikes = 0;
+        if (step.intent.state === "recover") {
+          windows[memory.phase] += 1;
+        }
+      }
+      openFor += STEP;
+      if (
+        openFor >= reaction &&
+        seconds >= swingReady &&
+        strikes < strikesPerOpening
+      ) {
+        health -= STRIKE;
+        swingReady = seconds + SWING;
+        strikes += 1;
+      }
+    }
+
+    return { seconds, windows };
+  };
+
+  test("a flawless hero still has to read every phase more than once", () => {
+    // 3 / 2 / 2 punish windows in 20s, live and here. The phase shift is
+    // itself an opening worth four blows, so a thin health band let the hero
+    // carry it straight through the next phase: at 260 the fight was three
+    // windows and five seconds, and phase two was never seen.
+    const { windows } = fight({ reaction: 0, strikesPerOpening: Infinity });
+    for (const phase of [1, 2, 3] as const) {
+      expect(windows[phase]).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  test("a quick hero gets a fight of about half a minute", () => {
+    // 30s here, 29s measured in the live finale.
+    const { seconds } = fight({ reaction: 0.25, strikesPerOpening: Infinity });
+    expect(seconds).toBeGreaterThan(20);
+    expect(seconds).toBeLessThan(40);
+  });
+
+  test("a slow hero landing one blow an opening still finishes", () => {
+    // 71s here. The live bot that mixed globs and blows took 75s.
+    const { seconds } = fight({ reaction: 0.45, strikesPerOpening: 1 });
+    expect(seconds).toBeLessThan(100);
   });
 });

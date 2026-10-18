@@ -1,6 +1,7 @@
 export { stepBossBrain } from "./brain";
 export {
   BOSS_BASE_SPEED,
+  BOSS_HEALTH,
   BOSS_TUNING,
   type BossPhaseTuning,
 } from "./tuning";
