@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsrs --noEmit --fast",
+    "typecheck:ci": "tsc --noEmit",
     "test": "bun test",
     "dev": "vite --host 0.0.0.0"
   },
@@ -18,7 +19,8 @@
     "fallow": "2.103.0",
     "happy-dom": "20.11.1",
     "lefthook": "2.1.9",
-    "typescript": "5.9.3",
+    "tsrs": "0.23.0-ts7.1.0-beta",
+    "typescript": "7.0.2",
     "vite": "8.0.10"
   }
 }

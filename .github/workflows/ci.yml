@@ -5,6 +5,10 @@ on:
   push:
     branches: [feat/phaser-prototype]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -22,7 +26,7 @@ jobs:
         run: bunx biome check .
 
       - name: Typecheck
-        run: bun run typecheck
+        run: bun run typecheck:ci
 
       - name: Test
         run: bun test
